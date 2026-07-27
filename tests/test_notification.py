@@ -2260,7 +2260,9 @@ class TestStrictEvidenceFallbackReport(unittest.TestCase):
                 },
             },
         )
-        result.search_performed = False
+        # The search path ran, but every provider request failed and returned 0 records.
+        result.search_performed = True
+        result.analysis_context_pack_overview = {"metadata": {"news_result_count": 0}}
         result.market_snapshot = {
             "date": "2026-07-24",
             "close": "1410.00",
@@ -2287,3 +2289,47 @@ class TestStrictEvidenceFallbackReport(unittest.TestCase):
         self.assertNotIn("4-6成", out)
         self.assertIn("上一完整交易日行情（2026-07-24）", out)
         self.assertIn("上一完整交易日收盘价", out)
+
+    @mock.patch("src.notification.get_config")
+    def test_intraday_snapshot_uses_session_date_and_marks_partial_bar(self, mock_get_config):
+        mock_get_config.return_value = _make_config(
+            report_renderer_enabled=False,
+            report_language="zh",
+        )
+        service = NotificationService()
+        result = AnalysisResult(
+            code="600519",
+            name="贵州茅台",
+            sentiment_score=59,
+            trend_prediction="看多",
+            operation_advice="持有",
+            analysis_summary="等待确认",
+            decision_type="hold",
+            dashboard={"core_conclusion": {"one_sentence": "等待确认"}},
+        )
+        result.analysis_context_pack_overview = {"metadata": {"news_result_count": 1}}
+        result.market_snapshot = {
+            "date": "2026-07-27",
+            "close": "1290.29",
+            "prev_close": "1297.41",
+            "open": "1308.00",
+            "high": "1308.00",
+            "low": "1279.58",
+            "pct_chg": "-0.55%",
+            "change_amount": "-7.12",
+            "amplitude": "2.19%",
+            "volume": "190.64万股",
+            "amount": "24.59亿元",
+        }
+        result.market_phase_summary = {
+            "phase": "intraday",
+            "session_date": "2026-07-27",
+            "effective_daily_bar_date": "2026-07-24",
+        }
+
+        out = service.generate_dashboard_report([result], report_date="2026-07-27")
+
+        self.assertIn("盘中行情（2026-07-27，未收盘）", out)
+        self.assertIn("盘中价", out)
+        self.assertNotIn("当日行情（2026-07-24）", out)
+        self.assertNotIn("上一完整交易日行情", out)
