@@ -2232,3 +2232,58 @@ class TestNotificationServiceReportGeneration(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class TestStrictEvidenceFallbackReport(unittest.TestCase):
+    """Regression coverage for the non-template fallback renderer."""
+
+    @mock.patch("src.notification.get_config")
+    def test_hold_hides_battle_plan_and_marks_unverified_news(self, mock_get_config):
+        mock_get_config.return_value = _make_config(
+            report_renderer_enabled=False,
+            report_language="zh",
+        )
+        service = NotificationService()
+        result = AnalysisResult(
+            code="600519",
+            name="贵州茅台",
+            sentiment_score=59,
+            trend_prediction="震荡",
+            operation_advice="持有",
+            analysis_summary="等待确认",
+            decision_type="hold",
+            dashboard={
+                "core_conclusion": {"one_sentence": "等待确认"},
+                "intelligence": {"sentiment_summary": "无重大新闻", "risk_alerts": []},
+                "battle_plan": {
+                    "sniper_points": {"ideal_buy": "1400", "stop_loss": "1300"},
+                    "position_strategy": {"suggested_position": "4-6成"},
+                },
+            },
+        )
+        result.search_performed = False
+        result.market_snapshot = {
+            "date": "2026-07-24",
+            "close": "1410.00",
+            "prev_close": "1400.00",
+            "open": "1401.00",
+            "high": "1420.00",
+            "low": "1390.00",
+            "pct_chg": "0.71%",
+            "change_amount": "10.00",
+            "amplitude": "2.14%",
+            "volume": "1.00万",
+            "amount": "2.00亿",
+        }
+        result.market_phase_summary = {
+            "phase": "premarket",
+            "effective_daily_bar_date": "2026-07-24",
+        }
+
+        out = service.generate_dashboard_report([result], report_date="2026-07-27")
+
+        self.assertIn("无法确认近期是否存在重大事项", out)
+        self.assertNotIn("无重大新闻", out)
+        self.assertNotIn("作战计划", out)
+        self.assertNotIn("4-6成", out)
+        self.assertIn("上一完整交易日行情（2026-07-24）", out)
+        self.assertIn("上一完整交易日收盘价", out)

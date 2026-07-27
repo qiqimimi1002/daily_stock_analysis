@@ -41,6 +41,12 @@ from src.schemas.decision_action import (
     display_operation_advice_for_result,
     localize_action_label,
 )
+from src.report_evidence_policy import (
+    is_actionable_buy_result,
+    market_snapshot_close_label,
+    market_snapshot_heading,
+    news_verification_notice,
+)
 from src.utils.data_processing import (
     normalize_model_used,
     signal_attribution_has_content,
@@ -243,6 +249,10 @@ def render(
         "strategy_invalid_opinion_count": strategy_invalid_opinion_count,
         "signal_attribution_has_content": signal_attribution_has_content,
         "signal_attribution_weight_items": signal_attribution_weight_items,
+        "is_actionable_buy_result": is_actionable_buy_result,
+        "news_verification_notice": news_verification_notice,
+        "market_snapshot_heading": market_snapshot_heading,
+        "market_snapshot_close_label": market_snapshot_close_label,
     }
     if extra_context:
         safe_extra_context = dict(extra_context)
