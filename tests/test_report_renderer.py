@@ -475,3 +475,116 @@ class TestReportRenderer(unittest.TestCase):
         out = render("markdown", [], summary_only=True)
         self.assertIsNotNone(out)
         self.assertIn("0", out)
+
+class TestStrictEvidenceReportRenderer(unittest.TestCase):
+    """Regression coverage for strict evidence reporting rules."""
+
+    @patch("src.services.report_renderer.get_config")
+    def test_hold_hides_battle_plan_and_unverified_news_claims(self, mock_get_config) -> None:
+        mock_get_config.return_value = _make_renderer_config(show_llm_model=False)
+        r = _make_result(
+            sentiment_score=59,
+            operation_advice="持有",
+            decision_type="hold",
+            dashboard={
+                "core_conclusion": {"one_sentence": "等待确认"},
+                "intelligence": {"sentiment_summary": "无重大新闻", "risk_alerts": []},
+                "battle_plan": {
+                    "sniper_points": {"ideal_buy": "1400", "stop_loss": "1300"},
+                    "position_strategy": {"suggested_position": "4-6成"},
+                },
+            },
+        )
+        # Search execution is not evidence when zero records were retrieved.
+        r.search_performed = True
+        r.analysis_context_pack_overview = {"metadata": {"news_result_count": 0}}
+
+        out = render("markdown", [r], report_date="2026-07-27", summary_only=False)
+
+        self.assertIn("无法确认近期是否存在重大事项", out)
+        self.assertNotIn("无重大新闻", out)
+        self.assertNotIn("作战计划", out)
+        self.assertNotIn("4-6成", out)
+        self.assertNotIn("1400", out)
+
+    @patch("src.services.report_renderer.get_config")
+    def test_buy_keeps_battle_plan(self, mock_get_config) -> None:
+        mock_get_config.return_value = _make_renderer_config(show_llm_model=False)
+        r = _make_result(
+            sentiment_score=82,
+            operation_advice="买入",
+            decision_type="buy",
+            dashboard={
+                "core_conclusion": {"one_sentence": "回调可分批关注"},
+                "battle_plan": {
+                    "sniper_points": {"ideal_buy": "1400", "stop_loss": "1300"},
+                    "position_strategy": {"suggested_position": "2成"},
+                },
+            },
+        )
+        r.search_performed = True
+
+        out = render("markdown", [r], report_date="2026-07-27", summary_only=False)
+
+        self.assertIn("作战计划", out)
+        self.assertIn("1400", out)
+        self.assertIn("2成", out)
+
+    @patch("src.services.report_renderer.get_config")
+    def test_premarket_snapshot_uses_previous_complete_date(self, mock_get_config) -> None:
+        mock_get_config.return_value = _make_renderer_config(show_llm_model=False)
+        r = _make_result(sentiment_score=59, operation_advice="持有", decision_type="hold")
+        r.market_snapshot = {
+            "date": "2026-07-24",
+            "close": "1410.00",
+            "prev_close": "1400.00",
+            "open": "1401.00",
+            "high": "1420.00",
+            "low": "1390.00",
+            "pct_chg": "0.71%",
+            "change_amount": "10.00",
+            "amplitude": "2.14%",
+            "volume": "1.00万",
+            "amount": "2.00亿",
+        }
+        r.market_phase_summary = {
+            "phase": "premarket",
+            "effective_daily_bar_date": "2026-07-24",
+        }
+
+        out = render("markdown", [r], report_date="2026-07-27", summary_only=False)
+
+        self.assertIn("上一完整交易日行情（2026-07-24）", out)
+        self.assertIn("上一完整交易日收盘价", out)
+        self.assertNotIn("### 📈 当日行情", out)
+
+    @patch("src.services.report_renderer.get_config")
+    def test_intraday_snapshot_uses_session_date_and_marks_partial_bar(self, mock_get_config) -> None:
+        mock_get_config.return_value = _make_renderer_config(show_llm_model=False)
+        r = _make_result(sentiment_score=59, operation_advice="持有", decision_type="hold")
+        r.analysis_context_pack_overview = {"metadata": {"news_result_count": 1}}
+        r.market_snapshot = {
+            "date": "2026-07-27",
+            "close": "1290.29",
+            "prev_close": "1297.41",
+            "open": "1308.00",
+            "high": "1308.00",
+            "low": "1279.58",
+            "pct_chg": "-0.55%",
+            "change_amount": "-7.12",
+            "amplitude": "2.19%",
+            "volume": "190.64万股",
+            "amount": "24.59亿元",
+        }
+        r.market_phase_summary = {
+            "phase": "intraday",
+            "session_date": "2026-07-27",
+            "effective_daily_bar_date": "2026-07-24",
+        }
+
+        out = render("markdown", [r], report_date="2026-07-27", summary_only=False)
+
+        self.assertIn("盘中行情（2026-07-27，未收盘）", out)
+        self.assertIn("盘中价", out)
+        self.assertNotIn("当日行情（2026-07-24）", out)
+        self.assertNotIn("上一完整交易日行情", out)

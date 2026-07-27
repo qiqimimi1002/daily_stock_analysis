@@ -24,7 +24,12 @@
 
 ## {{ e.signal_emoji }} {{ e.stock_name }} ({{ result.code }})
 
-{% if intel %}
+{% set news_notice = news_verification_notice(result, report_language) %}
+{% if news_notice %}
+### 📰 {{ labels.info_heading }}
+
+⚠️ **核查状态**：{{ news_notice }}
+{% elif intel %}
 ### 📰 {{ labels.info_heading }}
 
 {% if intel.get('sentiment_summary') %}
@@ -184,7 +189,7 @@
 
 {% endif %}
 
-{% if battle %}
+{% if battle and is_actionable_buy_result(result, report_language) %}
 ### 🎯 {{ labels.battle_plan_heading }}
 
 {% set sniper = battle.get('sniper_points', {}) %}

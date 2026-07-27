@@ -60,6 +60,11 @@ from src.schemas.decision_action import (
     display_decision_type_for_result,
     display_operation_advice_for_result,
 )
+from src.report_evidence_policy import (
+    is_actionable_buy_result,
+    market_snapshot_labels,
+    news_verification_notice,
+)
 from bot.models import BotMessage
 from src.utils.sanitize import sanitize_diagnostic_text
 from src.utils.data_processing import (
@@ -1022,12 +1027,16 @@ class NotificationService(
 
                 # 消息面/情绪面
                 news_lines = []
-                if result.news_summary:
-                    news_lines.append(f"**新闻摘要**：{result.news_summary}")
-                if hasattr(result, 'market_sentiment') and result.market_sentiment:
-                    news_lines.append(f"**市场情绪**：{result.market_sentiment}")
-                if hasattr(result, 'hot_topics') and result.hot_topics:
-                    news_lines.append(f"**相关热点**：{result.hot_topics}")
+                news_notice = news_verification_notice(result, report_language)
+                if news_notice:
+                    news_lines.append(f"**核查状态**：{news_notice}")
+                else:
+                    if result.news_summary:
+                        news_lines.append(f"**新闻摘要**：{result.news_summary}")
+                    if hasattr(result, 'market_sentiment') and result.market_sentiment:
+                        news_lines.append(f"**市场情绪**：{result.market_sentiment}")
+                    if hasattr(result, 'hot_topics') and result.hot_topics:
+                        news_lines.append(f"**相关热点**：{result.hot_topics}")
                 if news_lines:
                     report_lines.extend([
                         "#### 📰 消息面/情绪面",
@@ -1321,7 +1330,15 @@ class NotificationService(
                 ])
                 # ========== 舆情与基本面概览（放在最前面）==========
                 intel = dashboard.get('intelligence', {}) if dashboard else {}
-                if intel:
+                news_notice = news_verification_notice(result, report_language)
+                if news_notice:
+                    report_lines.extend([
+                        f"### 📰 {labels['info_heading']}",
+                        "",
+                        f"⚠️ **核查状态**：{news_notice}",
+                        "",
+                    ])
+                elif intel:
                     report_lines.extend([
                         f"### 📰 {labels['info_heading']}",
                         "",
@@ -1454,7 +1471,7 @@ class NotificationService(
 
                 # ========== 作战计划 ==========
                 battle = dashboard.get('battle_plan', {}) if dashboard else {}
-                if battle:
+                if battle and is_actionable_buy_result(result, report_language):
                     report_lines.extend([
                         f"### 🎯 {labels['battle_plan_heading']}",
                         "",
@@ -1656,6 +1673,10 @@ class NotificationService(
                     lines.append("")
                 # 重要信息区（舆情+基本面）
                 info_lines = []
+                news_notice = news_verification_notice(result, report_language)
+                if news_notice:
+                    info_lines.append(f"⚠️ 核查状态: {news_notice}")
+                    intel = {}
 
                 # 业绩预期
                 if intel.get('earnings_outlook'):
@@ -1690,7 +1711,7 @@ class NotificationService(
 
                 # 狙击点位
                 sniper = battle.get('sniper_points', {}) if battle else {}
-                if sniper:
+                if sniper and is_actionable_buy_result(result, report_language):
                     ideal_buy = str(sniper.get('ideal_buy', ''))
                     stop_loss = str(sniper.get('stop_loss', ''))
                     take_profit = str(sniper.get('take_profit', ''))
@@ -1947,6 +1968,15 @@ class NotificationService(
 
         # 重要信息（舆情+基本面）
         info_added = False
+        news_notice = news_verification_notice(result, report_language)
+        if news_notice:
+            lines.extend([
+                f"### 📰 {labels['info_heading']}",
+                "",
+                f"⚠️ **核查状态**：{news_notice}",
+                "",
+            ])
+            intel = {}
         if intel:
             if intel.get('earnings_outlook'):
                 if not info_added:
@@ -1987,7 +2017,7 @@ class NotificationService(
 
         # 狙击点位
         sniper = battle.get('sniper_points', {}) if battle else {}
-        if sniper:
+        if sniper and is_actionable_buy_result(result, report_language):
             lines.extend([
                 f"### 🎯 {labels['action_points_heading']}",
                 "",
@@ -2083,10 +2113,15 @@ class NotificationService(
         report_language = self._get_report_language(result)
         labels = get_report_labels(report_language)
 
+        snapshot_heading, close_label = market_snapshot_labels(
+            result,
+            labels,
+            report_language,
+        )
         lines.extend([
-            f"### 📈 {labels['market_snapshot_heading']}",
+            f"### 📈 {snapshot_heading}",
             "",
-            f"| {labels['close_label']} | {labels['prev_close_label']} | {labels['open_label']} | {labels['high_label']} | {labels['low_label']} | {labels['change_pct_label']} | {labels['change_amount_label']} | {labels['amplitude_label']} | {labels['volume_label']} | {labels['amount_label']} |",
+            f"| {close_label} | {labels['prev_close_label']} | {labels['open_label']} | {labels['high_label']} | {labels['low_label']} | {labels['change_pct_label']} | {labels['change_amount_label']} | {labels['amplitude_label']} | {labels['volume_label']} | {labels['amount_label']} |",
             "|------|------|------|------|------|-------|-------|------|--------|--------|",
             f"| {snapshot.get('close', 'N/A')} | {snapshot.get('prev_close', 'N/A')} | "
             f"{snapshot.get('open', 'N/A')} | {snapshot.get('high', 'N/A')} | "
