@@ -48,6 +48,7 @@ from src.schemas.decision_action import (
     display_operation_advice_for_result,
 )
 from src.schemas.decision_scale import extract_decision_guardrail_reason
+from src.report_evidence_policy import attribution_weights_for_result
 from src.utils.sniper_points import find_sniper_points
 from src.utils.data_processing import (
     extract_realtime_detail_fields,
@@ -1163,7 +1164,7 @@ class HistoryService:
                 f"### 🎯 {labels.get('signal_attribution_heading', '信号归因分析')}",
                 "",
             ])
-            weight_items = signal_attribution_weight_items(signal_attr)
+            weight_items = attribution_weights_for_result(result, signal_attr)
             if weight_items:
                 report_lines.append(f"**{labels.get('attribution_weights_label', '归因权重')}**:")
                 weight_labels = {

@@ -2060,7 +2060,7 @@ class NotificationService(
                 "",
             ])
             # 归因权重
-            weight_items = signal_attribution_weight_items(signal_attr)
+            weight_items = attribution_weights_for_result(result, signal_attr)
             if weight_items:
                 lines.append(f"**{labels.get('attribution_weights_label', '归因权重')}**:")
                 weight_labels = {
