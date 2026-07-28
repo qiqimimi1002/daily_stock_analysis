@@ -42,10 +42,18 @@ from src.schemas.decision_action import (
     localize_action_label,
 )
 from src.report_evidence_policy import (
+    attribution_weights_for_result,
+    conservative_volume_meaning,
     is_actionable_buy_result,
+    market_local_now,
+    market_snapshot_for_report,
     market_snapshot_close_label,
     market_snapshot_heading,
+    market_snapshot_price_label,
     news_verification_notice,
+    price_data_for_report,
+    sanitize_action_items,
+    sanitize_action_text,
 )
 from src.utils.data_processing import (
     normalize_model_used,
@@ -190,7 +198,7 @@ def render(
                 models_used.append(model)
         models_used = list(dict.fromkeys(models_used))
 
-    report_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    report_timestamp = market_local_now().strftime("%Y-%m-%d %H:%M:%S")
 
     def failed_checks(checklist: List[str]) -> List[str]:
         return [c for c in (checklist or []) if c.startswith("❌") or c.startswith("⚠️")]
@@ -249,7 +257,14 @@ def render(
         "strategy_invalid_opinion_count": strategy_invalid_opinion_count,
         "signal_attribution_has_content": signal_attribution_has_content,
         "signal_attribution_weight_items": signal_attribution_weight_items,
+        "attribution_weights_for_result": attribution_weights_for_result,
+        "conservative_volume_meaning": conservative_volume_meaning,
         "is_actionable_buy_result": is_actionable_buy_result,
+        "market_snapshot_for_report": market_snapshot_for_report,
+        "market_snapshot_price_label": market_snapshot_price_label,
+        "price_data_for_report": price_data_for_report,
+        "sanitize_action_items": sanitize_action_items,
+        "sanitize_action_text": sanitize_action_text,
         "news_verification_notice": news_verification_notice,
         "market_snapshot_heading": market_snapshot_heading,
         "market_snapshot_close_label": market_snapshot_close_label,

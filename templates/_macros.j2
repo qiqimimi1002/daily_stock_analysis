@@ -1,6 +1,6 @@
 {# Shared macros for report templates #}
 {% macro market_snapshot(result) %}
-{% set snapshot = result.market_snapshot if result.market_snapshot else {} %}
+{% set snapshot = market_snapshot_for_report(result) %}
 {% if snapshot %}
 ### 📈 {{ market_snapshot_heading(result, labels, report_language) }}
 
@@ -9,7 +9,7 @@
 | {{ snapshot.get('close', 'N/A') }} | {{ snapshot.get('prev_close', 'N/A') }} | {{ snapshot.get('open', 'N/A') }} | {{ snapshot.get('high', 'N/A') }} | {{ snapshot.get('low', 'N/A') }} | {{ snapshot.get('pct_chg', 'N/A') }} | {{ snapshot.get('change_amount', 'N/A') }} | {{ snapshot.get('amplitude', 'N/A') }} | {{ snapshot.get('volume', 'N/A') }} | {{ snapshot.get('amount', 'N/A') }} |
 {% if snapshot.get('price') %}
 
-| {{ labels.current_price_label }} | {{ labels.volume_ratio_label }} | {{ labels.turnover_rate_label }} | {{ labels.source_label }} |
+| {{ market_snapshot_price_label(result, labels, report_language) }} | {{ labels.volume_ratio_label }} | {{ labels.turnover_rate_label }} | {{ labels.source_label }} |
 |-------|------|--------|----------|
 | {{ snapshot.get('price', 'N/A') }} | {{ snapshot.get('volume_ratio', 'N/A') }} | {{ snapshot.get('turnover_rate', 'N/A') }} | {{ snapshot.get('source', 'N/A') }} |
 {% endif %}

@@ -61,9 +61,17 @@ from src.schemas.decision_action import (
     display_operation_advice_for_result,
 )
 from src.report_evidence_policy import (
+    attribution_weights_for_result,
+    conservative_volume_meaning,
     is_actionable_buy_result,
+    market_local_now,
+    market_snapshot_for_report,
     market_snapshot_labels,
+    market_snapshot_price_label,
     news_verification_notice,
+    price_data_for_report,
+    sanitize_action_items,
+    sanitize_action_text,
 )
 from bot.models import BotMessage
 from src.utils.sanitize import sanitize_diagnostic_text
@@ -1136,6 +1144,8 @@ class NotificationService(
         report_lines: List[str],
         dashboard: Dict[str, Any],
         labels: Dict[str, str],
+        result: Optional[AnalysisResult] = None,
+        report_language: str = "zh",
     ) -> None:
         phase_decision = dashboard.get("phase_decision") if dashboard else None
         if not isinstance(phase_decision, dict):
@@ -1145,6 +1155,12 @@ class NotificationService(
 
         watch_conditions = self._phase_decision_list(phase_decision.get("watch_conditions"))
         data_limitations = self._phase_decision_list(phase_decision.get("data_limitations"))
+        immediate_action = str(phase_decision.get("immediate_action") or "")
+        confidence_reason = str(phase_decision.get("confidence_reason") or "")
+        if result is not None:
+            watch_conditions = sanitize_action_items(result, watch_conditions, report_language)
+            immediate_action = sanitize_action_text(result, immediate_action, report_language)
+            confidence_reason = sanitize_action_text(result, confidence_reason, report_language)
 
         report_lines.extend([
             f"### 🛡️ {labels['phase_decision_heading']}",
@@ -1152,7 +1168,7 @@ class NotificationService(
             f"| {labels['action_window_label']} | {labels['immediate_action_label']} | {labels['next_check_time_label']} |",
             "|---------|---------|---------|",
             f"| {phase_decision.get('action_window') or 'N/A'} | "
-            f"{phase_decision.get('immediate_action') or 'N/A'} | "
+            f"{immediate_action or 'N/A'} | "
             f"{phase_decision.get('next_check_time') or 'N/A'} |",
             "",
         ])
@@ -1163,7 +1179,7 @@ class NotificationService(
                 report_lines.append(f"- {condition}")
             report_lines.append("")
 
-        confidence_reason = str(phase_decision.get("confidence_reason") or "").strip()
+        confidence_reason = confidence_reason.strip()
         if confidence_reason:
             report_lines.extend([
                 f"**{labels['confidence_reason_label']}**: {confidence_reason}",
@@ -1371,7 +1387,11 @@ class NotificationService(
 
                 # ========== 核心结论 ==========
                 core = dashboard.get('core_conclusion', {}) if dashboard else {}
-                one_sentence = core.get('one_sentence', result.analysis_summary)
+                one_sentence = sanitize_action_text(
+                    result,
+                    core.get('one_sentence', result.analysis_summary),
+                    report_language,
+                )
                 time_sense = core.get('time_sensitivity', labels['default_time_sensitivity'])
                 pos_advice = core.get('position_advice', {})
 
@@ -1390,8 +1410,8 @@ class NotificationService(
                     report_lines.extend([
                         f"| {labels['position_status_label']} | {labels['action_advice_label']} |",
                         "|---------|---------|",
-                        f"| 🆕 **{labels['no_position_label']}** | {pos_advice.get('no_position', self._get_display_operation_advice(result, report_language))} |",
-                        f"| 💼 **{labels['has_position_label']}** | {pos_advice.get('has_position', labels['continue_holding'])} |",
+                        f"| 🆕 **{labels['no_position_label']}** | {sanitize_action_text(result, pos_advice.get('no_position', self._get_display_operation_advice(result, report_language)), report_language)} |",
+                        f"| 💼 **{labels['has_position_label']}** | {sanitize_action_text(result, pos_advice.get('has_position', labels['continue_holding']), report_language)} |",
                         "",
                     ])
 
@@ -1401,7 +1421,7 @@ class NotificationService(
                 data_persp = dashboard.get('data_perspective', {}) if dashboard else {}
                 if data_persp:
                     trend_data = data_persp.get('trend_status', {})
-                    price_data = data_persp.get('price_position', {})
+                    price_data = price_data_for_report(result, data_persp.get('price_position', {}))
                     vol_data = data_persp.get('volume_analysis', {})
                     chip_data = data_persp.get('chip_structure', {})
 
@@ -1442,7 +1462,7 @@ class NotificationService(
                         report_lines.extend([
                             f"**{labels['volume_label']}**: {labels['volume_ratio_label']} {vol_data.get('volume_ratio', 'N/A')} ({vol_data.get('volume_status', '')}) | "
                             f"{labels['turnover_rate_label']} {vol_data.get('turnover_rate', 'N/A')}%",
-                            f"💡 *{vol_data.get('volume_meaning', '')}*",
+                            f"💡 *{conservative_volume_meaning(vol_data, report_language)}*",
                             "",
                         ])
                     # 筹码结构
@@ -1467,7 +1487,9 @@ class NotificationService(
                                 "",
                             ])
 
-                self._append_phase_decision_block(report_lines, dashboard, labels)
+                self._append_phase_decision_block(
+                    report_lines, dashboard, labels, result, report_language
+                )
 
                 # ========== 作战计划 ==========
                 battle = dashboard.get('battle_plan', {}) if dashboard else {}
@@ -1517,7 +1539,7 @@ class NotificationService(
                         f"### 🎯 {labels['signal_attribution_heading']}",
                         "",
                     ])
-                    weight_items = signal_attribution_weight_items(signal_attr)
+                    weight_items = attribution_weights_for_result(result, signal_attr)
                     if weight_items:
                         report_lines.append(f"**{labels['attribution_weights_label']}**:")
                         weight_labels = {
@@ -1588,7 +1610,7 @@ class NotificationService(
         # 底部（去除免责声明）
         report_lines.extend([
             "",
-            f"*{labels['generated_at_label']}：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*",
+            f"*{labels['generated_at_label']}：{market_local_now().strftime('%Y-%m-%d %H:%M:%S')}*",
         ])
         models = self._collect_models_used(results)
         if models:
@@ -2106,7 +2128,7 @@ class NotificationService(
         return mapping[normalize_report_language(language)]
 
     def _append_market_snapshot(self, lines: List[str], result: AnalysisResult) -> None:
-        snapshot = getattr(result, 'market_snapshot', None)
+        snapshot = market_snapshot_for_report(result)
         if not snapshot:
             return
 
@@ -2134,7 +2156,7 @@ class NotificationService(
             display_source = self._get_source_display_name(snapshot.get('source', 'N/A'), report_language)
             lines.extend([
                 "",
-                f"| {labels['current_price_label']} | {labels['volume_ratio_label']} | {labels['turnover_rate_label']} | {labels['source_label']} |",
+                f"| {market_snapshot_price_label(result, labels, report_language)} | {labels['volume_ratio_label']} | {labels['turnover_rate_label']} | {labels['source_label']} |",
                 "|-------|------|--------|----------|",
                 f"| {snapshot.get('price', 'N/A')} | {snapshot.get('volume_ratio', 'N/A')} | "
                 f"{snapshot.get('turnover_rate', 'N/A')} | {display_source} |",
