@@ -94,7 +94,7 @@ class TestReportRenderer(unittest.TestCase):
 
         self.assertIsNotNone(out)
         self.assertIn("持有", out)
-        self.assertIn("🟡观望:1", out)
+        self.assertIn("🟡持有/观望:1", out)
 
     def test_render_markdown_uses_explicit_avoid_and_alert_text(self) -> None:
         avoid = _make_result(

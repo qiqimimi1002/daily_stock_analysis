@@ -35,6 +35,17 @@ class TestReportEvidencePolicyV4(TestCase):
         self.assertNotIn("加仓", text)
         self.assertIn("持有观察", text)
 
+    def test_non_buy_text_removes_layout_and_entry_language(self):
+        result = self._result()
+        text = sanitize_action_text(
+            result,
+            "禁止盲目追高，建议逢低布局；确认后再分批介入。",
+            "zh",
+        )
+        self.assertNotIn("布局", text)
+        self.assertNotIn("介入", text)
+        self.assertEqual(text.count("持有观察"), 2)
+
     def test_buy_text_is_unchanged(self):
         result = self._result(decision_type="buy", operation_advice="买入")
         original = "回调可分批建仓"

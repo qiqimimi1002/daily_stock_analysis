@@ -48,6 +48,20 @@ _HISTORY_ALIASES: Mapping[str, Sequence[str]] = {
 }
 
 
+def _strict_json_value(value: Any) -> Any:
+    """Replace non-finite floats so saved artifacts are valid strict JSON."""
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    if isinstance(value, Mapping):
+        return {
+            str(key): _strict_json_value(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, (list, tuple)):
+        return [_strict_json_value(item) for item in value]
+    return value
+
+
 @dataclass(frozen=True)
 class ScreeningConfig:
     """User-facing screening thresholds."""
@@ -669,7 +683,12 @@ def save_result(
     codes_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(render_markdown(result), encoding="utf-8")
     json_path.write_text(
-        json.dumps(result.as_dict(), ensure_ascii=False, indent=2),
+        json.dumps(
+            _strict_json_value(result.as_dict()),
+            ensure_ascii=False,
+            indent=2,
+            allow_nan=False,
+        ),
         encoding="utf-8",
     )
     codes_path.write_text(",".join(result.analysis_codes), encoding="utf-8")

@@ -367,7 +367,7 @@ _REPORT_LABELS: Dict[str, Dict[str, str]] = {
         "stock_unit": "只股票",
         "stock_unit_compact": "只",
         "buy_label": "买入",
-        "watch_label": "观望",
+        "watch_label": "持有/观望",
         "sell_label": "卖出",
         "summary_heading": "分析结果摘要",
         "info_heading": "重要信息速览",

@@ -283,6 +283,57 @@ class TestEnhanceContextRealtimeOverride(unittest.TestCase):
 
     @patch("src.core.pipeline.get_market_now")
     @patch("src.core.pipeline.get_market_for_stock", return_value="cn")
+    def test_efinance_lot_volume_is_harmonized_with_realtime_shares(
+        self, _mock_market, mock_now
+    ) -> None:
+        today = date.today()
+        mock_now.return_value = datetime(
+            today.year, today.month, today.day, 10, 0, tzinfo=timezone.utc
+        )
+        context = {
+            "code": "600941",
+            "date": (today - timedelta(days=1)).isoformat(),
+            "today": {
+                "close": 96.35,
+                "volume": 156748,
+                "amount": 1_503_365_000,
+                "date": (today - timedelta(days=1)).isoformat(),
+                "dataSource": "EfinanceFetcher",
+            },
+            "yesterday": {
+                "close": 96.35,
+                "volume": 156748,
+                "amount": 1_503_365_000,
+            },
+        }
+        quote = UnifiedRealtimeQuote(
+            code="600941",
+            name="中国移动",
+            source=RealtimeSource.TENCENT,
+            price=97.27,
+            open_price=96.35,
+            high=97.79,
+            low=96.01,
+            volume=12_952_900,
+            amount=1_258_879_000,
+            change_pct=0.95,
+        )
+        trend = TrendAnalysisResult(
+            code="600941",
+            trend_status=TrendStatus.BULL,
+            ma5=95.0,
+            ma10=94.0,
+            ma20=93.0,
+        )
+
+        enhanced = self.pipeline._enhance_context(
+            context, quote, None, trend, "中国移动"
+        )
+
+        self.assertEqual(enhanced["volume_change_ratio"], 0.83)
+
+    @patch("src.core.pipeline.get_market_now")
+    @patch("src.core.pipeline.get_market_for_stock", return_value="cn")
     def test_realtime_metadata_and_partial_estimated_fields_are_propagated(
         self, _mock_market, mock_now
     ) -> None:

@@ -14,7 +14,10 @@ from src.schemas.decision_action import display_decision_type_for_result
 
 
 _INTRADAY_PHASES = {"intraday", "lunch_break", "closing_auction"}
-_BUY_WORDS_ZH = re.compile(r"(维持|继续)?\s*(买入评级|买入|加仓|建仓|低吸)")
+_BUY_WORDS_ZH = re.compile(
+    r"(维持|继续)?\s*"
+    r"(买入评级|逢低布局|分批布局|分批介入|买入|加仓|建仓|低吸|布局|介入|抄底)"
+)
 
 
 def _language_bucket(report_language: Any) -> str:

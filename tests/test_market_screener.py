@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 from datetime import datetime
 from pathlib import Path
+from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
 import pandas as pd
@@ -154,6 +156,56 @@ class TestHistoryAndRanking(unittest.TestCase):
                 (root / "data" / "codes.txt").read_text(encoding="utf-8"),
                 result.analysis_codes[0],
             )
+
+    def test_intraday_artifact_uses_null_instead_of_nan(self) -> None:
+        spot = pd.DataFrame(
+            [["600100", "主板甲", 25.0, 1.2, 100, 1_500_000_000, 2.0]],
+            columns=["代码", "名称", "最新价", "涨跌幅", "成交量", "成交额", "换手率"],
+        )
+        history = _history()
+        history = pd.concat(
+            [
+                history,
+                pd.DataFrame(
+                    [{"日期": "2026-07-29", "收盘": 25.0, "成交量": 500_000.0}]
+                ),
+            ],
+            ignore_index=True,
+        )
+        config = ScreeningConfig(
+            top_n=1,
+            analysis_limit=1,
+            preselect_limit=1,
+            history_workers=1,
+        )
+        with patch("src.services.market_screener.datetime") as mocked_datetime:
+            mocked_datetime.now.return_value = datetime(
+                2026,
+                7,
+                29,
+                10,
+                30,
+                tzinfo=ZoneInfo("Asia/Shanghai"),
+            )
+            mocked_datetime.fromisoformat = datetime.fromisoformat
+            result = MarketScreener(config).run(
+                spot_frame=spot,
+                history_fetcher=lambda _: history,
+            )
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            json_path = root / "data" / "screen.json"
+            save_result(
+                result,
+                report_path=root / "reports" / "screen.md",
+                json_path=json_path,
+                codes_path=root / "data" / "codes.txt",
+            )
+            raw = json_path.read_text(encoding="utf-8")
+            parsed = json.loads(raw)
+            self.assertNotIn("NaN", raw)
+            self.assertIsNone(parsed["candidates"][0]["volume_ratio_5d"])
 
 
 if __name__ == "__main__":

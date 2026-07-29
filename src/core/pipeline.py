@@ -12,6 +12,7 @@ A股自选股智能分析系统 - 核心分析流水线
 """
 
 import logging
+import math
 import threading
 import time
 import uuid
@@ -106,6 +107,50 @@ logger = logging.getLogger(__name__)
 # double-check 初始化 _single_stock_notify_lock 仍然线程安全。
 _SINGLE_STOCK_NOTIFY_LOCK_INIT_GUARD = threading.Lock()
 _DAILY_MARKET_CONTEXT_SERVICE_LOCK_INIT_GUARD = threading.Lock()
+
+
+def _volume_in_shares(
+    volume: Any,
+    *,
+    amount: Any = None,
+    price: Any = None,
+) -> Optional[float]:
+    """Normalize an A-share volume value to shares when units can be inferred.
+
+    Free data providers do not use one volume unit consistently: Tencent
+    realtime quotes are normalized to shares, while some efinance daily rows
+    expose lots (手).  Amount / price provides an independent estimate of
+    traded shares, so choose whichever of ``volume`` and ``volume * 100`` is
+    closer to that estimate.  When the evidence is incomplete, preserve the
+    original value instead of guessing.
+    """
+
+    try:
+        raw_volume = float(volume)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(raw_volume) or raw_volume <= 0:
+        return None
+
+    try:
+        traded_amount = float(amount)
+        reference_price = float(price)
+    except (TypeError, ValueError):
+        return raw_volume
+    if (
+        not math.isfinite(traded_amount)
+        or not math.isfinite(reference_price)
+        or traded_amount <= 0
+        or reference_price <= 0
+    ):
+        return raw_volume
+
+    estimated_shares = traded_amount / reference_price
+    candidates = (raw_volume, raw_volume * 100.0)
+    return min(
+        candidates,
+        key=lambda candidate: abs(math.log(candidate / estimated_shares)),
+    )
 
 
 def _symbol_scope_lookup_values(code: str, market: str) -> List[str]:
@@ -1053,18 +1098,31 @@ class StockAnalysisPipeline:
                     except (TypeError, ValueError):
                         pass
                 if vol is not None and enhanced.get('yesterday'):
-                    yest_vol = enhanced['yesterday'].get('volume') if isinstance(
-                        enhanced['yesterday'], dict
-                    ) else None
+                    yesterday = (
+                        enhanced['yesterday']
+                        if isinstance(enhanced['yesterday'], dict)
+                        else {}
+                    )
+                    yest_vol = yesterday.get('volume')
                     if yest_vol is not None:
-                        try:
-                            yv = float(yest_vol)
-                            if yv > 0:
-                                enhanced['volume_change_ratio'] = round(
-                                    float(vol) / yv, 2
-                                )
-                        except (TypeError, ValueError):
-                            pass
+                        current_volume = _volume_in_shares(
+                            vol,
+                            amount=realtime_today.get('amount'),
+                            price=realtime_today.get('close'),
+                        )
+                        previous_volume = _volume_in_shares(
+                            yest_vol,
+                            amount=yesterday.get('amount'),
+                            price=yesterday.get('close'),
+                        )
+                        if (
+                            current_volume is not None
+                            and previous_volume is not None
+                            and previous_volume > 0
+                        ):
+                            enhanced['volume_change_ratio'] = round(
+                                current_volume / previous_volume, 2
+                            )
 
         # ETF/index flag for analyzer prompt (Fixes #274)
         enhanced['is_index_etf'] = SearchService.is_index_or_etf(
