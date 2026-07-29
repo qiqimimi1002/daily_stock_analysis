@@ -5,12 +5,16 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from numbers import Integral
-from typing import Any, Dict, Optional, Tuple
+import re
+from datetime import datetime
+from typing import Any, Dict, List, Optional, Tuple
+from zoneinfo import ZoneInfo
 
 from src.schemas.decision_action import display_decision_type_for_result
 
 
 _INTRADAY_PHASES = {"intraday", "lunch_break", "closing_auction"}
+_BUY_WORDS_ZH = re.compile(r"(维持|继续)?\s*(买入评级|买入|加仓|建仓|低吸)")
 
 
 def _language_bucket(report_language: Any) -> str:
@@ -196,3 +200,117 @@ def market_snapshot_price_label(
             return "최근 이용 가능 가격"
         return "最近可用价"
     return labels.get("current_price_label", "当前价")
+
+
+def market_local_now() -> datetime:
+    """Return the report time in the A-share market timezone."""
+    return datetime.now(ZoneInfo("Asia/Shanghai"))
+
+
+def _as_float(value: Any) -> Optional[float]:
+    if isinstance(value, bool) or value is None:
+        return None
+    try:
+        return float(str(value).replace(",", "").replace("%", "").strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def market_snapshot_for_report(result: Any) -> Dict[str, Any]:
+    """Return a display snapshot with internally consistent price arithmetic."""
+    snapshot = _as_mapping(getattr(result, "market_snapshot", None))
+    if not snapshot:
+        return {}
+    normalized = dict(snapshot)
+    close = _as_float(snapshot.get("close"))
+    prev_close = _as_float(snapshot.get("prev_close"))
+    if close is not None and prev_close not in (None, 0):
+        change = close - prev_close
+        normalized["change_amount"] = f"{change:+.2f}"
+        normalized["pct_chg"] = f"{change / prev_close * 100:+.2f}%"
+    return normalized
+
+
+def price_data_for_report(result: Any, price_data: Any) -> Dict[str, Any]:
+    """Use the same quote in the price-position table as in the snapshot."""
+    normalized = _as_mapping(price_data)
+    snapshot = market_snapshot_for_report(result)
+    phase, _, _, _ = _phase_and_dates(result)
+    if phase in _INTRADAY_PHASES and snapshot.get("close") not in (None, ""):
+        normalized["current_price"] = snapshot["close"]
+    return normalized
+
+
+def sanitize_action_text(
+    result: Any,
+    value: Any,
+    report_language: str = "zh",
+) -> str:
+    """Remove incremental-buy language when the final decision is not buy."""
+    text = str(value or "").strip()
+    if not text or is_actionable_buy_result(result, report_language):
+        return text
+    lang = _language_bucket(report_language)
+    if lang == "en":
+        return re.sub(
+            r"\b(maintain|keep|continue)?\s*(buy rating|buy|add|build position|accumulate)\b",
+            "hold and observe",
+            text,
+            flags=re.IGNORECASE,
+        )
+    if lang == "ko":
+        return re.sub(r"(매수 의견 유지|매수|추가 매수|포지션 구축|저가 매수)", "보유 관찰", text)
+    return _BUY_WORDS_ZH.sub("持有观察", text)
+
+
+def sanitize_action_items(
+    result: Any,
+    values: Any,
+    report_language: str = "zh",
+) -> List[str]:
+    if not isinstance(values, (list, tuple)):
+        return []
+    return [sanitize_action_text(result, value, report_language) for value in values]
+
+
+def conservative_volume_meaning(vol_data: Any, report_language: str = "zh") -> str:
+    """Describe volume without inferring pressure, washouts, or future direction."""
+    ratio = _as_mapping(vol_data).get("volume_ratio")
+    ratio_text = str(ratio) if ratio not in (None, "") else "N/A"
+    lang = _language_bucket(report_language)
+    if lang == "en":
+        return (
+            f"Volume ratio {ratio_text} only describes relative activity; "
+            "it does not by itself establish pressure or future direction."
+        )
+    if lang == "ko":
+        return (
+            f"거래량 비율 {ratio_text}은 상대적 거래 활동만 나타내며, "
+            "그 자체로 매수·매도 압력이나 향후 방향을 판단할 수 없습니다."
+        )
+    return f"量比{ratio_text}仅反映相对成交活跃度，不能单独据此判断买卖压力或后续方向。"
+
+
+def attribution_weights_for_result(
+    result: Any,
+    signal_attr: Any,
+) -> List[Tuple[str, Any]]:
+    """Hide attribution percentages when key evidence is incomplete."""
+    if not has_verified_news_evidence(result):
+        return []
+    dashboard = _as_mapping(getattr(result, "dashboard", None))
+    perspective = _as_mapping(dashboard.get("data_perspective"))
+    has_technical = bool(
+        _as_mapping(perspective.get("trend_status"))
+        or _as_mapping(perspective.get("price_position"))
+    )
+    has_fundamentals = bool(
+        getattr(result, "financial_summary", None)
+        or dashboard.get("fundamental_analysis")
+        or dashboard.get("financial_summary")
+    )
+    if not (has_technical and has_fundamentals):
+        return []
+    from src.utils.data_processing import signal_attribution_weight_items
+
+    return signal_attribution_weight_items(_as_mapping(signal_attr))

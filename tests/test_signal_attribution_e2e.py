@@ -53,6 +53,18 @@ class TestSignalAttributionE2E:
             analysis_summary="测试摘要",
         )
 
+    def _with_complete_evidence(self, result):
+        """补齐允许展示归因百分比所需的新闻、技术和基本面证据。"""
+        result.analysis_context_pack_overview = {
+            "metadata": {"news_result_count": 2},
+        }
+        result.dashboard.setdefault("data_perspective", {}).setdefault(
+            "trend_status",
+            {"trend_score": 60},
+        )
+        result.financial_summary = {"pe": 20}
+        return result
+
     # ========== 测试 1: _parse_response() 归一化 ==========
     def test_normalize_called_in_parse_response(self):
         """
@@ -131,7 +143,7 @@ class TestSignalAttributionE2E:
             "strongest_bearish_signal": "成交量萎缩",
         }
         dashboard = self._make_dashboard_with_signal_attr(signal_attr)
-        result = self._make_result(dashboard)
+        result = self._with_complete_evidence(self._make_result(dashboard))
 
         # 调用 generate_dashboard_report()
         notification = NotificationService()
@@ -161,7 +173,9 @@ class TestSignalAttributionE2E:
             "market_conditions": 20,
             "strongest_bullish_signal": "MACD金叉",
         }
-        result = self._make_result(self._make_dashboard_with_signal_attr(signal_attr))
+        result = self._with_complete_evidence(
+            self._make_result(self._make_dashboard_with_signal_attr(signal_attr))
+        )
 
         out = render("markdown", [result], summary_only=False, extra_context={"report_language": "zh"})
 
@@ -198,7 +212,7 @@ class TestSignalAttributionE2E:
         assert "signal_attribution" not in dashboard
 
     def test_partial_signal_attribution_uses_same_display_contract(self):
-        """Partial weights should not render N/A% or None% in any report path."""
+        """证据不完整时，各报告路径均隐藏归因百分比但保留最强信号。"""
         from src.notification import NotificationService
         from src.services.history_service import HistoryService
 
@@ -225,7 +239,8 @@ class TestSignalAttributionE2E:
             assert output is not None
             assert "N/A%" not in output
             assert "None%" not in output
-            assert "35%" in output
+            assert "35%" not in output
+            assert "MACD金叉" in output
 
     def test_all_zero_signal_attribution_is_hidden_without_signals(self):
         """All-zero weights without strongest signals should not render attribution."""
@@ -240,7 +255,7 @@ class TestSignalAttributionE2E:
             "strongest_bullish_signal": None,
             "strongest_bearish_signal": None,
         })
-        result = self._make_result(dashboard)
+        result = self._with_complete_evidence(self._make_result(dashboard))
         notification = NotificationService()
 
         dashboard_report = notification.generate_dashboard_report([result], [dashboard])
@@ -343,7 +358,7 @@ class TestSignalAttributionE2E:
             "strongest_bearish_signal": "成交量萎缩",
         }
         dashboard = self._make_dashboard_with_signal_attr(signal_attr)
-        result = self._make_result(dashboard)
+        result = self._with_complete_evidence(self._make_result(dashboard))
 
         # 创建 mock record
         class MockRecord:

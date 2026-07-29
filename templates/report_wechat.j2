@@ -22,7 +22,7 @@
 
 {% set one_sentence = core.get('one_sentence', result.analysis_summary) if core else result.analysis_summary %}
 {% if one_sentence %}
-📌 **{{ one_sentence[:80] }}**
+📌 **{{ sanitize_action_text(result, one_sentence, report_language)[:80] }}**
 {% endif %}
 {% set news_notice = news_verification_notice(result, report_language) %}
 {% if news_notice %}
@@ -62,10 +62,10 @@
 {% set pos_advice = core.get('position_advice', {}) if core else {} %}
 {% if pos_advice %}
 {% if pos_advice.get('no_position') %}
-🆕 {{ labels.no_position_label }}: {{ pos_advice.no_position[:50] }}
+🆕 {{ labels.no_position_label }}: {{ sanitize_action_text(result, pos_advice.no_position, report_language)[:50] }}
 {% endif %}
 {% if pos_advice.get('has_position') %}
-💼 {{ labels.has_position_label }}: {{ pos_advice.has_position[:50] }}
+💼 {{ labels.has_position_label }}: {{ sanitize_action_text(result, pos_advice.has_position, report_language)[:50] }}
 {% endif %}
 {% endif %}
 
