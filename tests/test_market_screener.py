@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 
@@ -68,6 +70,35 @@ class TestHistoryAndRanking(unittest.TestCase):
         self.assertGreater(metrics["ma5"], metrics["ma20"])
         self.assertAlmostEqual(metrics["volume_ratio_5d"], 1.1, places=2)
 
+    def test_intraday_bar_is_not_treated_as_completed_daily_data(self) -> None:
+        history = _history(last_close=24.0)
+        today = pd.Timestamp("2026-07-29")
+        partial = pd.DataFrame(
+            [{"日期": today, "收盘": 30.0, "成交量": 20_000_000.0}]
+        )
+        history = pd.concat([history, partial], ignore_index=True)
+
+        metrics = calculate_history_metrics(
+            history,
+            min_rows=20,
+            reference_price=25.0,
+            now=datetime(
+                2026,
+                7,
+                29,
+                10,
+                30,
+                tzinfo=ZoneInfo("Asia/Shanghai"),
+            ),
+        )
+
+        self.assertIsNotNone(metrics)
+        assert metrics is not None
+        self.assertTrue(metrics["is_intraday"])
+        self.assertEqual(metrics["history_close"], 25.0)
+        self.assertTrue(pd.isna(metrics["volume_ratio_5d"]))
+        self.assertLess(metrics["ma5"], 25.0)
+
     def test_end_to_end_with_injected_data(self) -> None:
         spot = pd.DataFrame(
             [
@@ -127,4 +158,3 @@ class TestHistoryAndRanking(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
