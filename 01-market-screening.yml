@@ -1,0 +1,120 @@
+name: 全市场初筛
+
+on:
+  schedule:
+    # 工作日北京时间 09:40；开盘后再使用成交额和换手率，避免盘前零值。
+    # GitHub 定时任务可能有数分钟延迟。
+    - cron: "40 1 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      top_n:
+        description: "初筛候选数量"
+        required: true
+        default: "5"
+        type: choice
+        options:
+          - "5"
+          - "10"
+      run_deep_analysis:
+        description: "继续对前三只候选运行 Daily Stock 深度分析"
+        required: true
+        default: true
+        type: boolean
+      force_run:
+        description: "强制运行深度分析（跳过交易日检查）"
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: market-screening
+  cancel-in-progress: false
+
+jobs:
+  screen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v5
+
+      - name: 设置 Python 环境
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: 安装依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: 创建输出目录
+        run: mkdir -p data reports logs
+
+      - name: 执行沪深主板全市场初筛
+        env:
+          SCREEN_TOP_N: ${{ inputs.top_n || vars.SCREEN_TOP_N || '5' }}
+          SCREEN_ANALYSIS_LIMIT: ${{ vars.SCREEN_ANALYSIS_LIMIT || '3' }}
+          SCREEN_PRESELECT_LIMIT: ${{ vars.SCREEN_PRESELECT_LIMIT || '60' }}
+          SCREEN_MIN_AMOUNT_YUAN: ${{ vars.SCREEN_MIN_AMOUNT_YUAN || '100000000' }}
+        run: |
+          python scripts/run_market_screener.py \
+            --top-n "$SCREEN_TOP_N" \
+            --analysis-limit "$SCREEN_ANALYSIS_LIMIT" \
+            --preselect-limit "$SCREEN_PRESELECT_LIMIT" \
+            --history-workers 4 \
+            --min-amount-yuan "$SCREEN_MIN_AMOUNT_YUAN"
+
+      - name: 读取候选代码
+        id: selected
+        shell: bash
+        run: |
+          CODES="$(tr -d '\r\n ' < data/screened_codes.txt)"
+          echo "codes=$CODES" >> "$GITHUB_OUTPUT"
+          echo "深度分析候选: ${CODES:-无}"
+
+      - name: 对候选运行 Daily Stock 深度分析
+        if: >-
+          steps.selected.outputs.codes != '' &&
+          (github.event_name == 'schedule' || inputs.run_deep_analysis)
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_KEYS: ${{ secrets.GEMINI_API_KEYS }}
+          GEMINI_MODEL: ${{ vars.GEMINI_MODEL || secrets.GEMINI_MODEL || 'gemini-2.5-flash' }}
+          TUSHARE_TOKEN: ${{ secrets.TUSHARE_TOKEN }}
+          TICKFLOW_API_KEY: ${{ secrets.TICKFLOW_API_KEY }}
+          TAVILY_API_KEYS: ${{ secrets.TAVILY_API_KEYS }}
+          SERPAPI_API_KEYS: ${{ secrets.SERPAPI_API_KEYS }}
+          BOCHA_API_KEYS: ${{ secrets.BOCHA_API_KEYS }}
+          BRAVE_API_KEYS: ${{ secrets.BRAVE_API_KEYS }}
+          REPORT_TYPE: ${{ vars.REPORT_TYPE || secrets.REPORT_TYPE || 'simple' }}
+          REPORT_LANGUAGE: ${{ vars.REPORT_LANGUAGE || secrets.REPORT_LANGUAGE || 'zh' }}
+          MARKET_REVIEW_ENABLED: "false"
+          LOG_LEVEL: INFO
+          MAX_WORKERS: "1"
+          ENABLE_CHIP_DISTRIBUTION: "false"
+          REALTIME_SOURCE_PRIORITY: ${{ vars.REALTIME_SOURCE_PRIORITY || 'tencent,akshare_sina,efinance,akshare_em' }}
+        shell: bash
+        run: |
+          FORCE_ARG=""
+          if [ "${{ inputs.force_run }}" = "true" ]; then
+            FORCE_ARG="--force-run"
+          fi
+          python main.py \
+            --stocks "${{ steps.selected.outputs.codes }}" \
+            --no-market-review \
+            $FORCE_ARG
+
+      - name: 上传初筛及深度分析结果
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: market-screening-${{ github.run_number }}
+          path: |
+            data/market_screening_*.json
+            data/screened_codes.txt
+            reports/*.md
+            logs/*.log
+          if-no-files-found: warn
+          retention-days: 30
