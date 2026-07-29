@@ -41,6 +41,13 @@ class TestGenerateSingleStockReport:
         }
         dashboard = {"signal_attribution": signal_attr}
         result = self._make_result(dashboard)
+        result.analysis_context_pack_overview = {
+            "metadata": {"news_result_count": 2},
+        }
+        result.dashboard["data_perspective"] = {
+            "trend_status": {"trend_score": 60},
+        }
+        result.financial_summary = {"pe": 20}
 
         notification = NotificationService()
         report = notification.generate_single_stock_report(result)
