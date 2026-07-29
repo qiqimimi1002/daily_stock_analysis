@@ -19,7 +19,7 @@ import logging
 import math
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Sequence
 from zoneinfo import ZoneInfo
@@ -256,24 +256,50 @@ def calculate_history_metrics(
     frame: pd.DataFrame,
     *,
     min_rows: int = 20,
-) -> Optional[Dict[str, float]]:
+    reference_price: Optional[float] = None,
+    now: Optional[datetime] = None,
+) -> Optional[Dict[str, Any]]:
     history = normalize_history_frame(frame)
+    as_of = now or datetime.now(CN_TZ)
+    if as_of.tzinfo is None:
+        as_of = as_of.replace(tzinfo=CN_TZ)
+    else:
+        as_of = as_of.astimezone(CN_TZ)
+
+    # Many free A-share history APIs expose today's unfinished bar during the
+    # trading session. It must not be treated as a completed daily candle.
+    last_date = history["date"].iloc[-1].date() if not history.empty else None
+    is_intraday = (
+        last_date == as_of.date()
+        and time(9, 15) <= as_of.time().replace(tzinfo=None) < time(15, 5)
+    )
+    if is_intraday:
+        history = history.loc[history["date"].dt.date < as_of.date()].copy()
+
     if len(history) < max(min_rows, 20):
         return None
 
     close = history["close"]
     volume = history["volume"]
-    last_close = float(close.iloc[-1])
-    base_close = float(close.iloc[-6])
+    last_close = (
+        float(reference_price)
+        if is_intraday and reference_price is not None and reference_price > 0
+        else float(close.iloc[-1])
+    )
+    base_index = -5 if is_intraday else -6
+    base_close = float(close.iloc[base_index])
     if base_close <= 0:
         return None
 
-    previous_volume_mean = float(volume.iloc[-6:-1].mean())
-    volume_ratio = (
-        float(volume.iloc[-1]) / previous_volume_mean
-        if previous_volume_mean > 0
-        else math.nan
-    )
+    if is_intraday:
+        volume_ratio = math.nan
+    else:
+        previous_volume_mean = float(volume.iloc[-6:-1].mean())
+        volume_ratio = (
+            float(volume.iloc[-1]) / previous_volume_mean
+            if previous_volume_mean > 0
+            else math.nan
+        )
     return {
         "history_close": last_close,
         "five_day_pct": (last_close / base_close - 1.0) * 100.0,
@@ -281,6 +307,7 @@ def calculate_history_metrics(
         "ma10": float(close.tail(10).mean()),
         "ma20": float(close.tail(20).mean()),
         "volume_ratio_5d": volume_ratio,
+        "is_intraday": is_intraday,
     }
 
 
@@ -306,6 +333,7 @@ def build_candidate(
     ma10 = float(metrics["ma10"])
     ma20 = float(metrics["ma20"])
     volume_ratio = float(metrics["volume_ratio_5d"])
+    is_intraday = bool(metrics.get("is_intraday", False))
     amount = float(spot_row["amount"])
     turnover = float(spot_row["turnover"])
     daily_pct = float(spot_row["pct_change"])
@@ -333,11 +361,18 @@ def build_candidate(
     if close > ma5 > ma10 > ma20:
         score += 30.0
         trend_label = "均线多头"
-        reasons.append("收盘价及MA5/MA10/MA20呈多头排列")
+        if is_intraday:
+            reasons.append("最新价高于上一完整交易日MA5/MA10/MA20，均线保持多头排列")
+        else:
+            reasons.append("收盘价及MA5/MA10/MA20呈多头排列")
     elif close > ma20 and ma5 >= ma10:
         score += 21.0
         trend_label = "趋势偏强"
-        reasons.append("价格位于MA20上方，短期均线未转弱")
+        reasons.append(
+            "最新价位于上一完整交易日MA20上方，短期均线未转弱"
+            if is_intraday
+            else "价格位于MA20上方，短期均线未转弱"
+        )
     elif close > ma20:
         score += 13.0
         trend_label = "站上MA20"
@@ -476,6 +511,7 @@ class MarketScreener:
         candidates: List[ScreeningCandidate] = []
         failures = 0
         success = 0
+        intraday_mode = False
 
         rows = [row._asdict() for row in filtered.itertuples(index=False)]
         with ThreadPoolExecutor(max_workers=self.config.history_workers) as executor:
@@ -489,10 +525,14 @@ class MarketScreener:
                     metrics = calculate_history_metrics(
                         future.result(),
                         min_rows=self.config.min_history_rows,
+                        reference_price=float(row["close"]),
                     )
                     if metrics is None:
                         failures += 1
                         continue
+                    intraday_mode = intraday_mode or bool(
+                        metrics.get("is_intraday", False)
+                    )
                     success += 1
                     candidate = build_candidate(row, metrics, self.config)
                     if candidate is not None:
@@ -507,11 +547,16 @@ class MarketScreener:
             reverse=True,
         )[: self.config.top_n]
         analysis_codes = [item.code for item in ranked[: self.config.analysis_limit]]
-        limitations = (
+        limitations: List[str] = [
             "初筛仅使用公开行情、成交与均线数据，尚未核验公告、财务和新闻。",
             "候选名单用于缩小人工复核范围，不代表买入、加仓或建仓建议。",
             "免费行情接口可能延迟或失败；历史数据失败的股票会被跳过并计数。",
-        )
+        ]
+        if intraday_mode:
+            limitations.append(
+                "盘中运行时，当日未完成K线不参与日线均线和量能计算；"
+                "最新价仅用于判断相对上一完整交易日均线的位置。"
+            )
         return ScreeningResult(
             generated_at=datetime.now(CN_TZ).isoformat(timespec="seconds"),
             universe_count=universe_count,
@@ -522,7 +567,7 @@ class MarketScreener:
             analysis_codes=tuple(analysis_codes),
             config=self.config,
             data_source=self.data_source.name,
-            limitations=limitations,
+            limitations=tuple(limitations),
         )
 
 
