@@ -10,7 +10,12 @@ from src.services.market_scoring import (
     build_v21_scorecard,
     calculate_market_environment,
 )
-from src.services.market_screener import MarketScreener, ScreeningConfig, render_markdown
+from src.services.market_screener import (
+    MarketScreener,
+    ScreeningConfig,
+    normalize_spot_frame,
+    render_markdown,
+)
 
 
 def _spot(**overrides):
@@ -136,6 +141,27 @@ class TestV21Scorecard(unittest.TestCase):
         )
         self.assertGreater(strong["score"], weak["score"])
         self.assertIn("strategy", strong)
+
+
+class TestSpotNormalization(unittest.TestCase):
+    def test_sina_turnoverratio_alias_is_supported(self) -> None:
+        frame = pd.DataFrame(
+            [
+                {
+                    "code": "600100",
+                    "name": "sample",
+                    "close": 24.0,
+                    "pct_change": 1.2,
+                    "volume": 1_000_000,
+                    "amount": 1_500_000_000,
+                    "turnoverratio": 2.0,
+                }
+            ]
+        )
+
+        normalized = normalize_spot_frame(frame)
+
+        self.assertEqual(normalized.loc[0, "turnover"], 2.0)
 
 
 class TestV21ScreenerIntegration(unittest.TestCase):

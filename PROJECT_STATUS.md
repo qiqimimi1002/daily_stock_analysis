@@ -18,7 +18,8 @@ observation model without replacing the existing architecture.
 - Active branch: `feat/v2-1-scoring`
 - Pull request: [#4](https://github.com/qiqimimi1002/daily_stock_analysis/pull/4)
 - PR target: `main`
-- Current active-branch head: `ae9c95a`
+- Current active-branch head: see PR #4 (this file is updated in the same
+  changeset as the latest compatibility fix).
 - PR is open and must not be merged until the live screening run succeeds.
 - Temporary branch `v2-1-market-scoring` was created during an abandoned web
   upload attempt. Do not merge or use it.
@@ -39,30 +40,33 @@ observation model without replacing the existing architecture.
 - Missing evidence is disclosed rather than guessed.
 - Added a Sina/AKShare full-market spot fallback after the Eastmoney endpoint
   failed from GitHub Actions.
+- Added compatibility for Sina's `turnoverratio` field so the fallback snapshot
+  can pass the canonical spot-data normalization stage.
 
 ## Verification
 
 - Original V2.1 PR CI run `30515993625`: passed.
-- Local `tests/test_market_scoring.py`: 7 passed.
+- Local `tests/test_market_scoring.py`: 8 passed.
 - `python -m py_compile src/services/market_screener.py`: passed.
 - A broader local test command could not collect
   `tests/test_fundamental_adapter.py` because the local Python environment lacks
   `python-dotenv`; the earlier GitHub CI covered dependency installation.
-- Latest CI for fallback commit `ae9c95a`, run `30517697973`: in progress at
-  the time of this update.
+- PR CI run `30520970883` for head `21bb421`: passed.
 
 ## Live-run evidence
 
 - Workflow run:
-  [全市场初筛 #4](https://github.com/qiqimimi1002/daily_stock_analysis/actions/runs/30517458316)
-- Result: failed before candidate generation.
-- Root cause: both full-market spot sources failed from the GitHub runner:
-  Eastmoney/AKShare disconnected and efinance returned invalid JSON.
-- Fix pushed: add `ak.stock_zh_a_spot()` (Sina) as an independent fallback.
+  [全市场初筛 #5](https://github.com/qiqimimi1002/daily_stock_analysis/actions/runs/30525796322)
+- Result: the Sina fallback successfully downloaded the full-market snapshot,
+  then normalization failed before candidate generation.
+- Root cause: Sina names the turnover field `turnoverratio`; the canonical alias
+  table only recognized `turnover` and `turnover_rate`.
+- Fix completed locally: recognize `turnoverratio` and cover it with a
+  regression test.
 
 ## Next actions
 
-1. Wait for CI run `30517697973`.
+1. Push the Sina field-compatibility fix and wait for PR CI.
 2. If CI passes, run `01-market-screening.yml` again from
    `feat/v2-1-scoring` with:
    - `top_n=5`
