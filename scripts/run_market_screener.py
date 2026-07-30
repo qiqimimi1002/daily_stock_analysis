@@ -29,7 +29,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--analysis-limit", type=int, default=3, help="交给AI深度分析的数量")
     parser.add_argument("--preselect-limit", type=int, default=60, help="历史数据核验数量")
     parser.add_argument("--history-workers", type=int, default=4, help="历史行情并发数")
-    parser.add_argument("--min-amount-yuan", type=float, default=100_000_000)
+    parser.add_argument("--enrichment-limit", type=int, default=8, help="基本面和资金面增强数量")
+    parser.add_argument("--evidence-workers", type=int, default=2, help="证据增强并发数")
+    parser.add_argument("--evidence-budget-seconds", type=float, default=12.0)
+    parser.add_argument("--min-amount-yuan", type=float, default=200_000_000)
     parser.add_argument("--report-dir", default="reports")
     parser.add_argument("--data-dir", default="data")
     return parser.parse_args()
@@ -46,6 +49,9 @@ def main() -> int:
         analysis_limit=min(args.analysis_limit, args.top_n),
         preselect_limit=max(args.preselect_limit, args.top_n),
         history_workers=args.history_workers,
+        enrichment_limit=max(args.enrichment_limit, args.top_n),
+        evidence_workers=args.evidence_workers,
+        evidence_budget_seconds=args.evidence_budget_seconds,
         min_amount_yuan=args.min_amount_yuan,
     )
     result = MarketScreener(config=config).run()
@@ -67,6 +73,8 @@ def main() -> int:
     print(f"全市场记录: {result.universe_count}")
     print(f"基础过滤后: {result.spot_filtered_count}")
     print(f"最终候选: {len(result.candidates)}")
+    print(f"证据增强成功/失败: {result.evidence_success_count}/{result.evidence_failure_count}")
+    print(f"市场环境评分: {result.market_environment.get('score', '无法确认')}")
     print(f"深度分析代码: {','.join(result.analysis_codes) or '无'}")
     print(f"初筛报告: {report_path}")
     return 0

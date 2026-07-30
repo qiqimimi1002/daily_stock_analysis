@@ -21,10 +21,17 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass
 from datetime import datetime, time, timedelta
 from pathlib import Path
+from threading import Lock
 from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Sequence
 from zoneinfo import ZoneInfo
 
 import pandas as pd
+
+from src.services.market_scoring import (
+    V21ScoreCard,
+    build_v21_scorecard,
+    calculate_market_environment,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -39,12 +46,17 @@ _SPOT_ALIASES: Mapping[str, Sequence[str]] = {
     "volume": ("成交量", "volume"),
     "amount": ("成交额", "amount", "成交金额"),
     "turnover": ("换手率", "换手率(%)", "turnover", "turnover_rate"),
+    "volume_ratio": ("量比", "volume_ratio"),
+    "pe_ratio": ("市盈率-动态", "市盈率", "pe_ratio", "pe"),
+    "pb_ratio": ("市净率", "pb_ratio", "pb"),
+    "industry": ("行业", "所属行业", "industry"),
 }
 
 _HISTORY_ALIASES: Mapping[str, Sequence[str]] = {
     "date": ("日期", "date", "时间"),
     "close": ("收盘", "收盘价", "close"),
     "volume": ("成交量", "volume"),
+    "amount": ("成交额", "成交金额", "amount"),
 }
 
 
@@ -70,7 +82,10 @@ class ScreeningConfig:
     analysis_limit: int = 3
     preselect_limit: int = 60
     history_workers: int = 4
-    min_amount_yuan: float = 100_000_000.0
+    enrichment_limit: int = 8
+    evidence_workers: int = 2
+    evidence_budget_seconds: float = 12.0
+    min_amount_yuan: float = 200_000_000.0
     min_turnover_pct: float = 0.5
     max_turnover_pct: float = 12.0
     min_price: float = 3.0
@@ -90,6 +105,12 @@ class ScreeningConfig:
             raise ValueError("preselect_limit must be >= top_n")
         if self.history_workers < 1:
             raise ValueError("history_workers must be at least 1")
+        if self.enrichment_limit < self.top_n:
+            raise ValueError("enrichment_limit must be >= top_n")
+        if self.evidence_workers < 1:
+            raise ValueError("evidence_workers must be at least 1")
+        if self.evidence_budget_seconds <= 0:
+            raise ValueError("evidence_budget_seconds must be positive")
 
 
 @dataclass(frozen=True)
@@ -97,23 +118,44 @@ class ScreeningCandidate:
     code: str
     name: str
     score: float
+    raw_score: float
+    available_max_score: float
+    score_coverage_pct: float
+    confidence_label: str
+    score_breakdown: Mapping[str, Any]
     latest_price: float
     daily_pct: float
     five_day_pct: float
     amount_yi: float
+    avg_amount_20d_yi: Optional[float]
     turnover_pct: float
     ma5: float
     ma10: float
     ma20: float
     volume_ratio_5d: float
     trend_label: str
+    watch_zone: str
+    industry: str
+    pe_ratio: Optional[float]
+    pb_ratio: Optional[float]
+    historical_win_rate: Optional[float]
+    risk_gate: str
     reasons: Sequence[str]
     risks: Sequence[str]
+    evidence_gaps: Sequence[str]
+    trigger_conditions: Sequence[str]
+    abandon_conditions: Sequence[str]
 
     def as_dict(self) -> Dict[str, Any]:
         value = asdict(self)
-        value["reasons"] = list(self.reasons)
-        value["risks"] = list(self.risks)
+        for key in (
+            "reasons",
+            "risks",
+            "evidence_gaps",
+            "trigger_conditions",
+            "abandon_conditions",
+        ):
+            value[key] = list(value[key])
         return value
 
 
@@ -124,11 +166,15 @@ class ScreeningResult:
     spot_filtered_count: int
     history_success_count: int
     history_failure_count: int
+    evidence_success_count: int
+    evidence_failure_count: int
     candidates: Sequence[ScreeningCandidate]
     analysis_codes: Sequence[str]
     config: ScreeningConfig
     data_source: str
     limitations: Sequence[str]
+    model_version: str
+    market_environment: Mapping[str, Any]
 
     def as_dict(self) -> Dict[str, Any]:
         return {
@@ -137,11 +183,15 @@ class ScreeningResult:
             "spot_filtered_count": self.spot_filtered_count,
             "history_success_count": self.history_success_count,
             "history_failure_count": self.history_failure_count,
+            "evidence_success_count": self.evidence_success_count,
+            "evidence_failure_count": self.evidence_failure_count,
             "candidates": [candidate.as_dict() for candidate in self.candidates],
             "analysis_codes": list(self.analysis_codes),
             "config": asdict(self.config),
             "data_source": self.data_source,
             "limitations": list(self.limitations),
+            "model_version": self.model_version,
+            "market_environment": dict(self.market_environment),
         }
 
 
@@ -208,8 +258,24 @@ def normalize_spot_frame(frame: pd.DataFrame) -> pd.DataFrame:
     )
     normalized["code"] = normalized["code"].map(normalize_stock_code)
     normalized["name"] = normalized["name"].astype(str).str.strip()
-    for column in ("close", "pct_change", "volume", "amount", "turnover"):
-        normalized[column] = pd.to_numeric(normalized[column], errors="coerce")
+    for column in (
+        "close",
+        "pct_change",
+        "volume",
+        "amount",
+        "turnover",
+        "volume_ratio",
+        "pe_ratio",
+        "pb_ratio",
+    ):
+        if column in normalized.columns:
+            normalized[column] = pd.to_numeric(normalized[column], errors="coerce")
+    for column in ("volume_ratio", "pe_ratio", "pb_ratio"):
+        if column not in normalized.columns:
+            normalized[column] = math.nan
+    if "industry" not in normalized.columns:
+        normalized["industry"] = ""
+    normalized["industry"] = normalized["industry"].fillna("").astype(str).str.strip()
     return normalized
 
 
@@ -222,6 +288,8 @@ def normalize_history_frame(frame: pd.DataFrame) -> pd.DataFrame:
     normalized["date"] = pd.to_datetime(normalized["date"], errors="coerce")
     normalized["close"] = pd.to_numeric(normalized["close"], errors="coerce")
     normalized["volume"] = pd.to_numeric(normalized["volume"], errors="coerce")
+    if "amount" in normalized.columns:
+        normalized["amount"] = pd.to_numeric(normalized["amount"], errors="coerce")
     normalized = (
         normalized.dropna(subset=["date", "close", "volume"])
         .sort_values("date")
@@ -295,6 +363,7 @@ def calculate_history_metrics(
 
     close = history["close"]
     volume = history["volume"]
+    amount = history["amount"] if "amount" in history.columns else None
     last_close = (
         float(reference_price)
         if is_intraday and reference_price is not None and reference_price > 0
@@ -314,6 +383,12 @@ def calculate_history_metrics(
             if previous_volume_mean > 0
             else math.nan
         )
+    avg_amount_20d = None
+    if amount is not None:
+        amount_window = amount.tail(20).dropna()
+        if len(amount_window) >= 10:
+            avg_amount_20d = float(amount_window.mean())
+
     return {
         "history_close": last_close,
         "five_day_pct": (last_close / base_close - 1.0) * 100.0,
@@ -321,6 +396,7 @@ def calculate_history_metrics(
         "ma10": float(close.tail(10).mean()),
         "ma20": float(close.tail(20).mean()),
         "volume_ratio_5d": volume_ratio,
+        "avg_amount_20d": avg_amount_20d,
         "is_intraday": is_intraday,
     }
 
@@ -333,10 +409,19 @@ def _bounded_score(value: float, low: float, ideal: float, high: float) -> float
     return (high - value) / (high - ideal)
 
 
+def _optional_number(value: Any) -> Optional[float]:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if math.isfinite(number) else None
+
+
 def build_candidate(
     spot_row: Mapping[str, Any],
     metrics: Mapping[str, float],
     config: ScreeningConfig,
+    evidence: Optional[Mapping[str, Any]] = None,
 ) -> Optional[ScreeningCandidate]:
     five_day_pct = float(metrics["five_day_pct"])
     if not config.min_five_day_pct <= five_day_pct <= config.max_five_day_pct:
@@ -349,87 +434,97 @@ def build_candidate(
     volume_ratio = float(metrics["volume_ratio_5d"])
     is_intraday = bool(metrics.get("is_intraday", False))
     amount = float(spot_row["amount"])
+    avg_amount_20d = _optional_number(metrics.get("avg_amount_20d"))
+    if avg_amount_20d is not None and avg_amount_20d < config.min_amount_yuan:
+        return None
     turnover = float(spot_row["turnover"])
     daily_pct = float(spot_row["pct_change"])
-
-    reasons: List[str] = []
-    risks: List[str] = []
-    score = 0.0
-
-    # Liquidity (25): amount is objective and available for the whole market.
     amount_yi = amount / 100_000_000.0
-    score += min(25.0, 8.0 + math.log10(max(amount_yi, 1.0)) * 12.0)
-    reasons.append(f"成交额{amount_yi:.2f}亿元，满足流动性门槛")
+    scorecard: V21ScoreCard = build_v21_scorecard(
+        spot_row,
+        metrics,
+        evidence=evidence,
+    )
+    if scorecard.hard_reject:
+        logger.info(
+            "V2.1 风险门禁剔除 %s: %s",
+            spot_row.get("code", ""),
+            "；".join(scorecard.reject_reasons),
+        )
+        return None
 
-    # Five-day movement (25): moderate strength is preferred; chasing is penalized.
-    five_day_component = _bounded_score(five_day_pct, -5.0, 4.0, 12.0) * 25.0
-    score += five_day_component
+    if close > ma5 > ma10 > ma20:
+        trend_label = "均线多头"
+    elif close > ma20 and ma5 >= ma10:
+        trend_label = "趋势偏强"
+    elif close > ma20:
+        trend_label = "站上MA20"
+    else:
+        trend_label = "趋势待确认"
+
+    reasons = [
+        f"V2.1综合评分{scorecard.score:.2f}，证据覆盖率{scorecard.coverage_pct:.2f}%",
+        f"成交额{amount_yi:.2f}亿元，满足流动性门槛",
+        *scorecard.reasons,
+    ]
+    if avg_amount_20d is not None:
+        reasons.append(
+            f"近20日平均成交额{avg_amount_20d / 100_000_000.0:.2f}亿元，满足流动性门槛"
+        )
     if -1.0 <= five_day_pct <= 8.0:
         reasons.append(f"近5日涨幅{five_day_pct:+.2f}%，未进入追高区间")
-    elif five_day_pct > 8.0:
-        risks.append(f"近5日已上涨{five_day_pct:.2f}%，接近追高上限")
-    else:
-        risks.append(f"近5日回撤{abs(five_day_pct):.2f}%，趋势仍需确认")
+    risks = list(scorecard.risks)
+    evidence_gaps = list(scorecard.evidence_gaps)
+    if avg_amount_20d is None:
+        evidence_gaps.append("历史数据未提供成交额，暂以当日成交额完成流动性初筛")
+    if is_intraday:
+        risks.append("盘中未完成K线不参与日线量能计算")
 
-    # Trend (30): transparent MA relationships, not an AI prediction.
-    if close > ma5 > ma10 > ma20:
-        score += 30.0
-        trend_label = "均线多头"
-        if is_intraday:
-            reasons.append("最新价高于上一完整交易日MA5/MA10/MA20，均线保持多头排列")
-        else:
-            reasons.append("收盘价及MA5/MA10/MA20呈多头排列")
-    elif close > ma20 and ma5 >= ma10:
-        score += 21.0
-        trend_label = "趋势偏强"
-        reasons.append(
-            "最新价位于上一完整交易日MA20上方，短期均线未转弱"
-            if is_intraday
-            else "价格位于MA20上方，短期均线未转弱"
-        )
-    elif close > ma20:
-        score += 13.0
-        trend_label = "站上MA20"
-        risks.append("短期均线尚未形成多头排列")
-    else:
-        score += 3.0
-        trend_label = "趋势待确认"
-        risks.append("价格仍在MA20下方")
-
-    # Turnover (10): reward a moderate band, not maximal turnover.
-    score += _bounded_score(turnover, 0.5, 3.0, 12.0) * 10.0
-    if turnover > 8.0:
-        risks.append(f"换手率{turnover:.2f}%偏高，短线波动风险较大")
-
-    # Volume (10): this is descriptive only. It never infers accumulation/washout.
-    if math.isfinite(volume_ratio):
-        score += _bounded_score(volume_ratio, 0.3, 1.15, 2.5) * 10.0
-        if 0.7 <= volume_ratio <= 1.6:
-            reasons.append(f"最新量能为近5日均量的{volume_ratio:.2f}倍，处于常见区间")
-        elif volume_ratio > 2.0:
-            risks.append(f"最新量能为近5日均量的{volume_ratio:.2f}倍，需核查放量原因")
-        else:
-            risks.append(f"最新量能为近5日均量的{volume_ratio:.2f}倍，量能偏低")
-
-    if daily_pct > 4.0:
-        risks.append(f"当日涨幅{daily_pct:+.2f}%，不宜依据初筛结果追涨")
+    pe_ratio = _optional_number(spot_row.get("pe_ratio"))
+    pb_ratio = _optional_number(spot_row.get("pb_ratio"))
 
     return ScreeningCandidate(
         code=str(spot_row["code"]),
         name=str(spot_row["name"]),
-        score=round(score, 2),
+        score=scorecard.score,
+        raw_score=scorecard.raw_score,
+        available_max_score=scorecard.available_max,
+        score_coverage_pct=scorecard.coverage_pct,
+        confidence_label=scorecard.confidence,
+        score_breakdown={
+            key: component.as_dict()
+            for key, component in scorecard.components.items()
+        },
         latest_price=round(float(spot_row["close"]), 2),
         daily_pct=round(daily_pct, 2),
         five_day_pct=round(five_day_pct, 2),
         amount_yi=round(amount_yi, 2),
+        avg_amount_20d_yi=(
+            round(avg_amount_20d / 100_000_000.0, 2)
+            if avg_amount_20d is not None
+            else None
+        ),
         turnover_pct=round(turnover, 2),
         ma5=round(ma5, 2),
         ma10=round(ma10, 2),
         ma20=round(ma20, 2),
         volume_ratio_5d=round(volume_ratio, 2),
         trend_label=trend_label,
+        watch_zone=(
+            f"{min(ma20, ma5):.2f}—{max(ma20, ma5):.2f}"
+            if ma20 > 0 and ma5 > 0
+            else "无法确认"
+        ),
+        industry=str(spot_row.get("industry", "") or ""),
+        pe_ratio=round(pe_ratio, 2) if pe_ratio is not None else None,
+        pb_ratio=round(pb_ratio, 2) if pb_ratio is not None else None,
+        historical_win_rate=None,
+        risk_gate="需深度复核" if scorecard.evidence_gaps else "通过",
         reasons=tuple(reasons),
         risks=tuple(risks),
+        evidence_gaps=tuple(evidence_gaps),
+        trigger_conditions=tuple(scorecard.trigger_conditions),
+        abandon_conditions=tuple(scorecard.abandon_conditions),
     )
 
 
@@ -437,6 +532,20 @@ class PublicMarketDataSource:
     """Free-data adapter with explicit fallback errors."""
 
     name = "AKShare/东方财富，失败时尝试 efinance"
+
+    def __init__(self) -> None:
+        self._fundamental_manager = None
+        self._fundamental_manager_lock = Lock()
+
+    def _get_fundamental_manager(self):
+        if self._fundamental_manager is not None:
+            return self._fundamental_manager
+        with self._fundamental_manager_lock:
+            if self._fundamental_manager is None:
+                from data_provider.base import DataFetcherManager
+
+                self._fundamental_manager = DataFetcherManager()
+        return self._fundamental_manager
 
     def fetch_spot(self) -> pd.DataFrame:
         errors: List[str] = []
@@ -501,6 +610,19 @@ class PublicMarketDataSource:
 
         raise RuntimeError("；".join(errors))
 
+    def fetch_evidence(
+        self,
+        code: str,
+        *,
+        budget_seconds: float,
+    ) -> Mapping[str, Any]:
+        """Reuse the existing fail-open fundamental and capital-flow pipeline."""
+        manager = self._get_fundamental_manager()
+        return manager.get_fundamental_context(
+            code,
+            budget_seconds=budget_seconds,
+        )
+
 
 class MarketScreener:
     def __init__(
@@ -516,15 +638,22 @@ class MarketScreener:
         *,
         spot_frame: Optional[pd.DataFrame] = None,
         history_fetcher: Optional[Callable[[str], pd.DataFrame]] = None,
+        evidence_fetcher: Optional[Callable[[str], Mapping[str, Any]]] = None,
     ) -> ScreeningResult:
         raw_spot = spot_frame if spot_frame is not None else self.data_source.fetch_spot()
         universe_count = len(raw_spot)
+        normalized_spot = normalize_spot_frame(raw_spot)
+        market_environment = calculate_market_environment(normalized_spot)
         filtered = apply_spot_filters(raw_spot, self.config)
         fetch_history = history_fetcher or self.data_source.fetch_history
 
-        candidates: List[ScreeningCandidate] = []
+        candidate_inputs: List[
+            tuple[Mapping[str, Any], Mapping[str, Any], ScreeningCandidate]
+        ] = []
         failures = 0
         success = 0
+        evidence_success = 0
+        evidence_failures = 0
         intraday_mode = False
 
         rows = [row._asdict() for row in filtered.itertuples(index=False)]
@@ -550,21 +679,94 @@ class MarketScreener:
                     success += 1
                     candidate = build_candidate(row, metrics, self.config)
                     if candidate is not None:
-                        candidates.append(candidate)
+                        candidate_inputs.append((row, metrics, candidate))
                 except Exception as exc:
                     failures += 1
                     logger.warning("历史数据获取或计算失败 %s: %s", row["code"], exc)
 
+        # Expensive fundamentals and capital-flow requests are limited to the
+        # strongest transparent price/volume candidates.
+        candidate_inputs = sorted(
+            candidate_inputs,
+            key=lambda item: (
+                item[2].score,
+                item[2].score_coverage_pct,
+                item[2].amount_yi,
+            ),
+            reverse=True,
+        )[: self.config.enrichment_limit]
+
+        evidence_by_code: Dict[str, Mapping[str, Any]] = {}
+        should_fetch_evidence = evidence_fetcher is not None or spot_frame is None
+        if should_fetch_evidence and candidate_inputs:
+            if evidence_fetcher is None:
+                fetch_evidence = lambda code: self.data_source.fetch_evidence(
+                    code,
+                    budget_seconds=self.config.evidence_budget_seconds,
+                )
+            else:
+                fetch_evidence = evidence_fetcher
+            with ThreadPoolExecutor(max_workers=self.config.evidence_workers) as executor:
+                evidence_futures = {
+                    executor.submit(fetch_evidence, str(row["code"])): str(row["code"])
+                    for row, _, _ in candidate_inputs
+                }
+                for future in as_completed(evidence_futures):
+                    code = evidence_futures[future]
+                    try:
+                        payload = future.result()
+                        if not isinstance(payload, Mapping):
+                            raise TypeError("evidence payload must be a mapping")
+                        evidence_by_code[code] = payload
+                        if payload and str(payload.get("status", "")).lower() != "not_supported":
+                            evidence_success += 1
+                        else:
+                            evidence_failures += 1
+                    except Exception as exc:
+                        evidence_failures += 1
+                        logger.warning("V2.1 证据增强失败 %s: %s", code, exc)
+                        evidence_by_code[code] = {}
+
+        candidates: List[ScreeningCandidate] = []
+        for row, metrics, _ in candidate_inputs:
+            candidate = build_candidate(
+                row,
+                metrics,
+                self.config,
+                evidence=evidence_by_code.get(str(row["code"]), {}),
+            )
+            if candidate is not None:
+                candidates.append(candidate)
+
+        market_score = _optional_number(market_environment.get("score"))
+        if market_score is not None and market_score < 40.0:
+            observation_limit = min(self.config.top_n, 3)
+        elif market_score is not None and market_score < 55.0:
+            observation_limit = min(self.config.top_n, 4)
+        else:
+            observation_limit = self.config.top_n
+        market_environment = {
+            **market_environment,
+            "observation_limit": observation_limit,
+        }
+
         ranked = sorted(
             candidates,
-            key=lambda item: (item.score, item.amount_yi),
+            key=lambda item: (
+                item.score,
+                item.score_coverage_pct,
+                item.amount_yi,
+            ),
             reverse=True,
-        )[: self.config.top_n]
+        )[:observation_limit]
         analysis_codes = [item.code for item in ranked[: self.config.analysis_limit]]
         limitations: List[str] = [
-            "初筛仅使用公开行情、成交与均线数据，尚未核验公告、财务和新闻。",
+            "V2.1综合评分覆盖基本面、资金面、技术面和估值；行业催化评分将在后续阶段补充。",
+            "证据覆盖率单独展示；缺失数据不会按正面信号计分，也不会被表述为无风险。",
             "候选名单用于缩小人工复核范围，不代表买入、加仓或建仓建议。",
             "免费行情接口可能延迟或失败；历史数据失败的股票会被跳过并计数。",
+            "历史类似信号胜率和5/10/20日表现将在V2.2积累足够样本后展示。",
+            "重大公告、监管处罚和异常事项仍由候选股深度分析继续复核。",
         ]
         if intraday_mode:
             limitations.append(
@@ -577,21 +779,39 @@ class MarketScreener:
             spot_filtered_count=len(filtered),
             history_success_count=success,
             history_failure_count=failures,
+            evidence_success_count=evidence_success,
+            evidence_failure_count=evidence_failures,
             candidates=tuple(ranked),
             analysis_codes=tuple(analysis_codes),
             config=self.config,
             data_source=self.data_source.name,
             limitations=tuple(limitations),
+            model_version="V2.1",
+            market_environment=market_environment,
         )
 
 
 def render_markdown(result: ScreeningResult) -> str:
     generated = datetime.fromisoformat(result.generated_at)
+    market = result.market_environment
+    market_score = market.get("score")
     lines = [
-        "# A股主板全市场初筛",
+        f"# A股主板全市场初筛（{result.model_version}）",
         "",
         f"> 生成时间：{generated.strftime('%Y-%m-%d %H:%M:%S')}（北京时间）",
         f"> 数据来源：{result.data_source}",
+        "> 定位：观察名单，不代表买入、加仓或建仓建议。",
+        "",
+        "## 市场环境",
+        "",
+        f"- 环境评分：{market_score if market_score is not None else '无法确认'}",
+        f"- 策略：{market.get('strategy', '保持谨慎')}",
+        f"- 本次观察名单上限：{market.get('observation_limit', result.config.top_n)}只",
+        f"- 评分覆盖：{market.get('coverage', 'partial')}（{market.get('coverage_note', '数据范围待复核')}）",
+        f"- 上涨家数占比：{market.get('advance_ratio_pct') if market.get('advance_ratio_pct') is not None else '无法确认'}%",
+        f"- 涨跌幅中位数：{market.get('median_pct_change') if market.get('median_pct_change') is not None else '无法确认'}%",
+        f"- 涨停/跌停数量：{market.get('limit_up_count') if market.get('limit_up_count') is not None else '无法确认'} / "
+        f"{market.get('limit_down_count') if market.get('limit_down_count') is not None else '无法确认'}",
         "",
         "## 筛选概况",
         "",
@@ -599,6 +819,8 @@ def render_markdown(result: ScreeningResult) -> str:
         f"- 通过基础过滤并进入历史核验：{result.spot_filtered_count}",
         f"- 历史数据有效：{result.history_success_count}",
         f"- 历史数据失败或不足：{result.history_failure_count}",
+        f"- 基本面/资金证据增强成功：{result.evidence_success_count}",
+        f"- 基本面/资金证据增强失败或不支持：{result.evidence_failure_count}",
         f"- 最终观察候选：{len(result.candidates)}",
         "",
         "## 观察候选",
@@ -614,24 +836,32 @@ def render_markdown(result: ScreeningResult) -> str:
     else:
         lines.extend(
             [
-                "| 排名 | 代码 | 名称 | 评分 | 最新价 | 当日涨跌 | 近5日 | 成交额(亿) | 换手率 | 趋势 |",
-                "|---:|---|---|---:|---:|---:|---:|---:|---:|---|",
+                "| 排名 | 代码 | 名称 | 综合评分 | 证据覆盖 | 置信度 | 基本面 | 催化 | 资金面 | 技术面 | 估值 | 历史胜率 |",
+                "|---:|---|---|---:|---:|---|---:|---:|---:|---:|---:|---|",
             ]
         )
         for index, candidate in enumerate(result.candidates, start=1):
+            breakdown = candidate.score_breakdown
             lines.append(
-                "| {rank} | {code} | {name} | {score:.2f} | {price:.2f} | "
-                "{daily:+.2f}% | {five:+.2f}% | {amount:.2f} | {turnover:.2f}% | {trend} |".format(
+                "| {rank} | {code} | {name} | {score:.2f} | {coverage:.2f}% | {confidence} | "
+                "{fundamental:.2f}/30 | {catalyst:.2f}/20 | {capital:.2f}/20 | {technical:.2f}/20 | "
+                "{valuation:.2f}/10 | {win_rate} |".format(
                     rank=index,
                     code=candidate.code,
                     name=candidate.name,
                     score=candidate.score,
-                    price=candidate.latest_price,
-                    daily=candidate.daily_pct,
-                    five=candidate.five_day_pct,
-                    amount=candidate.amount_yi,
-                    turnover=candidate.turnover_pct,
-                    trend=candidate.trend_label,
+                    coverage=candidate.score_coverage_pct,
+                    confidence=candidate.confidence_label,
+                    fundamental=float(breakdown["fundamental"]["score"]),
+                    catalyst=float(breakdown["industry_catalyst"]["score"]),
+                    capital=float(breakdown["capital"]["score"]),
+                    technical=float(breakdown["technical"]["score"]),
+                    valuation=float(breakdown["valuation"]["score"]),
+                    win_rate=(
+                        f"{candidate.historical_win_rate:.2f}%"
+                        if candidate.historical_win_rate is not None
+                        else "待V2.2积累"
+                    ),
                 )
             )
         lines.append("")
@@ -639,6 +869,21 @@ def render_markdown(result: ScreeningResult) -> str:
             lines.extend(
                 [
                     f"### {candidate.code} {candidate.name}",
+                    "",
+                    f"- 综合评分：{candidate.score:.2f}",
+                    f"- 证据覆盖率：{candidate.score_coverage_pct:.2f}%（{candidate.confidence_label}置信度）",
+                    f"- 最新价/当日涨跌：{candidate.latest_price:.2f} / {candidate.daily_pct:+.2f}%",
+                    f"- 近5日涨跌：{candidate.five_day_pct:+.2f}%",
+                    f"- 成交额/换手率：{candidate.amount_yi:.2f}亿元 / {candidate.turnover_pct:.2f}%",
+                    (
+                        f"- 近20日平均成交额：{candidate.avg_amount_20d_yi:.2f}亿元"
+                        if candidate.avg_amount_20d_yi is not None
+                        else "- 近20日平均成交额：历史接口未提供，需复核"
+                    ),
+                    f"- 技术结构：{candidate.trend_label}",
+                    f"- 技术观察带：{candidate.watch_zone}（MA20—MA5，仅用于复核，不是买入区间）",
+                    f"- 风险门禁：{candidate.risk_gate}",
+                    "- 历史类似信号：V2.2尚未积累足够样本，不输出虚构胜率",
                     "",
                     "**入选依据**",
                     "",
@@ -654,6 +899,27 @@ def render_markdown(result: ScreeningResult) -> str:
                         *[f"- {risk}" for risk in candidate.risks],
                     ]
                 )
+            if candidate.evidence_gaps:
+                lines.extend(
+                    [
+                        "",
+                        "**证据缺口**",
+                        "",
+                        *[f"- {gap}" for gap in candidate.evidence_gaps],
+                    ]
+                )
+            lines.extend(
+                [
+                    "",
+                    "**关注触发条件**",
+                    "",
+                    *[f"- {condition}" for condition in candidate.trigger_conditions],
+                    "",
+                    "**放弃条件**",
+                    "",
+                    *[f"- {condition}" for condition in candidate.abandon_conditions],
+                ]
+            )
             lines.append("")
 
     lines.extend(

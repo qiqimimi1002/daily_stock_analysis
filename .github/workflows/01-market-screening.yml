@@ -57,13 +57,19 @@ jobs:
           SCREEN_TOP_N: ${{ inputs.top_n || vars.SCREEN_TOP_N || '5' }}
           SCREEN_ANALYSIS_LIMIT: ${{ vars.SCREEN_ANALYSIS_LIMIT || '3' }}
           SCREEN_PRESELECT_LIMIT: ${{ vars.SCREEN_PRESELECT_LIMIT || '60' }}
-          SCREEN_MIN_AMOUNT_YUAN: ${{ vars.SCREEN_MIN_AMOUNT_YUAN || '100000000' }}
+          SCREEN_ENRICHMENT_LIMIT: ${{ vars.SCREEN_ENRICHMENT_LIMIT || '8' }}
+          SCREEN_EVIDENCE_WORKERS: ${{ vars.SCREEN_EVIDENCE_WORKERS || '2' }}
+          SCREEN_EVIDENCE_BUDGET_SECONDS: ${{ vars.SCREEN_EVIDENCE_BUDGET_SECONDS || '12' }}
+          SCREEN_MIN_AMOUNT_YUAN: ${{ vars.SCREEN_MIN_AMOUNT_YUAN || '200000000' }}
         run: |
           python scripts/run_market_screener.py \
             --top-n "$SCREEN_TOP_N" \
             --analysis-limit "$SCREEN_ANALYSIS_LIMIT" \
             --preselect-limit "$SCREEN_PRESELECT_LIMIT" \
             --history-workers 4 \
+            --enrichment-limit "$SCREEN_ENRICHMENT_LIMIT" \
+            --evidence-workers "$SCREEN_EVIDENCE_WORKERS" \
+            --evidence-budget-seconds "$SCREEN_EVIDENCE_BUDGET_SECONDS" \
             --min-amount-yuan "$SCREEN_MIN_AMOUNT_YUAN"
 
       - name: 读取候选代码
