@@ -559,6 +559,19 @@ class PublicMarketDataSource:
         except Exception as exc:  # pragma: no cover - live provider
             errors.append(f"AKShare: {exc}")
 
+        # 东方财富的全市场接口在 GitHub Actions 出口上偶尔会主动断开。
+        # 新浪接口字段较少，但足以完成基础流动性与量价初筛，应作为独立兜底，
+        # 不能让一次上游连接中断直接终止整次定时任务。
+        try:
+            import akshare as ak
+
+            frame = ak.stock_zh_a_spot()
+            if frame is not None and not frame.empty:
+                return frame
+            errors.append("AKShare 新浪返回空表")
+        except Exception as exc:  # pragma: no cover - live provider
+            errors.append(f"AKShare 新浪: {exc}")
+
         try:
             import efinance as ef
 
