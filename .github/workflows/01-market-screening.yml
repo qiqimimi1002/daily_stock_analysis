@@ -1,11 +1,6 @@
 name: 全市场初筛
 
 on:
-  # Temporary branch-only trigger for V2.1 live validation. Remove after the
-  # generated artifact has been reviewed; this must not be merged into main.
-  push:
-    branches:
-      - feat/v2-1-scoring
   schedule:
     # 工作日北京时间 09:40；开盘后再使用成交额和换手率，避免盘前零值。
     # GitHub 定时任务可能有数分钟延迟。
@@ -88,9 +83,7 @@ jobs:
       - name: 对候选运行 Daily Stock 深度分析
         if: >-
           steps.selected.outputs.codes != '' &&
-          (github.event_name == 'schedule' ||
-          github.event_name == 'push' ||
-          inputs.run_deep_analysis)
+          (github.event_name == 'schedule' || inputs.run_deep_analysis)
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_API_KEYS: ${{ secrets.GEMINI_API_KEYS }}
@@ -111,7 +104,7 @@ jobs:
         shell: bash
         run: |
           FORCE_ARG=""
-          if [ "${{ inputs.force_run }}" = "true" ] || [ "${{ github.event_name }}" = "push" ]; then
+          if [ "${{ inputs.force_run }}" = "true" ]; then
             FORCE_ARG="--force-run"
           fi
           python main.py \

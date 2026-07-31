@@ -13,6 +13,7 @@ from src.services.market_scoring import (
 from src.services.market_screener import (
     MarketScreener,
     ScreeningConfig,
+    normalize_sina_raw_spot_frame,
     normalize_spot_frame,
     render_markdown,
 )
@@ -162,6 +163,31 @@ class TestSpotNormalization(unittest.TestCase):
         normalized = normalize_spot_frame(frame)
 
         self.assertEqual(normalized.loc[0, "turnover"], 2.0)
+
+    def test_sina_raw_payload_preserves_turnover(self) -> None:
+        frame = pd.DataFrame(
+            [
+                {
+                    "symbol": "sh600100",
+                    "code": "600100",
+                    "name": "sample",
+                    "trade": "24.0",
+                    "changepercent": "1.2",
+                    "volume": "1000000",
+                    "amount": "1500000000",
+                    "turnoverratio": "2.0",
+                    "per": "18.0",
+                    "pb": "2.0",
+                }
+            ]
+        )
+
+        sina_frame = normalize_sina_raw_spot_frame(frame)
+        normalized = normalize_spot_frame(sina_frame)
+
+        self.assertEqual(normalized.loc[0, "code"], "600100")
+        self.assertEqual(normalized.loc[0, "turnover"], 2.0)
+        self.assertEqual(normalized.loc[0, "pe_ratio"], 18.0)
 
 
 class TestV21ScreenerIntegration(unittest.TestCase):

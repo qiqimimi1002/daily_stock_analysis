@@ -42,31 +42,35 @@ observation model without replacing the existing architecture.
   failed from GitHub Actions.
 - Added compatibility for Sina's `turnoverratio` field so the fallback snapshot
   can pass the canonical spot-data normalization stage.
+- Replaced AKShare's lossy Sina wrapper with a direct adapter for the same
+  public Sina endpoint. AKShare parses `turnoverratio` internally but removes
+  it from the returned DataFrame; the direct adapter preserves turnover, PE,
+  and PB without guessing missing evidence.
 
 ## Verification
 
 - Original V2.1 PR CI run `30515993625`: passed.
-- Local `tests/test_market_scoring.py`: 8 passed.
+- Local `tests/test_market_scoring.py`: 9 passed.
 - `python -m py_compile src/services/market_screener.py`: passed.
 - A broader local test command could not collect
   `tests/test_fundamental_adapter.py` because the local Python environment lacks
   `python-dotenv`; the earlier GitHub CI covered dependency installation.
-- PR CI run `30520970883` for head `21bb421`: passed.
+- PR CI run `30528193098` for head `e3b12cd`: passed.
 
 ## Live-run evidence
 
 - Workflow run:
-  [全市场初筛 #5](https://github.com/qiqimimi1002/daily_stock_analysis/actions/runs/30525796322)
-- Result: the Sina fallback successfully downloaded the full-market snapshot,
-  then normalization failed before candidate generation.
-- Root cause: Sina names the turnover field `turnoverratio`; the canonical alias
-  table only recognized `turnover` and `turnover_rate`.
-- Fix completed locally: recognize `turnoverratio` and cover it with a
-  regression test.
+  [全市场初筛 #7](https://github.com/qiqimimi1002/daily_stock_analysis/actions/runs/30594476438)
+- Result: the AKShare Sina fallback downloaded all 70 pages but normalization
+  still lacked turnover.
+- Confirmed root cause from AKShare 1.18.81 source: `stock_zh_a_spot()` casts
+  `turnoverratio` and then intentionally excludes it from its returned columns.
+- Fix completed locally: direct Sina raw adapter plus a regression test proving
+  that turnover, PE, and PB survive canonical normalization.
 
 ## Next actions
 
-1. Push the Sina field-compatibility fix and wait for PR CI.
+1. Push the direct Sina adapter fix and wait for PR CI.
 2. If CI passes, run `01-market-screening.yml` again from
    `feat/v2-1-scoring` with:
    - `top_n=5`

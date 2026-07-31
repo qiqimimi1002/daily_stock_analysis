@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import logging
 import math
+import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass
 from datetime import datetime, time, timedelta
@@ -63,6 +64,18 @@ _HISTORY_ALIASES: Mapping[str, Sequence[str]] = {
     "close": ("收盘", "收盘价", "close"),
     "volume": ("成交量", "volume"),
     "amount": ("成交额", "成交金额", "amount"),
+}
+
+_SINA_RAW_SPOT_ALIASES: Mapping[str, Sequence[str]] = {
+    "code": ("code", "symbol"),
+    "name": ("name",),
+    "close": ("trade",),
+    "pct_change": ("changepercent",),
+    "volume": ("volume",),
+    "amount": ("amount",),
+    "turnover": ("turnoverratio",),
+    "pe_ratio": ("per",),
+    "pb_ratio": ("pb",),
 }
 
 
@@ -283,6 +296,29 @@ def normalize_spot_frame(frame: pd.DataFrame) -> pd.DataFrame:
         normalized["industry"] = ""
     normalized["industry"] = normalized["industry"].fillna("").astype(str).str.strip()
     return normalized
+
+
+def normalize_sina_raw_spot_frame(frame: pd.DataFrame) -> pd.DataFrame:
+    """Preserve fields that AKShare drops from its public Sina wrapper."""
+
+    normalized = _normalize_columns(
+        frame,
+        _SINA_RAW_SPOT_ALIASES,
+        required=("code", "name", "close", "pct_change", "volume", "amount", "turnover"),
+    )
+    return normalized[
+        [
+            "code",
+            "name",
+            "close",
+            "pct_change",
+            "volume",
+            "amount",
+            "turnover",
+            "pe_ratio",
+            "pb_ratio",
+        ]
+    ].copy()
 
 
 def normalize_history_frame(frame: pd.DataFrame) -> pd.DataFrame:
@@ -565,18 +601,16 @@ class PublicMarketDataSource:
         except Exception as exc:  # pragma: no cover - live provider
             errors.append(f"AKShare: {exc}")
 
-        # 东方财富的全市场接口在 GitHub Actions 出口上偶尔会主动断开。
-        # 新浪接口字段较少，但足以完成基础流动性与量价初筛，应作为独立兜底，
-        # 不能让一次上游连接中断直接终止整次定时任务。
+        # AKShare 的 stock_zh_a_spot() 会解析新浪的 turnoverratio，却在
+        # 返回 DataFrame 前删除该列。这里直接读取同一原始接口并保留换手率，
+        # 否则基础风险过滤无法执行。
         try:
-            import akshare as ak
-
-            frame = ak.stock_zh_a_spot()
-            if frame is not None and not frame.empty:
+            frame = self._fetch_sina_spot_with_turnover()
+            if not frame.empty:
                 return frame
-            errors.append("AKShare 新浪返回空表")
+            errors.append("新浪原始接口返回空表")
         except Exception as exc:  # pragma: no cover - live provider
-            errors.append(f"AKShare 新浪: {exc}")
+            errors.append(f"新浪原始接口: {exc}")
 
         try:
             import efinance as ef
@@ -589,6 +623,44 @@ class PublicMarketDataSource:
             errors.append(f"efinance: {exc}")
 
         raise RuntimeError("全市场实时行情获取失败；" + "；".join(errors))
+
+    @staticmethod
+    def _fetch_sina_spot_with_turnover() -> pd.DataFrame:
+        import requests
+        from akshare.stock.cons import (
+            zh_sina_a_stock_count_url,
+            zh_sina_a_stock_payload,
+            zh_sina_a_stock_url,
+        )
+        from akshare.utils import demjson
+
+        with requests.Session() as session:
+            count_response = session.get(zh_sina_a_stock_count_url, timeout=15)
+            count_response.raise_for_status()
+            matches = re.findall(r"\d+", count_response.text)
+            if not matches:
+                raise ValueError("新浪接口未返回股票数量")
+            page_count = math.ceil(int(matches[0]) / 80)
+
+            frames: List[pd.DataFrame] = []
+            payload = zh_sina_a_stock_payload.copy()
+            for page in range(1, page_count + 1):
+                payload["page"] = page
+                response = session.get(
+                    zh_sina_a_stock_url,
+                    params=payload,
+                    timeout=15,
+                )
+                response.raise_for_status()
+                rows = demjson.decode(response.text)
+                if rows:
+                    frames.append(pd.DataFrame(rows))
+
+        if not frames:
+            raise ValueError("新浪接口未返回行情记录")
+        return normalize_sina_raw_spot_frame(
+            pd.concat(frames, ignore_index=True)
+        )
 
     def fetch_history(self, code: str) -> pd.DataFrame:
         end = datetime.now(CN_TZ).date()
