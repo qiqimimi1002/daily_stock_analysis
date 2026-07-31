@@ -1,6 +1,6 @@
 # Project Status
 
-> Last updated: 2026-07-30 (Asia/Shanghai)
+> Last updated: 2026-07-31 (Asia/Shanghai)
 >
 > Codex workflow rule: read this file before substantial project work and
 > update it after every completed material task. Keep it concise, current, and
@@ -46,37 +46,46 @@ observation model without replacing the existing architecture.
   public Sina endpoint. AKShare parses `turnoverratio` internally but removes
   it from the returned DataFrame; the direct adapter preserves turnover, PE,
   and PB without guessing missing evidence.
+- Added explicit pre-open/unavailable snapshot handling:
+  - market breadth uses only rows with a real price, volume, and amount;
+  - a zero-activity snapshot is labelled unavailable rather than weak market;
+  - zero pre-open candidates are explicitly not interpreted as no opportunity;
+  - the observation limit is zero until an active quote snapshot exists.
 
 ## Verification
 
 - Original V2.1 PR CI run `30515993625`: passed.
-- Local `tests/test_market_scoring.py`: 9 passed.
+- Local screener/scoring tests: 18 passed.
 - `python -m py_compile src/services/market_screener.py`: passed.
 - A broader local test command could not collect
   `tests/test_fundamental_adapter.py` because the local Python environment lacks
   `python-dotenv`; the earlier GitHub CI covered dependency installation.
 - PR CI run `30528193098` for head `e3b12cd`: passed.
+- PR CI run `30594863953` for head `098d4d0`: passed.
 
 ## Live-run evidence
 
-- Workflow run:
-  [全市场初筛 #7](https://github.com/qiqimimi1002/daily_stock_analysis/actions/runs/30594476438)
-- Result: the AKShare Sina fallback downloaded all 70 pages but normalization
-  still lacked turnover.
-- Confirmed root cause from AKShare 1.18.81 source: `stock_zh_a_spot()` casts
-  `turnoverratio` and then intentionally excludes it from its returned columns.
-- Fix completed locally: direct Sina raw adapter plus a regression test proving
-  that turnover, PE, and PB survive canonical normalization.
+- Workflow run #7:
+  [failed turnover validation](https://github.com/qiqimimi1002/daily_stock_analysis/actions/runs/30594476438).
+- Workflow run #8:
+  [successful pre-open integration run](https://github.com/qiqimimi1002/daily_stock_analysis/actions/runs/30595266523).
+- Run #8 proved that the direct Sina adapter can retrieve and normalize all
+  5,533 market records without the previous turnover error.
+- It ran at 09:04 Asia/Shanghai, before A-share trading began, so Sina correctly
+  returned zero price/volume/amount activity and no securities passed the
+  liquidity gate. This is not valid evidence that the market has no candidates.
+- A pre-open/unavailable guard and regression test were added after reviewing
+  the run #8 artifact.
 
 ## Next actions
 
-1. Push the direct Sina adapter fix and wait for PR CI.
-2. If CI passes, run `01-market-screening.yml` again from
+1. Push the pre-open/unavailable guard and wait for PR CI.
+2. At or after 09:40 Asia/Shanghai, run `01-market-screening.yml` again from
    `feat/v2-1-scoring` with:
    - `top_n=5`
    - deep analysis enabled
    - force run enabled
-3. Inspect the generated artifact for candidate quality, evidence gaps,
+3. Inspect the live-session artifact for candidate quality, evidence gaps,
    scoring arithmetic, observation language, and deep-analysis consistency.
 4. Merge PR #4 only after the live run succeeds and its artifact passes review.
 5. After merge, verify the scheduled main-branch run before deleting temporary

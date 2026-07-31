@@ -157,6 +157,36 @@ class TestHistoryAndRanking(unittest.TestCase):
                 result.analysis_codes[0],
             )
 
+    def test_pre_open_snapshot_is_not_reported_as_a_valid_zero_candidate_run(self) -> None:
+        spot = pd.DataFrame(
+            [["600100", "主板甲", 0.0, 0.0, 0, 0, 0.0]],
+            columns=["代码", "名称", "最新价", "涨跌幅", "成交量", "成交额", "换手率"],
+        )
+
+        result = MarketScreener(
+            ScreeningConfig(
+                top_n=1,
+                analysis_limit=1,
+                preselect_limit=1,
+                history_workers=1,
+            )
+        ).run(
+            spot_frame=spot,
+            history_fetcher=lambda _: self.fail("盘前空快照不应请求历史数据"),
+        )
+
+        self.assertIsNone(result.market_environment["score"])
+        self.assertEqual(result.market_environment["coverage"], "unavailable")
+        self.assertEqual(
+            result.market_environment["snapshot_status"],
+            "pre_open_or_unavailable",
+        )
+        self.assertEqual(result.market_environment["observation_limit"], 0)
+        report = render_markdown(result)
+        self.assertIn("盘前行情尚未形成", report)
+        self.assertIn("不能解读为市场没有观察机会", report)
+        self.assertNotIn("系统不会为了凑数而降低标准", report)
+
     def test_intraday_artifact_uses_null_instead_of_nan(self) -> None:
         spot = pd.DataFrame(
             [["600100", "主板甲", 25.0, 1.2, 100, 1_500_000_000, 2.0]],

@@ -376,6 +376,15 @@ def apply_spot_filters(frame: pd.DataFrame, config: ScreeningConfig) -> pd.DataF
     ).head(config.preselect_limit)
 
 
+def _active_spot_rows(frame: pd.DataFrame) -> pd.DataFrame:
+    """Return rows whose intraday quote has actually started trading."""
+
+    close = pd.to_numeric(frame["close"], errors="coerce")
+    volume = pd.to_numeric(frame["volume"], errors="coerce")
+    amount = pd.to_numeric(frame["amount"], errors="coerce")
+    return frame.loc[(close > 0) & (volume > 0) & (amount > 0)].copy()
+
+
 def calculate_history_metrics(
     frame: pd.DataFrame,
     *,
@@ -573,7 +582,7 @@ def build_candidate(
 class PublicMarketDataSource:
     """Free-data adapter with explicit fallback errors."""
 
-    name = "AKShare/东方财富，失败时尝试 efinance"
+    name = "AKShare/东方财富；失败时使用新浪原始接口或 efinance"
 
     def __init__(self) -> None:
         self._fundamental_manager = None
@@ -734,7 +743,26 @@ class MarketScreener:
         raw_spot = spot_frame if spot_frame is not None else self.data_source.fetch_spot()
         universe_count = len(raw_spot)
         normalized_spot = normalize_spot_frame(raw_spot)
-        market_environment = calculate_market_environment(normalized_spot)
+        active_spot = _active_spot_rows(normalized_spot)
+        if active_spot.empty:
+            market_environment = {
+                "score": None,
+                "strategy": "盘前或实时行情尚未形成，等待开盘后重新筛选",
+                "coverage": "unavailable",
+                "coverage_note": "全市场快照没有有效成交量和成交额，本次结果不能解读为无候选",
+                "advance_ratio_pct": None,
+                "median_pct_change": None,
+                "limit_up_count": None,
+                "limit_down_count": None,
+                "snapshot_status": "pre_open_or_unavailable",
+                "active_quote_count": 0,
+            }
+        else:
+            market_environment = {
+                **calculate_market_environment(active_spot),
+                "snapshot_status": "active",
+                "active_quote_count": len(active_spot),
+            }
         filtered = apply_spot_filters(raw_spot, self.config)
         fetch_history = history_fetcher or self.data_source.fetch_history
 
@@ -830,7 +858,9 @@ class MarketScreener:
                 candidates.append(candidate)
 
         market_score = _optional_number(market_environment.get("score"))
-        if market_score is not None and market_score < 40.0:
+        if market_environment.get("snapshot_status") != "active":
+            observation_limit = 0
+        elif market_score is not None and market_score < 40.0:
             observation_limit = min(self.config.top_n, 3)
         elif market_score is not None and market_score < 55.0:
             observation_limit = min(self.config.top_n, 4)
@@ -918,12 +948,21 @@ def render_markdown(result: ScreeningResult) -> str:
         "",
     ]
     if not result.candidates:
-        lines.extend(
-            [
-                "本次没有股票同时满足全部门槛。系统不会为了凑数而降低标准。",
-                "",
-            ]
-        )
+        if market.get("snapshot_status") == "pre_open_or_unavailable":
+            lines.extend(
+                [
+                    "盘前行情尚未形成，或实时快照没有有效成交量和成交额。",
+                    "本次筛选未取得可用盘中数据，0只候选不能解读为市场没有观察机会；请开盘后重新运行。",
+                    "",
+                ]
+            )
+        else:
+            lines.extend(
+                [
+                    "本次没有股票同时满足全部门槛。系统不会为了凑数而降低标准。",
+                    "",
+                ]
+            )
     else:
         lines.extend(
             [
