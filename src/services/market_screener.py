@@ -40,30 +40,30 @@ CN_TZ = ZoneInfo("Asia/Shanghai")
 
 MAIN_BOARD_PREFIXES = ("600", "601", "603", "605", "000", "001", "002", "003")
 _SPOT_ALIASES: Mapping[str, Sequence[str]] = {
-    "code": ("代码", "股票代码", "code", "股票编号"),
-    "name": ("名称", "股票名称", "name"),
-    "close": ("最新价", "最新", "close", "最新价格", "最新报价"),
-    "pct_change": ("涨跌幅", "涨跌幅(%)", "pct_change", "change_percent"),
-    "volume": ("成交量", "volume"),
-    "amount": ("成交额", "amount", "成交金额"),
+    "code": ("??", "????", "code", "????"),
+    "name": ("??", "????", "name"),
+    "close": ("???", "??", "close", "????", "????"),
+    "pct_change": ("???", "???(%)", "pct_change", "change_percent"),
+    "volume": ("???", "volume"),
+    "amount": ("???", "amount", "????"),
     "turnover": (
-        "换手率",
-        "换手率(%)",
+        "???",
+        "???(%)",
         "turnover",
         "turnover_rate",
         "turnoverratio",
     ),
-    "volume_ratio": ("量比", "volume_ratio"),
-    "pe_ratio": ("市盈率-动态", "市盈率", "pe_ratio", "pe"),
-    "pb_ratio": ("市净率", "pb_ratio", "pb"),
-    "industry": ("行业", "所属行业", "industry"),
+    "volume_ratio": ("??", "volume_ratio"),
+    "pe_ratio": ("???-??", "???", "pe_ratio", "pe"),
+    "pb_ratio": ("???", "pb_ratio", "pb"),
+    "industry": ("??", "????", "industry"),
 }
 
 _HISTORY_ALIASES: Mapping[str, Sequence[str]] = {
-    "date": ("日期", "date", "时间"),
-    "close": ("收盘", "收盘价", "close"),
-    "volume": ("成交量", "volume"),
-    "amount": ("成交额", "成交金额", "amount"),
+    "date": ("??", "date", "??"),
+    "close": ("??", "???", "close"),
+    "volume": ("???", "volume"),
+    "amount": ("???", "????", "amount"),
 }
 
 _SINA_RAW_SPOT_ALIASES: Mapping[str, Sequence[str]] = {
@@ -234,7 +234,7 @@ def is_excluded_name(name: Any) -> bool:
     return (
         not normalized
         or "ST" in normalized
-        or "退" in normalized
+        or "?" in normalized
         or normalized.startswith(("N", "C"))
     )
 
@@ -254,7 +254,7 @@ def _normalize_columns(
     required: Sequence[str],
 ) -> pd.DataFrame:
     if frame is None or frame.empty:
-        raise ValueError("数据源返回空表")
+        raise ValueError("???????")
 
     rename: Dict[str, str] = {}
     for canonical, options in aliases.items():
@@ -265,7 +265,7 @@ def _normalize_columns(
     normalized = frame.rename(columns=rename).copy()
     missing = [column for column in required if column not in normalized.columns]
     if missing:
-        raise ValueError(f"数据缺少必要字段: {', '.join(missing)}")
+        raise ValueError(f"????????: {', '.join(missing)}")
     return normalized
 
 
@@ -374,6 +374,15 @@ def apply_spot_filters(frame: pd.DataFrame, config: ScreeningConfig) -> pd.DataF
         ["pre_score", "amount"],
         ascending=[False, False],
     ).head(config.preselect_limit)
+
+
+def _active_spot_rows(frame: pd.DataFrame) -> pd.DataFrame:
+    """Return rows whose intraday quote has actually started trading."""
+
+    close = pd.to_numeric(frame["close"], errors="coerce")
+    volume = pd.to_numeric(frame["volume"], errors="coerce")
+    amount = pd.to_numeric(frame["amount"], errors="coerce")
+    return frame.loc[(close > 0) & (volume > 0) & (amount > 0)].copy()
 
 
 def calculate_history_metrics(
@@ -489,38 +498,38 @@ def build_candidate(
     )
     if scorecard.hard_reject:
         logger.info(
-            "V2.1 风险门禁剔除 %s: %s",
+            "V2.1 ?????? %s: %s",
             spot_row.get("code", ""),
-            "；".join(scorecard.reject_reasons),
+            "?".join(scorecard.reject_reasons),
         )
         return None
 
     if close > ma5 > ma10 > ma20:
-        trend_label = "均线多头"
+        trend_label = "????"
     elif close > ma20 and ma5 >= ma10:
-        trend_label = "趋势偏强"
+        trend_label = "????"
     elif close > ma20:
-        trend_label = "站上MA20"
+        trend_label = "??MA20"
     else:
-        trend_label = "趋势待确认"
+        trend_label = "?????"
 
     reasons = [
-        f"V2.1综合评分{scorecard.score:.2f}，证据覆盖率{scorecard.coverage_pct:.2f}%",
-        f"成交额{amount_yi:.2f}亿元，满足流动性门槛",
+        f"V2.1????{scorecard.score:.2f}??????{scorecard.coverage_pct:.2f}%",
+        f"???{amount_yi:.2f}??????????",
         *scorecard.reasons,
     ]
     if avg_amount_20d is not None:
         reasons.append(
-            f"近20日平均成交额{avg_amount_20d / 100_000_000.0:.2f}亿元，满足流动性门槛"
+            f"?20??????{avg_amount_20d / 100_000_000.0:.2f}??????????"
         )
     if -1.0 <= five_day_pct <= 8.0:
-        reasons.append(f"近5日涨幅{five_day_pct:+.2f}%，未进入追高区间")
+        reasons.append(f"?5???{five_day_pct:+.2f}%????????")
     risks = list(scorecard.risks)
     evidence_gaps = list(scorecard.evidence_gaps)
     if avg_amount_20d is None:
-        evidence_gaps.append("历史数据未提供成交额，暂以当日成交额完成流动性初筛")
+        evidence_gaps.append("?????????????????????????")
     if is_intraday:
-        risks.append("盘中未完成K线不参与日线量能计算")
+        risks.append("?????K??????????")
 
     pe_ratio = _optional_number(spot_row.get("pe_ratio"))
     pb_ratio = _optional_number(spot_row.get("pb_ratio"))
@@ -553,15 +562,15 @@ def build_candidate(
         volume_ratio_5d=round(volume_ratio, 2),
         trend_label=trend_label,
         watch_zone=(
-            f"{min(ma20, ma5):.2f}—{max(ma20, ma5):.2f}"
+            f"{min(ma20, ma5):.2f}?{max(ma20, ma5):.2f}"
             if ma20 > 0 and ma5 > 0
-            else "无法确认"
+            else "????"
         ),
         industry=str(spot_row.get("industry", "") or ""),
         pe_ratio=round(pe_ratio, 2) if pe_ratio is not None else None,
         pb_ratio=round(pb_ratio, 2) if pb_ratio is not None else None,
         historical_win_rate=None,
-        risk_gate="需深度复核" if scorecard.evidence_gaps else "通过",
+        risk_gate="?????" if scorecard.evidence_gaps else "??",
         reasons=tuple(reasons),
         risks=tuple(risks),
         evidence_gaps=tuple(evidence_gaps),
@@ -573,7 +582,7 @@ def build_candidate(
 class PublicMarketDataSource:
     """Free-data adapter with explicit fallback errors."""
 
-    name = "AKShare/东方财富，失败时尝试 efinance"
+    name = "AKShare/????????????????? efinance"
 
     def __init__(self) -> None:
         self._fundamental_manager = None
@@ -597,20 +606,20 @@ class PublicMarketDataSource:
             frame = ak.stock_zh_a_spot_em()
             if frame is not None and not frame.empty:
                 return frame
-            errors.append("AKShare 返回空表")
+            errors.append("AKShare ????")
         except Exception as exc:  # pragma: no cover - live provider
             errors.append(f"AKShare: {exc}")
 
-        # AKShare 的 stock_zh_a_spot() 会解析新浪的 turnoverratio，却在
-        # 返回 DataFrame 前删除该列。这里直接读取同一原始接口并保留换手率，
-        # 否则基础风险过滤无法执行。
+        # AKShare ? stock_zh_a_spot() ?????? turnoverratio???
+        # ?? DataFrame ?????????????????????????
+        # ?????????????
         try:
             frame = self._fetch_sina_spot_with_turnover()
             if not frame.empty:
                 return frame
-            errors.append("新浪原始接口返回空表")
+            errors.append("??????????")
         except Exception as exc:  # pragma: no cover - live provider
-            errors.append(f"新浪原始接口: {exc}")
+            errors.append(f"??????: {exc}")
 
         try:
             import efinance as ef
@@ -618,11 +627,11 @@ class PublicMarketDataSource:
             frame = ef.stock.get_realtime_quotes()
             if frame is not None and not frame.empty:
                 return frame
-            errors.append("efinance 返回空表")
+            errors.append("efinance ????")
         except Exception as exc:  # pragma: no cover - live provider
             errors.append(f"efinance: {exc}")
 
-        raise RuntimeError("全市场实时行情获取失败；" + "；".join(errors))
+        raise RuntimeError("????????????" + "?".join(errors))
 
     @staticmethod
     def _fetch_sina_spot_with_turnover() -> pd.DataFrame:
@@ -639,7 +648,7 @@ class PublicMarketDataSource:
             count_response.raise_for_status()
             matches = re.findall(r"\d+", count_response.text)
             if not matches:
-                raise ValueError("新浪接口未返回股票数量")
+                raise ValueError("???????????")
             page_count = math.ceil(int(matches[0]) / 80)
 
             frames: List[pd.DataFrame] = []
@@ -657,7 +666,7 @@ class PublicMarketDataSource:
                     frames.append(pd.DataFrame(rows))
 
         if not frames:
-            raise ValueError("新浪接口未返回行情记录")
+            raise ValueError("???????????")
         return normalize_sina_raw_spot_frame(
             pd.concat(frames, ignore_index=True)
         )
@@ -679,7 +688,7 @@ class PublicMarketDataSource:
             )
             if frame is not None and not frame.empty:
                 return frame
-            errors.append("AKShare 日线为空")
+            errors.append("AKShare ????")
         except Exception as exc:  # pragma: no cover - live provider
             errors.append(f"AKShare: {exc}")
 
@@ -695,11 +704,11 @@ class PublicMarketDataSource:
             )
             if frame is not None and not frame.empty:
                 return frame
-            errors.append("efinance 日线为空")
+            errors.append("efinance ????")
         except Exception as exc:  # pragma: no cover - live provider
             errors.append(f"efinance: {exc}")
 
-        raise RuntimeError("；".join(errors))
+        raise RuntimeError("?".join(errors))
 
     def fetch_evidence(
         self,
@@ -734,7 +743,26 @@ class MarketScreener:
         raw_spot = spot_frame if spot_frame is not None else self.data_source.fetch_spot()
         universe_count = len(raw_spot)
         normalized_spot = normalize_spot_frame(raw_spot)
-        market_environment = calculate_market_environment(normalized_spot)
+        active_spot = _active_spot_rows(normalized_spot)
+        if active_spot.empty:
+            market_environment = {
+                "score": None,
+                "strategy": "?????????????????????",
+                "coverage": "unavailable",
+                "coverage_note": "?????????????????????????????",
+                "advance_ratio_pct": None,
+                "median_pct_change": None,
+                "limit_up_count": None,
+                "limit_down_count": None,
+                "snapshot_status": "pre_open_or_unavailable",
+                "active_quote_count": 0,
+            }
+        else:
+            market_environment = {
+                **calculate_market_environment(active_spot),
+                "snapshot_status": "active",
+                "active_quote_count": len(active_spot),
+            }
         filtered = apply_spot_filters(raw_spot, self.config)
         fetch_history = history_fetcher or self.data_source.fetch_history
 
@@ -773,7 +801,7 @@ class MarketScreener:
                         candidate_inputs.append((row, metrics, candidate))
                 except Exception as exc:
                     failures += 1
-                    logger.warning("历史数据获取或计算失败 %s: %s", row["code"], exc)
+                    logger.warning("??????????? %s: %s", row["code"], exc)
 
         # Expensive fundamentals and capital-flow requests are limited to the
         # strongest transparent price/volume candidates.
@@ -815,7 +843,7 @@ class MarketScreener:
                             evidence_failures += 1
                     except Exception as exc:
                         evidence_failures += 1
-                        logger.warning("V2.1 证据增强失败 %s: %s", code, exc)
+                        logger.warning("V2.1 ?????? %s: %s", code, exc)
                         evidence_by_code[code] = {}
 
         candidates: List[ScreeningCandidate] = []
@@ -830,7 +858,9 @@ class MarketScreener:
                 candidates.append(candidate)
 
         market_score = _optional_number(market_environment.get("score"))
-        if market_score is not None and market_score < 40.0:
+        if market_environment.get("snapshot_status") != "active":
+            observation_limit = 0
+        elif market_score is not None and market_score < 40.0:
             observation_limit = min(self.config.top_n, 3)
         elif market_score is not None and market_score < 55.0:
             observation_limit = min(self.config.top_n, 4)
@@ -852,17 +882,17 @@ class MarketScreener:
         )[:observation_limit]
         analysis_codes = [item.code for item in ranked[: self.config.analysis_limit]]
         limitations: List[str] = [
-            "V2.1综合评分覆盖基本面、资金面、技术面和估值；行业催化评分将在后续阶段补充。",
-            "证据覆盖率单独展示；缺失数据不会按正面信号计分，也不会被表述为无风险。",
-            "候选名单用于缩小人工复核范围，不代表买入、加仓或建仓建议。",
-            "免费行情接口可能延迟或失败；历史数据失败的股票会被跳过并计数。",
-            "历史类似信号胜率和5/10/20日表现将在V2.2积累足够样本后展示。",
-            "重大公告、监管处罚和异常事项仍由候选股深度分析继续复核。",
+            "V2.1????????????????????????????????????",
+            "???????????????????????????????????",
+            "?????????????????????????????",
+            "???????????????????????????????",
+            "?????????5/10/20?????V2.2??????????",
+            "????????????????????????????",
         ]
         if intraday_mode:
             limitations.append(
-                "盘中运行时，当日未完成K线不参与日线均线和量能计算；"
-                "最新价仅用于判断相对上一完整交易日均线的位置。"
+                "???????????K??????????????"
+                "???????????????????????"
             )
         return ScreeningResult(
             generated_at=datetime.now(CN_TZ).isoformat(timespec="seconds"),
@@ -887,47 +917,56 @@ def render_markdown(result: ScreeningResult) -> str:
     market = result.market_environment
     market_score = market.get("score")
     lines = [
-        f"# A股主板全市场初筛（{result.model_version}）",
+        f"# A?????????{result.model_version}?",
         "",
-        f"> 生成时间：{generated.strftime('%Y-%m-%d %H:%M:%S')}（北京时间）",
-        f"> 数据来源：{result.data_source}",
-        "> 定位：观察名单，不代表买入、加仓或建仓建议。",
+        f"> ?????{generated.strftime('%Y-%m-%d %H:%M:%S')}??????",
+        f"> ?????{result.data_source}",
+        "> ??????????????????????",
         "",
-        "## 市场环境",
+        "## ????",
         "",
-        f"- 环境评分：{market_score if market_score is not None else '无法确认'}",
-        f"- 策略：{market.get('strategy', '保持谨慎')}",
-        f"- 本次观察名单上限：{market.get('observation_limit', result.config.top_n)}只",
-        f"- 评分覆盖：{market.get('coverage', 'partial')}（{market.get('coverage_note', '数据范围待复核')}）",
-        f"- 上涨家数占比：{market.get('advance_ratio_pct') if market.get('advance_ratio_pct') is not None else '无法确认'}%",
-        f"- 涨跌幅中位数：{market.get('median_pct_change') if market.get('median_pct_change') is not None else '无法确认'}%",
-        f"- 涨停/跌停数量：{market.get('limit_up_count') if market.get('limit_up_count') is not None else '无法确认'} / "
-        f"{market.get('limit_down_count') if market.get('limit_down_count') is not None else '无法确认'}",
+        f"- ?????{market_score if market_score is not None else '????'}",
+        f"- ???{market.get('strategy', '????')}",
+        f"- ?????????{market.get('observation_limit', result.config.top_n)}?",
+        f"- ?????{market.get('coverage', 'partial')}?{market.get('coverage_note', '???????')}?",
+        f"- ???????{market.get('advance_ratio_pct') if market.get('advance_ratio_pct') is not None else '????'}%",
+        f"- ???????{market.get('median_pct_change') if market.get('median_pct_change') is not None else '????'}%",
+        f"- ??/?????{market.get('limit_up_count') if market.get('limit_up_count') is not None else '????'} / "
+        f"{market.get('limit_down_count') if market.get('limit_down_count') is not None else '????'}",
         "",
-        "## 筛选概况",
+        "## ????",
         "",
-        f"- 全市场记录：{result.universe_count}",
-        f"- 通过基础过滤并进入历史核验：{result.spot_filtered_count}",
-        f"- 历史数据有效：{result.history_success_count}",
-        f"- 历史数据失败或不足：{result.history_failure_count}",
-        f"- 基本面/资金证据增强成功：{result.evidence_success_count}",
-        f"- 基本面/资金证据增强失败或不支持：{result.evidence_failure_count}",
-        f"- 最终观察候选：{len(result.candidates)}",
+        f"- ??????{result.universe_count}",
+        f"- ??????????????{result.spot_filtered_count}",
+        f"- ???????{result.history_success_count}",
+        f"- ??????????{result.history_failure_count}",
+        f"- ???/?????????{result.evidence_success_count}",
+        f"- ???/?????????????{result.evidence_failure_count}",
+        f"- ???????{len(result.candidates)}",
         "",
-        "## 观察候选",
+        "## ????",
         "",
     ]
     if not result.candidates:
-        lines.extend(
-            [
-                "本次没有股票同时满足全部门槛。系统不会为了凑数而降低标准。",
-                "",
-            ]
-        )
+        if market.get("snapshot_status") == "pre_open_or_unavailable":
+            lines.extend(
+                [
+                    "??????????????????????????",
+                    "??????????????0??????????????????????????",
+                    "",
+                ]
+            )
+        else:
+            lines.extend(
+                [
+                    "?????????????????????????????",
+                    "",
+                ]
+            )
     else:
         lines.extend(
             [
-                "| 排名 | 代码 | 名称 | 综合评分 | 证据覆盖 | 置信度 | 基本面 | 催化 | 资金面 | 技术面 | 估值 | 历史胜率 |",
+                "| ?? | ?? | ?? | ???? | ???? | ??? | ??? | ?? | ??? | ??? | ?? | ???? |",
                 "|---:|---|---|---:|---:|---|---:|---:|---:|---:|---:|---|",
             ]
         )
@@ -951,7 +990,7 @@ def render_markdown(result: ScreeningResult) -> str:
                     win_rate=(
                         f"{candidate.historical_win_rate:.2f}%"
                         if candidate.historical_win_rate is not None
-                        else "待V2.2积累"
+                        else "?V2.2??"
                     ),
                 )
             )
@@ -961,22 +1000,22 @@ def render_markdown(result: ScreeningResult) -> str:
                 [
                     f"### {candidate.code} {candidate.name}",
                     "",
-                    f"- 综合评分：{candidate.score:.2f}",
-                    f"- 证据覆盖率：{candidate.score_coverage_pct:.2f}%（{candidate.confidence_label}置信度）",
-                    f"- 最新价/当日涨跌：{candidate.latest_price:.2f} / {candidate.daily_pct:+.2f}%",
-                    f"- 近5日涨跌：{candidate.five_day_pct:+.2f}%",
-                    f"- 成交额/换手率：{candidate.amount_yi:.2f}亿元 / {candidate.turnover_pct:.2f}%",
+                    f"- ?????{candidate.score:.2f}",
+                    f"- ??????{candidate.score_coverage_pct:.2f}%?{candidate.confidence_label}????",
+                    f"- ???/?????{candidate.latest_price:.2f} / {candidate.daily_pct:+.2f}%",
+                    f"- ?5????{candidate.five_day_pct:+.2f}%",
+                    f"- ???/????{candidate.amount_yi:.2f}?? / {candidate.turnover_pct:.2f}%",
                     (
-                        f"- 近20日平均成交额：{candidate.avg_amount_20d_yi:.2f}亿元"
+                        f"- ?20???????{candidate.avg_amount_20d_yi:.2f}??"
                         if candidate.avg_amount_20d_yi is not None
-                        else "- 近20日平均成交额：历史接口未提供，需复核"
+                        else "- ?20??????????????????"
                     ),
-                    f"- 技术结构：{candidate.trend_label}",
-                    f"- 技术观察带：{candidate.watch_zone}（MA20—MA5，仅用于复核，不是买入区间）",
-                    f"- 风险门禁：{candidate.risk_gate}",
-                    "- 历史类似信号：V2.2尚未积累足够样本，不输出虚构胜率",
+                    f"- ?????{candidate.trend_label}",
+                    f"- ??????{candidate.watch_zone}?MA20?MA5??????????????",
+                    f"- ?????{candidate.risk_gate}",
+                    "- ???????V2.2????????????????",
                     "",
-                    "**入选依据**",
+                    "**????**",
                     "",
                     *[f"- {reason}" for reason in candidate.reasons],
                 ]
@@ -985,7 +1024,7 @@ def render_markdown(result: ScreeningResult) -> str:
                 lines.extend(
                     [
                         "",
-                        "**待核验风险**",
+                        "**?????**",
                         "",
                         *[f"- {risk}" for risk in candidate.risks],
                     ]
@@ -994,7 +1033,7 @@ def render_markdown(result: ScreeningResult) -> str:
                 lines.extend(
                     [
                         "",
-                        "**证据缺口**",
+                        "**????**",
                         "",
                         *[f"- {gap}" for gap in candidate.evidence_gaps],
                     ]
@@ -1002,11 +1041,11 @@ def render_markdown(result: ScreeningResult) -> str:
             lines.extend(
                 [
                     "",
-                    "**关注触发条件**",
+                    "**??????**",
                     "",
                     *[f"- {condition}" for condition in candidate.trigger_conditions],
                     "",
-                    "**放弃条件**",
+                    "**????**",
                     "",
                     *[f"- {condition}" for condition in candidate.abandon_conditions],
                 ]
@@ -1015,11 +1054,11 @@ def render_markdown(result: ScreeningResult) -> str:
 
     lines.extend(
         [
-            "## 下一步深度分析代码",
+            "## ?????????",
             "",
-            ", ".join(result.analysis_codes) if result.analysis_codes else "无",
+            ", ".join(result.analysis_codes) if result.analysis_codes else "?",
             "",
-            "## 证据边界",
+            "## ????",
             "",
             *[f"- {item}" for item in result.limitations],
             "",
