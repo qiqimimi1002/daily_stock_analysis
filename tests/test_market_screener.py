@@ -28,7 +28,7 @@ def _history(last_close: float = 24.0, volume_ratio: float = 1.1) -> pd.DataFram
     dates = pd.date_range("2026-06-01", periods=30, freq="B")
     closes = [18.0 + index * (last_close - 18.0) / 29 for index in range(30)]
     volumes = [1_000_000.0] * 29 + [1_000_000.0 * volume_ratio]
-    return pd.DataFrame({"??": dates, "??": closes, "???": volumes})
+    return pd.DataFrame({"日期": dates, "收盘": closes, "成交量": volumes})
 
 
 class TestBoardRules(unittest.TestCase):
@@ -39,9 +39,9 @@ class TestBoardRules(unittest.TestCase):
             self.assertFalse(is_main_board_code(code), code)
 
     def test_excludes_risk_and_new_listing_names(self) -> None:
-        for name in ("ST??", "*ST??", "????", "N??", "C??"):
+        for name in ("ST测试", "*ST测试", "退市测试", "N测试", "C测试"):
             self.assertTrue(is_excluded_name(name), name)
-        self.assertFalse(is_excluded_name("????"))
+        self.assertFalse(is_excluded_name("贵州茅台"))
 
 
 class TestSpotFilters(unittest.TestCase):
@@ -51,14 +51,14 @@ class TestSpotFilters(unittest.TestCase):
     def test_hard_filters_are_applied(self) -> None:
         frame = pd.DataFrame(
             [
-                ["600519", "????", 1300, 1.2, 100, 2_000_000_000, 1.1],
-                ["000001", "????", 12, 0.8, 100, 800_000_000, 2.0],
-                ["300750", "?????", 200, 1.0, 100, 2_000_000_000, 2.0],
-                ["600001", "ST??", 10, 1.0, 100, 2_000_000_000, 2.0],
-                ["600002", "????", 10, 1.0, 100, 20_000_000, 2.0],
-                ["600003", "????", 10, 8.0, 100, 2_000_000_000, 2.0],
+                ["600519", "贵州茅台", 1300, 1.2, 100, 2_000_000_000, 1.1],
+                ["000001", "平安银行", 12, 0.8, 100, 800_000_000, 2.0],
+                ["300750", "创业板样本", 200, 1.0, 100, 2_000_000_000, 2.0],
+                ["600001", "ST样本", 10, 1.0, 100, 2_000_000_000, 2.0],
+                ["600002", "低流动性", 10, 1.0, 100, 20_000_000, 2.0],
+                ["600003", "追涨样本", 10, 8.0, 100, 2_000_000_000, 2.0],
             ],
-            columns=["??", "??", "???", "???", "???", "???", "???"],
+            columns=["代码", "名称", "最新价", "涨跌幅", "成交量", "成交额", "换手率"],
         )
         filtered = apply_spot_filters(frame, self.config)
         self.assertEqual(set(filtered["code"]), {"600519", "000001"})
@@ -76,7 +76,7 @@ class TestHistoryAndRanking(unittest.TestCase):
         history = _history(last_close=24.0)
         today = pd.Timestamp("2026-07-29")
         partial = pd.DataFrame(
-            [{"??": today, "??": 30.0, "???": 20_000_000.0}]
+            [{"日期": today, "收盘": 30.0, "成交量": 20_000_000.0}]
         )
         history = pd.concat([history, partial], ignore_index=True)
 
@@ -104,11 +104,11 @@ class TestHistoryAndRanking(unittest.TestCase):
     def test_end_to_end_with_injected_data(self) -> None:
         spot = pd.DataFrame(
             [
-                ["600100", "???", 24.0, 1.2, 100, 1_500_000_000, 2.0],
-                ["000100", "???", 20.0, 0.5, 100, 900_000_000, 1.5],
-                ["688100", "????", 50.0, 1.0, 100, 2_000_000_000, 2.0],
+                ["600100", "主板甲", 24.0, 1.2, 100, 1_500_000_000, 2.0],
+                ["000100", "主板乙", 20.0, 0.5, 100, 900_000_000, 1.5],
+                ["688100", "科创样本", 50.0, 1.0, 100, 2_000_000_000, 2.0],
             ],
-            columns=["??", "??", "???", "???", "???", "???", "???"],
+            columns=["代码", "名称", "最新价", "涨跌幅", "成交量", "成交额", "换手率"],
         )
         config = ScreeningConfig(
             top_n=2,
@@ -128,8 +128,8 @@ class TestHistoryAndRanking(unittest.TestCase):
 
     def test_report_is_observation_not_buy_advice(self) -> None:
         spot = pd.DataFrame(
-            [["600100", "???", 24.0, 1.2, 100, 1_500_000_000, 2.0]],
-            columns=["??", "??", "???", "???", "???", "???", "???"],
+            [["600100", "主板甲", 24.0, 1.2, 100, 1_500_000_000, 2.0]],
+            columns=["代码", "名称", "最新价", "涨跌幅", "成交量", "成交额", "换手率"],
         )
         result = MarketScreener(
             ScreeningConfig(
@@ -140,9 +140,9 @@ class TestHistoryAndRanking(unittest.TestCase):
             )
         ).run(spot_frame=spot, history_fetcher=lambda _: _history())
         report = render_markdown(result)
-        self.assertIn("????", report)
-        self.assertIn("?????????????", report)
-        self.assertNotIn("????", report)
+        self.assertIn("观察候选", report)
+        self.assertIn("不代表买入、加仓或建仓建议", report)
+        self.assertNotIn("建议买入", report)
 
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -159,8 +159,8 @@ class TestHistoryAndRanking(unittest.TestCase):
 
     def test_pre_open_snapshot_is_not_reported_as_a_valid_zero_candidate_run(self) -> None:
         spot = pd.DataFrame(
-            [["600100", "???", 0.0, 0.0, 0, 0, 0.0]],
-            columns=["??", "??", "???", "???", "???", "???", "???"],
+            [["600100", "主板甲", 0.0, 0.0, 0, 0, 0.0]],
+            columns=["代码", "名称", "最新价", "涨跌幅", "成交量", "成交额", "换手率"],
         )
 
         result = MarketScreener(
@@ -172,7 +172,7 @@ class TestHistoryAndRanking(unittest.TestCase):
             )
         ).run(
             spot_frame=spot,
-            history_fetcher=lambda _: self.fail("?????????????"),
+            history_fetcher=lambda _: self.fail("盘前空快照不应请求历史数据"),
         )
 
         self.assertIsNone(result.market_environment["score"])
@@ -183,21 +183,21 @@ class TestHistoryAndRanking(unittest.TestCase):
         )
         self.assertEqual(result.market_environment["observation_limit"], 0)
         report = render_markdown(result)
-        self.assertIn("????????", report)
-        self.assertIn("?????????????", report)
-        self.assertNotIn("?????????????", report)
+        self.assertIn("盘前行情尚未形成", report)
+        self.assertIn("不能解读为市场没有观察机会", report)
+        self.assertNotIn("系统不会为了凑数而降低标准", report)
 
     def test_intraday_artifact_uses_null_instead_of_nan(self) -> None:
         spot = pd.DataFrame(
-            [["600100", "???", 25.0, 1.2, 100, 1_500_000_000, 2.0]],
-            columns=["??", "??", "???", "???", "???", "???", "???"],
+            [["600100", "主板甲", 25.0, 1.2, 100, 1_500_000_000, 2.0]],
+            columns=["代码", "名称", "最新价", "涨跌幅", "成交量", "成交额", "换手率"],
         )
         history = _history()
         history = pd.concat(
             [
                 history,
                 pd.DataFrame(
-                    [{"??": "2026-07-29", "??": 25.0, "???": 500_000.0}]
+                    [{"日期": "2026-07-29", "收盘": 25.0, "成交量": 500_000.0}]
                 ),
             ],
             ignore_index=True,
