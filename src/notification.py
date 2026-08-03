@@ -1555,9 +1555,19 @@ class NotificationService(
 
                     # 最强信号
                     if signal_attr.get('strongest_bullish_signal'):
-                        report_lines.append(f"**🐂 {labels['strongest_bullish_signal_label']}**: {signal_attr['strongest_bullish_signal']}")
+                        bullish_signal = sanitize_action_text(
+                            result,
+                            signal_attr['strongest_bullish_signal'],
+                            report_language,
+                        )
+                        report_lines.append(f"**🐂 {labels['strongest_bullish_signal_label']}**: {bullish_signal}")
                     if signal_attr.get('strongest_bearish_signal'):
-                        report_lines.append(f"**🐻 {labels['strongest_bearish_signal_label']}**: {signal_attr['strongest_bearish_signal']}")
+                        bearish_signal = sanitize_action_text(
+                            result,
+                            signal_attr['strongest_bearish_signal'],
+                            report_language,
+                        )
+                        report_lines.append(f"**🐻 {labels['strongest_bearish_signal_label']}**: {bearish_signal}")
                     report_lines.append("")
 
                 # ========== 多策略综合 ==========
@@ -2078,8 +2088,10 @@ class NotificationService(
             bullish = signal_attr.get('strongest_bullish_signal')
             bearish = signal_attr.get('strongest_bearish_signal')
             if bullish:
+                bullish = sanitize_action_text(result, bullish, report_language)
                 lines.append(f"**🐂 {labels.get('strongest_bullish_signal_label', '最强看多信号')}**: {bullish}")
             if bearish:
+                bearish = sanitize_action_text(result, bearish, report_language)
                 lines.append(f"**🐻 {labels.get('strongest_bearish_signal_label', '最强看空信号')}**: {bearish}")
             lines.append("")
 

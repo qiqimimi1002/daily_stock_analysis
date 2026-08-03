@@ -18,6 +18,49 @@ _BUY_WORDS_ZH = re.compile(
     r"(维持|继续)?\s*"
     r"(买入评级|逢低布局|分批布局|分批介入|买入|加仓|建仓|低吸|布局|介入|抄底)"
 )
+_UNVERIFIED_VOLUME_PRESSURE_ZH = re.compile(
+    r"(?:盘中)?量比(?:过大|较大|偏高)?(?:可能)?(?:隐含|说明|表明)?"
+    r"(?:短期)?(?:抛压|买压|卖压)"
+)
+
+
+def _neutralize_unverified_claims(text: str, lang: str) -> str:
+    """Remove superlatives and pressure claims unsupported by volume ratio alone."""
+
+    if lang == "en":
+        text = re.sub(
+            r"\b(perfect|excellent)\s+technical\s+(?:form|setup)\b",
+            "relatively strong technical setup",
+            text,
+            flags=re.IGNORECASE,
+        )
+        return re.sub(
+            r"\bvolume ratio\b[^.;]*(?:buying|selling)\s+pressure\b",
+            "volume ratio indicates activity only; directional pressure remains unverified",
+            text,
+            flags=re.IGNORECASE,
+        )
+    if lang == "ko":
+        text = text.replace("완벽한 기술적 형태", "상대적으로 강한 기술적 형태")
+        text = text.replace("매우 우수한 기술적 형태", "상대적으로 강한 기술적 형태")
+        return re.sub(
+            r"거래량 비율[^.。]*(?:매수|매도) 압력",
+            "거래량 비율은 활동성만 나타내며 방향성 압력은 확인되지 않음",
+            text,
+        )
+
+    replacements = (
+        ("技术形态完美", "技术形态偏强"),
+        ("技术形态极佳", "技术形态偏强"),
+        ("量价配合理想", "成交活跃度较高但方向仍待确认"),
+        ("且符合交易准则", "仍需结合缺失证据复核"),
+    )
+    for source, target in replacements:
+        text = text.replace(source, target)
+    return _UNVERIFIED_VOLUME_PRESSURE_ZH.sub(
+        "量比偏高仅表示成交活跃，买卖压力待确认",
+        text,
+    )
 
 
 def _language_bucket(report_language: Any) -> str:
@@ -251,19 +294,33 @@ def sanitize_action_text(
 ) -> str:
     """Remove incremental-buy language when the final decision is not buy."""
     text = str(value or "").strip()
-    if not text or is_actionable_buy_result(result, report_language):
+    if not text:
         return text
     lang = _language_bucket(report_language)
+    text = _neutralize_unverified_claims(text, lang)
+    if is_actionable_buy_result(result, report_language):
+        return text
     if lang == "en":
-        return re.sub(
+        text = re.sub(
             r"\b(maintain|keep|continue)?\s*(buy rating|buy|add|build position|accumulate)\b",
             "hold and observe",
             text,
             flags=re.IGNORECASE,
         )
+        text = re.sub(r"\bact now\b", "wait for confirmation", text, flags=re.IGNORECASE)
+        return re.sub(
+            r"hold and observe(?:\s*(?:and|/|,)\s*hold and observe)+",
+            "hold and observe",
+            text,
+            flags=re.IGNORECASE,
+        )
     if lang == "ko":
-        return re.sub(r"(매수 의견 유지|매수|추가 매수|포지션 구축|저가 매수)", "보유 관찰", text)
-    return _BUY_WORDS_ZH.sub("持有观察", text)
+        text = re.sub(r"(매수 의견 유지|매수|추가 매수|포지션 구축|저가 매수)", "보유 관찰", text)
+        text = text.replace("즉시 행동", "확인 대기")
+        return re.sub(r"(?:보유 관찰\s*){2,}", "보유 관찰", text)
+    text = _BUY_WORDS_ZH.sub("持有观察", text)
+    text = text.replace("立即行动", "等待确认")
+    return re.sub(r"(?:持有观察\s*){2,}", "持有观察", text)
 
 
 def sanitize_action_items(
