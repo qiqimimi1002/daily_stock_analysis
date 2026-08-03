@@ -18,7 +18,8 @@ observation model without replacing the existing architecture.
 - Active branch: `feat/v2-1-scoring`
 - Pull request: [#4](https://github.com/qiqimimi1002/daily_stock_analysis/pull/4)
 - PR target: `main`
-- Current remote head: `6ca0715dff2eb7b60dbf61d022df95436d54f987`.
+- Current remote head: `9cf6a616c6c6030a4e6ce849a1cf4a0ddc1fdd79` before the pending
+  one-line CI import fix.
 - PR is open and must not be merged until the live screening run succeeds.
 - Temporary branch `v2-1-market-scoring` was created during an abandoned web
   upload attempt. Do not merge or use it.
@@ -73,6 +74,10 @@ observation model without replacing the existing architecture.
 - Final report-language policy tests: 10 passed locally.
 - `python -m py_compile` passed for `src/report_evidence_policy.py`,
   `src/notification.py`, and `src/services/history_service.py`.
+- PR CI run `30778997772` reached flake8 and found one scoped defect:
+  `history_service.py` used `sanitize_action_text` without importing it.
+- The missing import is fixed locally; flake8 critical checks, the 10 focused
+  policy tests, and Python compilation all pass after the fix.
 - Local collection of the broader renderer/notification tests remains blocked
   by incomplete local dependencies; GitHub CI is the required full validation.
 
@@ -115,9 +120,8 @@ observation model without replacing the existing architecture.
 
 ## Next actions
 
-1. Commit and upload the final report-language patch using the GitHub connector;
-   plain PowerShell JSON previously corrupted Chinese text and must not be used.
-2. Wait for PR CI, then run one final live artifact check for the forbidden and
+1. Upload the one-line `sanitize_action_text` import fix and this status update.
+2. Wait for the new PR CI, then run one final live artifact check for the forbidden and
    overconfident phrases above.
 3. Merge PR #4 only after the final artifact passes review.
 4. After merge, verify the scheduled main-branch run before deleting temporary
