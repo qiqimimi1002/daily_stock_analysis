@@ -87,6 +87,7 @@ class TestFundamentalAdapter(unittest.TestCase):
                 "归母净利润": [300.0],
                 "经营活动产生的现金流量净额": [500.0],
                 "净资产收益率": [18.2],
+                "资产负债率": [35.6],
                 "营业收入同比": [12.0],
                 "净利润同比": [9.5],
             }
@@ -121,6 +122,7 @@ class TestFundamentalAdapter(unittest.TestCase):
         self.assertEqual(financial_report.get("net_profit_parent"), 300.0)
         self.assertEqual(financial_report.get("operating_cash_flow"), 500.0)
         self.assertEqual(financial_report.get("roe"), 18.2)
+        self.assertEqual(result["growth"].get("debt_ratio"), 35.6)
 
         dividend_payload = result["earnings"].get("dividend", {})
         events = dividend_payload.get("events", [])

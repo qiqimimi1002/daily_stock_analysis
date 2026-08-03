@@ -48,14 +48,18 @@ from src.schemas.decision_action import (
     display_operation_advice_for_result,
 )
 from src.schemas.decision_scale import extract_decision_guardrail_reason
-from src.report_evidence_policy import attribution_weights_for_result
+from src.report_evidence_policy import (
+    attribution_weights_for_result,
+    conservative_volume_meaning,
+    is_actionable_buy_result,
+    sanitize_action_text,
+    signal_attribution_text_for_report,
+)
 from src.utils.sniper_points import find_sniper_points
 from src.utils.data_processing import (
     extract_realtime_detail_fields,
     normalize_model_used,
     parse_json_field,
-    signal_attribution_has_content,
-    signal_attribution_weight_items,
 )
 
 if TYPE_CHECKING:
@@ -1050,13 +1054,18 @@ class HistoryService:
             ])
             # 趋势状态
             if trend_data:
+                ma_alignment = sanitize_action_text(
+                    result,
+                    trend_data.get('ma_alignment', 'N/A'),
+                    report_language,
+                )
                 is_bullish = (
                     f"✅ {labels['yes_label']}"
                     if trend_data.get('is_bullish', False)
                     else f"❌ {labels['no_label']}"
                 )
                 report_lines.extend([
-                    f"**{labels['ma_alignment_label']}**: {trend_data.get('ma_alignment', 'N/A')} | "
+                    f"**{labels['ma_alignment_label']}**: {ma_alignment} | "
                     f"{labels['bullish_alignment_label']}: {is_bullish} | "
                     f"{labels['trend_strength_label']}: {trend_data.get('trend_score', 'N/A')}/100",
                     "",
@@ -1083,7 +1092,7 @@ class HistoryService:
                 report_lines.extend([
                     f"**{labels['volume_label']}**: {labels['volume_ratio_label']} {vol_data.get('volume_ratio', 'N/A')} "
                     f"({vol_data.get('volume_status', '')}) | {labels['turnover_rate_label']} {vol_data.get('turnover_rate', 'N/A')}%",
-                    f"💡 *{vol_data.get('volume_meaning', '')}*",
+                    f"💡 *{conservative_volume_meaning(vol_data, report_language)}*",
                     "",
                 ])
             # 筹码结构
@@ -1118,7 +1127,7 @@ class HistoryService:
 
         # ========== 作战计划 ==========
         battle = dashboard.get('battle_plan', {}) if dashboard else {}
-        if battle:
+        if battle and is_actionable_buy_result(result, report_language):
             report_lines.extend([
                 f"### 🎯 {labels['battle_plan_heading']}",
                 "",
@@ -1159,12 +1168,18 @@ class HistoryService:
 
         # ========== 信号归因分析 ==========
         signal_attr = dashboard.get('signal_attribution', {}) if dashboard else {}
-        if signal_attribution_has_content(signal_attr):
+        weight_items = attribution_weights_for_result(result, signal_attr)
+        bullish = signal_attribution_text_for_report(
+            result, signal_attr.get('strongest_bullish_signal'), report_language
+        )
+        bearish = signal_attribution_text_for_report(
+            result, signal_attr.get('strongest_bearish_signal'), report_language
+        )
+        if weight_items or bullish or bearish:
             report_lines.extend([
                 f"### 🎯 {labels.get('signal_attribution_heading', '信号归因分析')}",
                 "",
             ])
-            weight_items = attribution_weights_for_result(result, signal_attr)
             if weight_items:
                 report_lines.append(f"**{labels.get('attribution_weights_label', '归因权重')}**:")
                 weight_labels = {
@@ -1177,8 +1192,6 @@ class HistoryService:
                     icon, label = weight_labels[key]
                     report_lines.append(f"- {icon} {label}: {value}%")
                 report_lines.append("")
-            bullish = signal_attr.get('strongest_bullish_signal')
-            bearish = signal_attr.get('strongest_bearish_signal')
             if bullish:
                 report_lines.append(f"**🐂 {labels.get('strongest_bullish_signal_label', '最强看多信号')}**: {bullish}")
             if bearish:

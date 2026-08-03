@@ -82,7 +82,7 @@
 
 {% set trend_data = data_persp.get('trend_status', {}) %}
 {% if trend_data %}
-**{{ labels.ma_alignment_label }}**: {{ trend_data.get('ma_alignment', 'N/A') }} | {{ labels.bullish_alignment_label }}: {{ '✅ ' ~ labels.yes_label if trend_data.get('is_bullish') else '❌ ' ~ labels.no_label }} | {{ labels.trend_strength_label }}: {{ trend_data.get('trend_score', 'N/A') }}/100
+**{{ labels.ma_alignment_label }}**: {{ sanitize_action_text(result, trend_data.get('ma_alignment', 'N/A'), report_language) }} | {{ labels.bullish_alignment_label }}: {{ '✅ ' ~ labels.yes_label if trend_data.get('is_bullish') else '❌ ' ~ labels.no_label }} | {{ labels.trend_strength_label }}: {{ trend_data.get('trend_score', 'N/A') }}/100
 {% endif %}
 
 {% set price_data = price_data_for_report(result, data_persp.get('price_position', {})) %}
@@ -139,7 +139,7 @@
 {% if phase_decision.get('data_limitations') %}
 **{{ labels.data_limitations_label }}**:
 {% for limitation in phase_decision.get('data_limitations') %}
-- {{ limitation }}
+- {{ sanitize_action_text(result, limitation, report_language) }}
 {% endfor %}
 {% endif %}
 
@@ -147,7 +147,9 @@
 
 {% set signal_attr = dashboard.get('signal_attribution') or {} %}
 {% set signal_attr_weights = attribution_weights_for_result(result, signal_attr) %}
-{% if signal_attribution_has_content(signal_attr) %}
+{% set bullish_signal = signal_attribution_text_for_report(result, signal_attr.get('strongest_bullish_signal'), report_language) %}
+{% set bearish_signal = signal_attribution_text_for_report(result, signal_attr.get('strongest_bearish_signal'), report_language) %}
+{% if signal_attr_weights or bullish_signal or bearish_signal %}
 ### 🎯 {{ labels.signal_attribution_heading }}
 
 {% if signal_attr_weights %}
@@ -159,12 +161,11 @@
 {% if key == 'market_conditions' %}- 🌐 {{ labels.market_conditions_label }}: {{ value }}%{% endif %}
 {% endfor %}
 {% endif %}
-
-{% if signal_attr.get('strongest_bullish_signal') %}
-**🟢 {{ labels.strongest_bullish_signal_label }}**: {{ signal_attr.get('strongest_bullish_signal') }}
+{% if bullish_signal %}
+**🟢 {{ labels.strongest_bullish_signal_label }}**: {{ bullish_signal }}
 {% endif %}
-{% if signal_attr.get('strongest_bearish_signal') %}
-**🔴 {{ labels.strongest_bearish_signal_label }}**: {{ signal_attr.get('strongest_bearish_signal') }}
+{% if bearish_signal %}
+**🔴 {{ labels.strongest_bearish_signal_label }}**: {{ bearish_signal }}
 {% endif %}
 
 {% endif %}

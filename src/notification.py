@@ -72,14 +72,11 @@ from src.report_evidence_policy import (
     price_data_for_report,
     sanitize_action_items,
     sanitize_action_text,
+    signal_attribution_text_for_report,
 )
 from bot.models import BotMessage
 from src.utils.sanitize import sanitize_diagnostic_text
-from src.utils.data_processing import (
-    signal_attribution_has_content,
-    signal_attribution_weight_items,
-    normalize_model_used,
-)
+from src.utils.data_processing import normalize_model_used
 from src.notification_sender import (
     AstrbotSender,
     CustomWebhookSender,
@@ -1159,6 +1156,7 @@ class NotificationService(
         confidence_reason = str(phase_decision.get("confidence_reason") or "")
         if result is not None:
             watch_conditions = sanitize_action_items(result, watch_conditions, report_language)
+            data_limitations = sanitize_action_items(result, data_limitations, report_language)
             immediate_action = sanitize_action_text(result, immediate_action, report_language)
             confidence_reason = sanitize_action_text(result, confidence_reason, report_language)
 
@@ -1431,13 +1429,18 @@ class NotificationService(
                     ])
                     # 趋势状态
                     if trend_data:
+                        ma_alignment = sanitize_action_text(
+                            result,
+                            trend_data.get('ma_alignment', 'N/A'),
+                            report_language,
+                        )
                         is_bullish = (
                             f"✅ {labels['yes_label']}"
                             if trend_data.get('is_bullish', False)
                             else f"❌ {labels['no_label']}"
                         )
                         report_lines.extend([
-                            f"**{labels['ma_alignment_label']}**: {trend_data.get('ma_alignment', 'N/A')} | "
+                            f"**{labels['ma_alignment_label']}**: {ma_alignment} | "
                             f"{labels['bullish_alignment_label']}: {is_bullish} | "
                             f"{labels['trend_strength_label']}: {trend_data.get('trend_score', 'N/A')}/100",
                             "",
@@ -1534,12 +1537,22 @@ class NotificationService(
 
                 # ========== 信号归因分析 ==========
                 signal_attr = dashboard.get('signal_attribution', {}) if dashboard else {}
-                if signal_attribution_has_content(signal_attr):
+                weight_items = attribution_weights_for_result(result, signal_attr)
+                bullish_signal = signal_attribution_text_for_report(
+                    result,
+                    signal_attr.get('strongest_bullish_signal'),
+                    report_language,
+                )
+                bearish_signal = signal_attribution_text_for_report(
+                    result,
+                    signal_attr.get('strongest_bearish_signal'),
+                    report_language,
+                )
+                if weight_items or bullish_signal or bearish_signal:
                     report_lines.extend([
                         f"### 🎯 {labels['signal_attribution_heading']}",
                         "",
                     ])
-                    weight_items = attribution_weights_for_result(result, signal_attr)
                     if weight_items:
                         report_lines.append(f"**{labels['attribution_weights_label']}**:")
                         weight_labels = {
@@ -1554,10 +1567,10 @@ class NotificationService(
                         report_lines.append("")
 
                     # 最强信号
-                    if signal_attr.get('strongest_bullish_signal'):
-                        report_lines.append(f"**🐂 {labels['strongest_bullish_signal_label']}**: {signal_attr['strongest_bullish_signal']}")
-                    if signal_attr.get('strongest_bearish_signal'):
-                        report_lines.append(f"**🐻 {labels['strongest_bearish_signal_label']}**: {signal_attr['strongest_bearish_signal']}")
+                    if bullish_signal:
+                        report_lines.append(f"**🐂 {labels['strongest_bullish_signal_label']}**: {bullish_signal}")
+                    if bearish_signal:
+                        report_lines.append(f"**🐻 {labels['strongest_bearish_signal_label']}**: {bearish_signal}")
                     report_lines.append("")
 
                 # ========== 多策略综合 ==========
@@ -2054,13 +2067,19 @@ class NotificationService(
 
         # ========== 信号归因分析 ==========
         signal_attr = dashboard.get('signal_attribution', {}) if dashboard else {}
-        if signal_attribution_has_content(signal_attr):
+        weight_items = attribution_weights_for_result(result, signal_attr)
+        bullish = signal_attribution_text_for_report(
+            result, signal_attr.get('strongest_bullish_signal'), report_language
+        )
+        bearish = signal_attribution_text_for_report(
+            result, signal_attr.get('strongest_bearish_signal'), report_language
+        )
+        if weight_items or bullish or bearish:
             lines.extend([
                 f"### 🎯 {labels.get('signal_attribution_heading', '信号归因分析')}",
                 "",
             ])
             # 归因权重
-            weight_items = attribution_weights_for_result(result, signal_attr)
             if weight_items:
                 lines.append(f"**{labels.get('attribution_weights_label', '归因权重')}**:")
                 weight_labels = {
@@ -2075,8 +2094,6 @@ class NotificationService(
                 lines.append("")
 
             # 最强信号
-            bullish = signal_attr.get('strongest_bullish_signal')
-            bearish = signal_attr.get('strongest_bearish_signal')
             if bullish:
                 lines.append(f"**🐂 {labels.get('strongest_bullish_signal_label', '最强看多信号')}**: {bullish}")
             if bearish:
