@@ -53,14 +53,13 @@ from src.report_evidence_policy import (
     conservative_volume_meaning,
     is_actionable_buy_result,
     sanitize_action_text,
+    signal_attribution_text_for_report,
 )
 from src.utils.sniper_points import find_sniper_points
 from src.utils.data_processing import (
     extract_realtime_detail_fields,
     normalize_model_used,
     parse_json_field,
-    signal_attribution_has_content,
-    signal_attribution_weight_items,
 )
 
 if TYPE_CHECKING:
@@ -1170,29 +1169,32 @@ class HistoryService:
         # ========== 信号归因分析 ==========
         signal_attr = dashboard.get('signal_attribution', {}) if dashboard else {}
         weight_items = attribution_weights_for_result(result, signal_attr)
-        if signal_attribution_has_content(signal_attr) and weight_items:
+        bullish = signal_attribution_text_for_report(
+            result, signal_attr.get('strongest_bullish_signal'), report_language
+        )
+        bearish = signal_attribution_text_for_report(
+            result, signal_attr.get('strongest_bearish_signal'), report_language
+        )
+        if weight_items or bullish or bearish:
             report_lines.extend([
                 f"### 🎯 {labels.get('signal_attribution_heading', '信号归因分析')}",
                 "",
             ])
-            report_lines.append(f"**{labels.get('attribution_weights_label', '归因权重')}**:")
-            weight_labels = {
-                "technical_indicators": ("📈", labels.get('technical_indicators_label', '技术指标')),
-                "news_sentiment": ("📰", labels.get('news_sentiment_label', '新闻舆情')),
-                "fundamentals": ("📊", labels.get('fundamentals_label', '基本面')),
-                "market_conditions": ("🌐", labels.get('market_conditions_label', '市场环境')),
-            }
-            for key, value in weight_items:
-                icon, label = weight_labels[key]
-                report_lines.append(f"- {icon} {label}: {value}%")
-            report_lines.append("")
-            bullish = signal_attr.get('strongest_bullish_signal')
-            bearish = signal_attr.get('strongest_bearish_signal')
+            if weight_items:
+                report_lines.append(f"**{labels.get('attribution_weights_label', '归因权重')}**:")
+                weight_labels = {
+                    "technical_indicators": ("📈", labels.get('technical_indicators_label', '技术指标')),
+                    "news_sentiment": ("📰", labels.get('news_sentiment_label', '新闻舆情')),
+                    "fundamentals": ("📊", labels.get('fundamentals_label', '基本面')),
+                    "market_conditions": ("🌐", labels.get('market_conditions_label', '市场环境')),
+                }
+                for key, value in weight_items:
+                    icon, label = weight_labels[key]
+                    report_lines.append(f"- {icon} {label}: {value}%")
+                report_lines.append("")
             if bullish:
-                bullish = sanitize_action_text(result, bullish, report_language)
                 report_lines.append(f"**🐂 {labels.get('strongest_bullish_signal_label', '最强看多信号')}**: {bullish}")
             if bearish:
-                bearish = sanitize_action_text(result, bearish, report_language)
                 report_lines.append(f"**🐻 {labels.get('strongest_bearish_signal_label', '最强看空信号')}**: {bearish}")
             report_lines.append("")
 

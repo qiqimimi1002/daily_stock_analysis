@@ -54,12 +54,9 @@ from src.report_evidence_policy import (
     price_data_for_report,
     sanitize_action_items,
     sanitize_action_text,
+    signal_attribution_text_for_report,
 )
-from src.utils.data_processing import (
-    normalize_model_used,
-    signal_attribution_has_content,
-    signal_attribution_weight_items,
-)
+from src.utils.data_processing import normalize_model_used
 
 logger = logging.getLogger(__name__)
 
@@ -255,8 +252,6 @@ def render(
         "localize_conflict_severity": localize_conflict_severity,
         "normalize_strategy_synthesis_payload": normalize_strategy_synthesis_payload,
         "strategy_invalid_opinion_count": strategy_invalid_opinion_count,
-        "signal_attribution_has_content": signal_attribution_has_content,
-        "signal_attribution_weight_items": signal_attribution_weight_items,
         "attribution_weights_for_result": attribution_weights_for_result,
         "conservative_volume_meaning": conservative_volume_meaning,
         "is_actionable_buy_result": is_actionable_buy_result,
@@ -265,6 +260,7 @@ def render(
         "price_data_for_report": price_data_for_report,
         "sanitize_action_items": sanitize_action_items,
         "sanitize_action_text": sanitize_action_text,
+        "signal_attribution_text_for_report": signal_attribution_text_for_report,
         "news_verification_notice": news_verification_notice,
         "market_snapshot_heading": market_snapshot_heading,
         "market_snapshot_close_label": market_snapshot_close_label,

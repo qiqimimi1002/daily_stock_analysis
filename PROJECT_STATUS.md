@@ -18,8 +18,8 @@ observation model without replacing the existing architecture.
 - Active branch: `feat/v2-1-scoring`
 - Pull request: [#4](https://github.com/qiqimimi1002/daily_stock_analysis/pull/4)
 - PR target: `main`
-- Current remote head: `e1379e712d8e37684ef42c8e68a5c0d65ae791b5` before the pending
-  attribution evidence gate.
+- Current remote head: `54108a4fefe524ad03a97ae6fa37153a8f20ae66` before the pending
+  per-signal evidence fix.
 - PR is open and must not be merged until the live screening run succeeds.
 - Temporary branch `v2-1-market-scoring` was created during an abandoned web
   upload attempt. Do not merge or use it.
@@ -82,6 +82,13 @@ observation model without replacing the existing architecture.
   deterministic checks, the full offline suite, Docker, and AI governance.
 - Final shared-policy tests after the live-artifact cleanup: 11 passed locally;
   flake8 critical checks and Python compilation also pass.
+- PR CI run `30781830474` for head `54108a4` completed 5,001 tests and
+  found one regression: partial attribution must retain a verified technical
+  signal such as `MACD金叉` even when evidence is insufficient for percentages.
+- The scoped per-signal fix passes 14 shared-policy tests locally, flake8
+  critical checks, Python compilation, and `git diff --check`. The local
+  end-to-end collector lacks `litellm`; GitHub CI remains the authoritative
+  full-suite validation.
 - Local collection of the broader renderer/notification tests remains blocked
   by incomplete local dependencies; GitHub CI is the required full validation.
 
@@ -132,17 +139,19 @@ observation model without replacing the existing architecture.
   non-buy decisions.
 - Workflow run #12:
   [successful cleanup validation](https://github.com/qiqimimi1002/daily_stock_analysis/actions/runs/30781220470).
-- Run #12 confirmed the three exact residual phrases were removed. Because the
-  model can generate unlimited wording variants, the final general guard now
-  hides the entire signal-attribution block whenever evidence is insufficient
-  to show attribution weights. This removes unsupported strongest-bullish and
-  strongest-bearish claims by policy instead of maintaining a phrase blacklist.
+- Run #12 confirmed the three exact residual phrases were removed. It also
+  exposed two unsupported generated variants: a directional claim derived
+  from missing chip data and a direction claim derived only from volume.
+- The final policy validates every strongest signal independently: attribution
+  percentages remain hidden when evidence is incomplete; unsupported chip- or
+  volume-derived directional claims are suppressed; independently meaningful
+  technical signals such as `MACD金叉` remain visible in every renderer.
 
 ## Next actions
 
-1. Push the attribution evidence gate and wait for PR CI.
+1. Push the per-signal evidence fix and wait for PR CI.
 2. Merge PR #4 after CI passes; run #12 already covers the live path and the
-   final gate is deterministic report rendering only.
+   final fix is deterministic report rendering with direct regression tests.
 3. After merge, verify the scheduled main-branch run before deleting temporary
    branches.
 

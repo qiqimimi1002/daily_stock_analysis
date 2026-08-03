@@ -337,6 +337,60 @@ def sanitize_action_items(
     return [sanitize_action_text(result, value, report_language) for value in values]
 
 
+def signal_attribution_text_for_report(
+    result: Any,
+    value: Any,
+    report_language: str = "zh",
+) -> str:
+    """Return a report-safe strongest-signal description.
+
+    A strongest-signal label is directional. Missing chip evidence and
+    volume-only activity therefore cannot support it. Suppress those claims
+    while preserving independently meaningful technical signals such as a
+    MACD crossover.
+    """
+    text = sanitize_action_text(result, value, report_language)
+    if not text:
+        return ""
+
+    lang = _language_bucket(report_language)
+    lowered = text.lower()
+    if lang == "en":
+        chip_missing = (
+            any(term in lowered for term in ("chip", "position concentration"))
+            and any(term in lowered for term in ("unknown", "missing", "unavailable"))
+        )
+        volume_direction = (
+            any(term in lowered for term in ("volume", "turnover"))
+            and any(
+                term in lowered
+                for term in (
+                    "momentum", "pressure", "direction", "accumulation",
+                    "distribution", "washout",
+                )
+            )
+        )
+        return "" if chip_missing or volume_direction else text
+
+    if lang == "ko":
+        chip_missing = "칩" in text and any(
+            term in text for term in ("알 수 없음", "누락", "사용 불가")
+        )
+        volume_direction = any(term in text for term in ("거래량", "회전율")) and any(
+            term in text for term in ("모멘텀", "압력", "방향", "매집", "분산")
+        )
+        return "" if chip_missing or volume_direction else text
+
+    chip_missing = any(term in text for term in ("筹码", "持仓集中度")) and any(
+        term in text for term in ("未知", "缺失", "不可用", "未获取")
+    )
+    volume_direction = any(term in text for term in ("量能", "量比", "成交量")) and any(
+        term in text
+        for term in ("动能", "上攻", "抛压", "买压", "卖压", "方向", "洗盘", "吸筹")
+    )
+    return "" if chip_missing or volume_direction else text
+
+
 def conservative_volume_meaning(vol_data: Any, report_language: str = "zh") -> str:
     """Describe volume without inferring pressure, washouts, or future direction."""
     ratio = _as_mapping(vol_data).get("volume_ratio")

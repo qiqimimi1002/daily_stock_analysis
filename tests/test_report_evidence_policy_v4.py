@@ -7,6 +7,7 @@ from src.report_evidence_policy import (
     market_snapshot_for_report,
     price_data_for_report,
     sanitize_action_text,
+    signal_attribution_text_for_report,
 )
 
 
@@ -142,3 +143,32 @@ class TestReportEvidencePolicyV4(TestCase):
             {"technical_indicators": 50, "news_sentiment": 20},
         )
         self.assertEqual(weights, [])
+
+    def test_verified_technical_signal_is_preserved_without_weights(self):
+        result = self._result()
+        self.assertEqual(
+            signal_attribution_text_for_report(result, "MACD金叉", "zh"),
+            "MACD金叉",
+        )
+
+    def test_missing_chip_directional_claim_is_suppressed(self):
+        result = self._result()
+        self.assertEqual(
+            signal_attribution_text_for_report(
+                result,
+                "筹码集中度未知导致的潜在抛压风险",
+                "zh",
+            ),
+            "",
+        )
+
+    def test_volume_only_directional_claim_is_suppressed(self):
+        result = self._result()
+        self.assertEqual(
+            signal_attribution_text_for_report(
+                result,
+                "量能上攻动能稍显不足",
+                "zh",
+            ),
+            "",
+        )
