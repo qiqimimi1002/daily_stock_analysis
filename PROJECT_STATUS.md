@@ -85,6 +85,10 @@ observation model without replacing the existing architecture.
 - PR CI run `30781830474` for head `54108a4` completed 5,001 tests and
   found one regression: partial attribution must retain a verified technical
   signal such as `MACD金叉` even when evidence is insufficient for percentages.
+- PR CI run `30782561127` for head `627a154` passed 5,004 tests and found one
+  remaining edge case: an all-zero attribution payload with no strongest
+  signals must not render an empty attribution section. The shared weight
+  policy now returns no display items for all-zero payloads.
 - The scoped per-signal fix passes 14 shared-policy tests locally, flake8
   critical checks, Python compilation, and `git diff --check`. The local
   end-to-end collector lacks `litellm`; GitHub CI remains the authoritative

@@ -144,6 +144,25 @@ class TestReportEvidencePolicyV4(TestCase):
         )
         self.assertEqual(weights, [])
 
+    def test_all_zero_attribution_weights_are_hidden(self):
+        result = self._result(
+            analysis_context_pack_overview={"metadata": {"news_result_count": 1}},
+            dashboard={
+                "data_perspective": {"trend_status": {"trend_score": 60}},
+                "financial_summary": {"pe": 20},
+            },
+        )
+        weights = attribution_weights_for_result(
+            result,
+            {
+                "technical_indicators": 0,
+                "news_sentiment": 0,
+                "fundamentals": 0,
+                "market_conditions": 0,
+            },
+        )
+        self.assertEqual(weights, [])
+
     def test_verified_technical_signal_is_preserved_without_weights(self):
         result = self._result()
         self.assertEqual(

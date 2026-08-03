@@ -431,4 +431,7 @@ def attribution_weights_for_result(
         return []
     from src.utils.data_processing import signal_attribution_weight_items
 
-    return signal_attribution_weight_items(_as_mapping(signal_attr))
+    items = signal_attribution_weight_items(_as_mapping(signal_attr))
+    if not any((_as_float(value) or 0) > 0 for _, value in items):
+        return []
+    return items
