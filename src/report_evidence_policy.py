@@ -52,8 +52,12 @@ def _neutralize_unverified_claims(text: str, lang: str) -> str:
     replacements = (
         ("技术形态完美", "技术形态偏强"),
         ("技术形态极佳", "技术形态偏强"),
+        ("完美多头排列", "多头排列"),
         ("量价配合理想", "成交活跃度较高但方向仍待确认"),
         ("且符合交易准则", "仍需结合缺失证据复核"),
+        ("新闻及公告数据近期真空", "新闻及公告未完成有效检索"),
+        ("暂无显著看空信号", "负面信号未完成充分核查"),
+        ("无显著看空信号", "负面信号未完成充分核查"),
     )
     for source, target in replacements:
         text = text.replace(source, target)

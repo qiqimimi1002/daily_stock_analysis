@@ -1159,6 +1159,7 @@ class NotificationService(
         confidence_reason = str(phase_decision.get("confidence_reason") or "")
         if result is not None:
             watch_conditions = sanitize_action_items(result, watch_conditions, report_language)
+            data_limitations = sanitize_action_items(result, data_limitations, report_language)
             immediate_action = sanitize_action_text(result, immediate_action, report_language)
             confidence_reason = sanitize_action_text(result, confidence_reason, report_language)
 
@@ -1431,13 +1432,18 @@ class NotificationService(
                     ])
                     # 趋势状态
                     if trend_data:
+                        ma_alignment = sanitize_action_text(
+                            result,
+                            trend_data.get('ma_alignment', 'N/A'),
+                            report_language,
+                        )
                         is_bullish = (
                             f"✅ {labels['yes_label']}"
                             if trend_data.get('is_bullish', False)
                             else f"❌ {labels['no_label']}"
                         )
                         report_lines.extend([
-                            f"**{labels['ma_alignment_label']}**: {trend_data.get('ma_alignment', 'N/A')} | "
+                            f"**{labels['ma_alignment_label']}**: {ma_alignment} | "
                             f"{labels['bullish_alignment_label']}: {is_bullish} | "
                             f"{labels['trend_strength_label']}: {trend_data.get('trend_score', 'N/A')}/100",
                             "",

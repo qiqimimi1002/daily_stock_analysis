@@ -18,8 +18,8 @@ observation model without replacing the existing architecture.
 - Active branch: `feat/v2-1-scoring`
 - Pull request: [#4](https://github.com/qiqimimi1002/daily_stock_analysis/pull/4)
 - PR target: `main`
-- Current remote head: `9cf6a616c6c6030a4e6ce849a1cf4a0ddc1fdd79` before the pending
-  one-line CI import fix.
+- Current remote head: `5f8f5c2364711627fc48ec8b1be1d00886d208d0` before the pending
+  final report-claim cleanup.
 - PR is open and must not be merged until the live screening run succeeds.
 - Temporary branch `v2-1-market-scoring` was created during an abandoned web
   upload attempt. Do not merge or use it.
@@ -78,6 +78,10 @@ observation model without replacing the existing architecture.
   `history_service.py` used `sanitize_action_text` without importing it.
 - The missing import is fixed locally; flake8 critical checks, the 10 focused
   policy tests, and Python compilation all pass after the fix.
+- PR CI run `30779754174` for head `5f8f5c2`: passed, including flake8,
+  deterministic checks, the full offline suite, Docker, and AI governance.
+- Final shared-policy tests after the live-artifact cleanup: 11 passed locally;
+  flake8 critical checks and Python compilation also pass.
 - Local collection of the broader renderer/notification tests remains blocked
   by incomplete local dependencies; GitHub CI is the required full validation.
 
@@ -117,12 +121,20 @@ observation model without replacing the existing architecture.
   `tests/test_report_evidence_policy_v4.py`.
 - The focused policy suite covers the exact forbidden phrases, including
   punctuation and adjacent-term regressions.
+- Workflow run #11:
+  [successful final live screening](https://github.com/qiqimimi1002/daily_stock_analysis/actions/runs/30780303787).
+- Run #11 completed full-market screening, deep analysis, and artifact upload.
+  It confirmed the core fixes but exposed three residual generated phrases:
+  `完美多头排列`, `新闻及公告数据近期真空`, and `暂无显著看空信号`.
+- The pending cleanup neutralizes those phrases in the shared policy, sanitizes
+  trend alignment and data limitations in every renderer, uses conservative
+  volume wording in history reports, and hides history battle plans for
+  non-buy decisions.
 
 ## Next actions
 
-1. Upload the one-line `sanitize_action_text` import fix and this status update.
-2. Wait for the new PR CI, then run one final live artifact check for the forbidden and
-   overconfident phrases above.
+1. Push the final report-claim cleanup and wait for PR CI.
+2. Run one final artifact check for the residual phrases above.
 3. Merge PR #4 only after the final artifact passes review.
 4. After merge, verify the scheduled main-branch run before deleting temporary
    branches.

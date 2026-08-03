@@ -86,6 +86,20 @@ class TestReportEvidencePolicyV4(TestCase):
             "持有观察",
         )
 
+    def test_remaining_unverified_report_claims_are_neutralized(self):
+        result = self._result()
+        cases = {
+            "MA5 > MA10 > MA20 完美多头排列": "MA5 > MA10 > MA20 多头排列",
+            "新闻及公告数据近期真空": "新闻及公告未完成有效检索",
+            "暂无显著看空信号": "负面信号未完成充分核查",
+        }
+        for original, expected in cases.items():
+            with self.subTest(original=original):
+                self.assertEqual(
+                    sanitize_action_text(result, original, "zh"),
+                    expected,
+                )
+
     def test_market_snapshot_arithmetic_is_recomputed(self):
         result = self._result(
             market_snapshot={

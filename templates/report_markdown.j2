@@ -82,7 +82,7 @@
 
 {% set trend_data = data_persp.get('trend_status', {}) %}
 {% if trend_data %}
-**{{ labels.ma_alignment_label }}**: {{ trend_data.get('ma_alignment', 'N/A') }} | {{ labels.bullish_alignment_label }}: {{ '✅ ' ~ labels.yes_label if trend_data.get('is_bullish') else '❌ ' ~ labels.no_label }} | {{ labels.trend_strength_label }}: {{ trend_data.get('trend_score', 'N/A') }}/100
+**{{ labels.ma_alignment_label }}**: {{ sanitize_action_text(result, trend_data.get('ma_alignment', 'N/A'), report_language) }} | {{ labels.bullish_alignment_label }}: {{ '✅ ' ~ labels.yes_label if trend_data.get('is_bullish') else '❌ ' ~ labels.no_label }} | {{ labels.trend_strength_label }}: {{ trend_data.get('trend_score', 'N/A') }}/100
 {% endif %}
 
 {% set price_data = price_data_for_report(result, data_persp.get('price_position', {})) %}
@@ -139,7 +139,7 @@
 {% if phase_decision.get('data_limitations') %}
 **{{ labels.data_limitations_label }}**:
 {% for limitation in phase_decision.get('data_limitations') %}
-- {{ limitation }}
+- {{ sanitize_action_text(result, limitation, report_language) }}
 {% endfor %}
 {% endif %}
 

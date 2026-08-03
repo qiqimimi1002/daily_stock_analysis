@@ -50,6 +50,8 @@ from src.schemas.decision_action import (
 from src.schemas.decision_scale import extract_decision_guardrail_reason
 from src.report_evidence_policy import (
     attribution_weights_for_result,
+    conservative_volume_meaning,
+    is_actionable_buy_result,
     sanitize_action_text,
 )
 from src.utils.sniper_points import find_sniper_points
@@ -1053,13 +1055,18 @@ class HistoryService:
             ])
             # 趋势状态
             if trend_data:
+                ma_alignment = sanitize_action_text(
+                    result,
+                    trend_data.get('ma_alignment', 'N/A'),
+                    report_language,
+                )
                 is_bullish = (
                     f"✅ {labels['yes_label']}"
                     if trend_data.get('is_bullish', False)
                     else f"❌ {labels['no_label']}"
                 )
                 report_lines.extend([
-                    f"**{labels['ma_alignment_label']}**: {trend_data.get('ma_alignment', 'N/A')} | "
+                    f"**{labels['ma_alignment_label']}**: {ma_alignment} | "
                     f"{labels['bullish_alignment_label']}: {is_bullish} | "
                     f"{labels['trend_strength_label']}: {trend_data.get('trend_score', 'N/A')}/100",
                     "",
@@ -1086,7 +1093,7 @@ class HistoryService:
                 report_lines.extend([
                     f"**{labels['volume_label']}**: {labels['volume_ratio_label']} {vol_data.get('volume_ratio', 'N/A')} "
                     f"({vol_data.get('volume_status', '')}) | {labels['turnover_rate_label']} {vol_data.get('turnover_rate', 'N/A')}%",
-                    f"💡 *{vol_data.get('volume_meaning', '')}*",
+                    f"💡 *{conservative_volume_meaning(vol_data, report_language)}*",
                     "",
                 ])
             # 筹码结构
@@ -1121,7 +1128,7 @@ class HistoryService:
 
         # ========== 作战计划 ==========
         battle = dashboard.get('battle_plan', {}) if dashboard else {}
-        if battle:
+        if battle and is_actionable_buy_result(result, report_language):
             report_lines.extend([
                 f"### 🎯 {labels['battle_plan_heading']}",
                 "",
