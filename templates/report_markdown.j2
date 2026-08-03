@@ -161,10 +161,10 @@
 {% endif %}
 
 {% if signal_attr.get('strongest_bullish_signal') %}
-**🟢 {{ labels.strongest_bullish_signal_label }}**: {{ signal_attr.get('strongest_bullish_signal') }}
+**🟢 {{ labels.strongest_bullish_signal_label }}**: {{ sanitize_action_text(result, signal_attr.get('strongest_bullish_signal'), report_language) }}
 {% endif %}
 {% if signal_attr.get('strongest_bearish_signal') %}
-**🔴 {{ labels.strongest_bearish_signal_label }}**: {{ signal_attr.get('strongest_bearish_signal') }}
+**🔴 {{ labels.strongest_bearish_signal_label }}**: {{ sanitize_action_text(result, signal_attr.get('strongest_bearish_signal'), report_language) }}
 {% endif %}
 
 {% endif %}
