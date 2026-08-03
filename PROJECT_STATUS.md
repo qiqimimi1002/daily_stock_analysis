@@ -18,8 +18,8 @@ observation model without replacing the existing architecture.
 - Active branch: `feat/v2-1-scoring`
 - Pull request: [#4](https://github.com/qiqimimi1002/daily_stock_analysis/pull/4)
 - PR target: `main`
-- Current remote head: `5f8f5c2364711627fc48ec8b1be1d00886d208d0` before the pending
-  final report-claim cleanup.
+- Current remote head: `e1379e712d8e37684ef42c8e68a5c0d65ae791b5` before the pending
+  attribution evidence gate.
 - PR is open and must not be merged until the live screening run succeeds.
 - Temporary branch `v2-1-market-scoring` was created during an abandoned web
   upload attempt. Do not merge or use it.
@@ -130,13 +130,20 @@ observation model without replacing the existing architecture.
   trend alignment and data limitations in every renderer, uses conservative
   volume wording in history reports, and hides history battle plans for
   non-buy decisions.
+- Workflow run #12:
+  [successful cleanup validation](https://github.com/qiqimimi1002/daily_stock_analysis/actions/runs/30781220470).
+- Run #12 confirmed the three exact residual phrases were removed. Because the
+  model can generate unlimited wording variants, the final general guard now
+  hides the entire signal-attribution block whenever evidence is insufficient
+  to show attribution weights. This removes unsupported strongest-bullish and
+  strongest-bearish claims by policy instead of maintaining a phrase blacklist.
 
 ## Next actions
 
-1. Push the final report-claim cleanup and wait for PR CI.
-2. Run one final artifact check for the residual phrases above.
-3. Merge PR #4 only after the final artifact passes review.
-4. After merge, verify the scheduled main-branch run before deleting temporary
+1. Push the attribution evidence gate and wait for PR CI.
+2. Merge PR #4 after CI passes; run #12 already covers the live path and the
+   final gate is deterministic report rendering only.
+3. After merge, verify the scheduled main-branch run before deleting temporary
    branches.
 
 ## Safety constraints
