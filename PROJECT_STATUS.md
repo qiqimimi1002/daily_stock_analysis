@@ -13,7 +13,8 @@
 - Stable V2.1 merge: `c56623f19256fe7b633aee579d7fceda31bd8659`
 - Active development branch: `agent/v2-2-signal-archive`
 - Current objective: V2.2 research phase 1, immutable structured signal archive.
-- Pull request: pending creation; must remain unmerged for human acceptance.
+- Draft pull request: [#5](https://github.com/qiqimimi1002/daily_stock_analysis/pull/5);
+  must remain unmerged for human acceptance.
 - Do not use or merge the abandoned branch `v2-1-market-scoring`.
 
 ## V2.2 phase 1 delivered on the branch
@@ -54,6 +55,9 @@
 - Existing V2.1 suites included in that selection:
   `tests/test_market_scoring.py` and `tests/test_market_screener.py`, 18 passed.
 - Python compilation, flake8 critical checks, and `git diff --check`: passed.
+- GitHub Actions CI run
+  [#30790563105](https://github.com/qiqimimi1002/daily_stock_analysis/actions/runs/30790563105)
+  completed successfully on the implementation commit.
 
 ## Explicitly not implemented
 
@@ -66,7 +70,5 @@
 
 ## Next actions
 
-1. Commit and push only the V2.2 phase 1 files; do not include `deliverables/`.
-2. Open a dedicated draft pull request targeting `main`; do not merge it.
-3. Wait for full GitHub CI and record the final PR URL/check results here.
-4. Human acceptance must occur before any V2.2 phase 2 outcome design begins.
+1. Review the PR files, archive contract, and example output; do not merge it.
+2. Human acceptance must occur before any V2.2 phase 2 outcome design begins.
