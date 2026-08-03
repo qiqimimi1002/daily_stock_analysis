@@ -1180,8 +1180,10 @@ class HistoryService:
             bullish = signal_attr.get('strongest_bullish_signal')
             bearish = signal_attr.get('strongest_bearish_signal')
             if bullish:
+                bullish = sanitize_action_text(result, bullish, report_language)
                 report_lines.append(f"**🐂 {labels.get('strongest_bullish_signal_label', '最强看多信号')}**: {bullish}")
             if bearish:
+                bearish = sanitize_action_text(result, bearish, report_language)
                 report_lines.append(f"**🐻 {labels.get('strongest_bearish_signal_label', '最强看空信号')}**: {bearish}")
             report_lines.append("")
 
