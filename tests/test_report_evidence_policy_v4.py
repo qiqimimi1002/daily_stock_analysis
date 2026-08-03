@@ -51,6 +51,41 @@ class TestReportEvidencePolicyV4(TestCase):
         original = "回调可分批建仓"
         self.assertEqual(sanitize_action_text(result, original, "zh"), original)
 
+    def test_non_buy_immediate_action_waits_for_confirmation(self):
+        result = self._result()
+        self.assertEqual(
+            sanitize_action_text(result, "立即行动", "zh"),
+            "等待确认",
+        )
+
+    def test_overconfident_and_volume_pressure_claims_are_neutralized(self):
+        result = self._result()
+        confidence = sanitize_action_text(
+            result,
+            "技术形态完美，量价配合理想，且符合交易准则。",
+            "zh",
+        )
+        self.assertNotIn("完美", confidence)
+        self.assertNotIn("理想", confidence)
+        self.assertNotIn("符合交易准则", confidence)
+        self.assertIn("方向仍待确认", confidence)
+        self.assertNotIn("，，", confidence)
+
+        pressure = sanitize_action_text(
+            result,
+            "盘中量比过大可能隐含短期抛压",
+            "zh",
+        )
+        self.assertNotIn("隐含短期抛压", pressure)
+        self.assertIn("买卖压力待确认", pressure)
+
+    def test_adjacent_buy_terms_collapse_to_one_hold_phrase(self):
+        result = self._result()
+        self.assertEqual(
+            sanitize_action_text(result, "低吸加仓", "zh"),
+            "持有观察",
+        )
+
     def test_market_snapshot_arithmetic_is_recomputed(self):
         result = self._result(
             market_snapshot={
