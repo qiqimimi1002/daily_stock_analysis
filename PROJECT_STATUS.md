@@ -11,10 +11,14 @@
 - Repository: `qiqimimi1002/daily_stock_analysis`
 - Stable branch: `main`
 - Stable V2.1 merge: `c56623f19256fe7b633aee579d7fceda31bd8659`
-- Active development branch: `agent/v2-2-signal-archive`
-- Current objective: V2.2 research phase 1, immutable structured signal archive.
-- Draft pull request: [#5](https://github.com/qiqimimi1002/daily_stock_analysis/pull/5);
-  must remain unmerged for human acceptance.
+- Retained traceability branch: `agent/v2-2-signal-archive` (do not delete yet).
+- V2.2 research phase 1 is complete and merged.
+- Pull request [#5](https://github.com/qiqimimi1002/daily_stock_analysis/pull/5)
+  was marked Ready and squash-merged into `main` on 2026-08-03.
+- Phase-1 squash commit:
+  `41d64f6ea504129bb93b78cb97694b0a553b43d8`.
+- Next authorized objective: V2.2 research phase 2, future outcome calculation,
+  on a new branch created from the latest `main`; development has not started.
 - Do not use or merge the abandoned branch `v2-1-market-scoring`.
 
 ## V2.2 phase 1 delivered on the branch
@@ -66,6 +70,17 @@
 - GitHub Actions CI run
   [#30790563105](https://github.com/qiqimimi1002/daily_stock_analysis/actions/runs/30790563105)
   completed successfully on the implementation commit.
+- Final PR-head CI run
+  [#30796325156](https://github.com/qiqimimi1002/daily_stock_analysis/actions/runs/30796325156)
+  completed successfully on `d50d2160a7ba4bf514c0fd1c4118330efef76698`.
+- The repository CI workflow is configured for `pull_request` events only, so
+  the squash merge did not create a separate push-triggered CI run on `main`.
+  The merged commit and the CI-validated PR head have the identical Git tree
+  `bcf2e6774427a97f30ba370391724d13da2a83d4`, which verifies that the exact
+  merged code content is the content that passed CI.
+- The only push-event run on the squash commit was Auto Tag
+  [#30797667479](https://github.com/qiqimimi1002/daily_stock_analysis/actions/runs/30797667479),
+  which completed with the expected `skipped` conclusion.
 
 ## Explicitly not implemented
 
@@ -110,17 +125,22 @@
   with `ArchiveConflictError`. The original JSON, Parquet, and manifest hashes
   remained unchanged, and exactly one batch directory remained.
 
-## Acceptance findings
+## Phase-1 closure
 
-- Status: **passed pre-merge acceptance** for the requested V2.2 phase-1 scope.
+- Status: **accepted, squash-merged, and closed** for the requested V2.2
+  phase-1 scope.
 - The two medium provenance findings are resolved: exact artifact bytes and
   canonical JSON have separate hashes, and quote-time provenance/precision are
   explicit and cross-file consistent.
 - The real legacy artifact remains correctly labelled as an operator-supplied
   batch-completion upper bound, not an exact quote snapshot.
-- PR #5 intentionally remains Draft and unmerged for human review.
+- PR #5 head was `d50d2160a7ba4bf514c0fd1c4118330efef76698`;
+  squash commit is `41d64f6ea504129bb93b78cb97694b0a553b43d8`.
+- The source branch remains available for audit and traceability.
 
 ## Next actions
 
-1. Review the final Draft PR #5 diff and CI results; do not merge automatically.
-2. Human acceptance must occur before any V2.2 phase 2 outcome design begins.
+1. Start V2.2 phase 2 only from the latest `main` on a new independent branch.
+2. Keep `agent/v2-2-signal-archive` until the user authorizes deletion.
+3. Phase 2 must remain isolated from V2.1 scoring, production workflows, and
+   formal reports, and its pull request must remain Draft for human acceptance.
