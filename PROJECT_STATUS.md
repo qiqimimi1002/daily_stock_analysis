@@ -68,7 +68,41 @@
 - No 10:00 screening workflow, 10:30 review, formal report, or production
   dependency changes.
 
+## Pre-merge acceptance evidence
+
+- Real source: GitHub Actions `全市场初筛` run number 12, run ID
+  `30781220470`, artifact `market-screening-12`, file
+  `data/market_screening_20260803_1115.json` (5 V2.1 candidates).
+- First archive invocation returned `created`; the identical second invocation
+  returned `exists`. Both returned the same path, content hash, and five stable
+  signal IDs. The archive still contained exactly five unique records.
+- Changing `600089` latest price from `21.27` to `21.28` with the same batch
+  identity returned exit code 3 / `ArchiveConflictError`. The JSON, Parquet,
+  and manifest SHA-256 hashes and batch-directory count were unchanged.
+- Cross-file checks passed for `600089` and `600309`: source V2.1 JSON,
+  `signals.json`, `signals.parquet`, and manifest agreed on the requested
+  identity, price, score, coverage, model, time, and signal-ID fields.
+- All three stored timestamps were timezone-aware `+08:00` values. Temporary
+  acceptance output was kept outside the repository and was not committed.
+
+## Acceptance findings
+
+- Status: **changes required before acceptance**; PR #5 must remain a draft
+  and unmerged.
+- Medium: `manifest.raw_source_hash` matches the canonicalized parsed JSON
+  object (`94b3a52f...`), but not the original artifact file bytes
+  (`96497408...`). Add a separately named byte-level source artifact SHA-256
+  while retaining the semantic/canonical hash.
+- Medium provenance limitation: the real legacy V2.1 artifact has no
+  `market_data_at`. The acceptance run used the explicitly supplied
+  `2026-08-03T11:15:14+08:00`, supported by the artifact generation time and
+  workflow completion log, but this is an auditable upper bound rather than a
+  captured per-quote timestamp. Do not describe it as an exact quote time.
+
 ## Next actions
 
-1. Review the PR files, archive contract, and example output; do not merge it.
-2. Human acceptance must occur before any V2.2 phase 2 outcome design begins.
+1. Correct only the two V2.2 phase-1 provenance findings above; do not expand
+   scope or change V2.1, workflows, reports, or screening/review schedules.
+2. Repeat the same real-artifact acceptance checks; keep PR #5 draft and
+   unmerged until they pass.
+3. Human acceptance must occur before any V2.2 phase 2 outcome design begins.
