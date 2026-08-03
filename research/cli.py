@@ -10,9 +10,11 @@ from typing import Optional, Sequence
 
 from research.archive import (
     ArchiveConflictError,
+    MARKET_DATA_AT_PRECISIONS,
+    MARKET_DATA_AT_SOURCES,
     SignalValidationError,
     archive_signals,
-    load_source,
+    load_source_artifact,
 )
 
 
@@ -38,6 +40,22 @@ def _parser() -> argparse.ArgumentParser:
         help="ISO-8601 quote timestamp with timezone; required for legacy artifacts",
     )
     archive.add_argument(
+        "--market-data-at-source",
+        choices=sorted(MARKET_DATA_AT_SOURCES),
+        help=(
+            "provenance of the quote timestamp; required with --market-data-at "
+            "and must be artifact_field for an artifact timestamp"
+        ),
+    )
+    archive.add_argument(
+        "--market-data-at-precision",
+        choices=sorted(MARKET_DATA_AT_PRECISIONS),
+        help=(
+            "precision of the quote timestamp; required with --market-data-at "
+            "and never inferred"
+        ),
+    )
+    archive.add_argument(
         "--batch-id",
         help="stable signal-batch identifier; defaults to the source batch or generated_at",
     )
@@ -54,11 +72,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         raise AssertionError(f"unsupported command: {args.command}")
 
     try:
-        source = load_source(args.input)
+        loaded = load_source_artifact(args.input)
         result = archive_signals(
-            source,
+            loaded.source,
             output_root=args.output,
+            source_file_sha256=loaded.source_file_sha256,
             market_data_at=args.market_data_at,
+            market_data_at_source=args.market_data_at_source,
+            market_data_at_precision=args.market_data_at_precision,
             batch_id=args.batch_id,
             source_artifact=args.source_artifact or args.input.name,
         )

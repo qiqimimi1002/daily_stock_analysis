@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from contextlib import redirect_stderr
 from datetime import datetime
 import hashlib
+import io
 import json
 from pathlib import Path
 import tempfile
@@ -14,7 +16,9 @@ from research.archive import (
     SignalValidationError,
     archive_signals,
     build_signal_id,
+    load_source_artifact,
 )
+from research.cli import main as cli_main
 
 
 CN_TZ = ZoneInfo("Asia/Shanghai")
@@ -65,10 +69,29 @@ def _source(
         "signal_date": day,
         "generated_at": f"{day}T10:00:30+08:00",
         "market_data_at": quote_time,
+        "market_data_at_precision": "exact_snapshot",
         "data_source": "synthetic-test-source",
         "model_version": "V2.1-TEST",
         "candidates": [_candidate("600100"), _candidate("000100")],
     }
+
+
+def _source_bytes(source: dict, *, pretty: bool = False) -> bytes:
+    return (
+        json.dumps(
+            source,
+            ensure_ascii=False,
+            sort_keys=not pretty,
+            indent=2 if pretty else None,
+            separators=None if pretty else (",", ":"),
+            allow_nan=True,
+        )
+        + "\n"
+    ).encode("utf-8")
+
+
+def _source_file_sha256(source: dict, *, pretty: bool = False) -> str:
+    return hashlib.sha256(_source_bytes(source, pretty=pretty)).hexdigest()
 
 
 def _fake_parquet(path: Path, records) -> None:
@@ -86,6 +109,9 @@ class TestSignalArchive(unittest.TestCase):
         return archive_signals(
             source,
             output_root=root,
+            source_file_sha256=kwargs.pop(
+                "source_file_sha256", _source_file_sha256(source)
+            ),
             source_artifact="market_screening_TEST.json",
             archived_at=kwargs.pop("archived_at", self.archive_time),
             parquet_writer=kwargs.pop("parquet_writer", _fake_parquet),
@@ -114,6 +140,8 @@ class TestSignalArchive(unittest.TestCase):
                 "signal_date",
                 "signal_generated_at",
                 "market_data_at",
+                "market_data_at_source",
+                "market_data_at_precision",
                 "stock_code",
                 "stock_name",
                 "reference_price",
@@ -149,6 +177,8 @@ class TestSignalArchive(unittest.TestCase):
             self.assertEqual(signal["reference_price_type"], "intraday_latest")
             self.assertEqual(signal["signal_generated_at"], "2026-08-03T10:00:30+08:00")
             self.assertEqual(signal["market_data_at"], "2026-08-03T10:00:00+08:00")
+            self.assertEqual(signal["market_data_at_source"], "artifact_field")
+            self.assertEqual(signal["market_data_at_precision"], "exact_snapshot")
             self.assertEqual(signal["archived_at"], "2026-08-03T16:00:00+08:00")
             self.assertEqual(len(payload["raw_signals"]), 2)
             self.assertEqual(payload["raw_source"]["signal_batch_id"], "TEST-AM-01")
@@ -158,10 +188,198 @@ class TestSignalArchive(unittest.TestCase):
             )
             self.assertEqual(manifest["signal_count"], 2)
             self.assertEqual(manifest["model_version"], "V2.1-TEST")
-            self.assertRegex(manifest["raw_source_hash"], r"^[0-9a-f]{64}$")
+            self.assertNotIn("raw_source_hash", manifest)
+            self.assertEqual(
+                manifest["source_file_sha256"], _source_file_sha256(_source())
+            )
+            expected_content_hash = hashlib.sha256(
+                json.dumps(
+                    _source(),
+                    ensure_ascii=False,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                    allow_nan=False,
+                ).encode("utf-8")
+            ).hexdigest()
+            self.assertEqual(manifest["source_content_sha256"], expected_content_hash)
+            self.assertEqual(manifest["market_data_at_source"], "artifact_field")
+            self.assertEqual(manifest["market_data_at_precision"], "exact_snapshot")
             for name, expected_hash in manifest["files"].items():
                 actual = hashlib.sha256((result.archive_dir / name).read_bytes()).hexdigest()
                 self.assertEqual(actual, expected_hash)
+
+    def test_source_file_sha256_is_computed_from_exact_input_bytes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "source.json"
+            source_bytes = _source_bytes(_source(), pretty=True)
+            path.write_bytes(source_bytes)
+
+            loaded = load_source_artifact(path)
+
+            self.assertEqual(
+                loaded.source_file_sha256,
+                hashlib.sha256(source_bytes).hexdigest(),
+            )
+            self.assertEqual(loaded.source, _source())
+
+    def test_formatting_changes_file_hash_but_not_content_hash(self) -> None:
+        source = _source()
+        compact_bytes = _source_bytes(source)
+        pretty_bytes = _source_bytes(source, pretty=True)
+        compact_file_hash = hashlib.sha256(compact_bytes).hexdigest()
+        pretty_file_hash = hashlib.sha256(pretty_bytes).hexdigest()
+        self.assertNotEqual(compact_file_hash, pretty_file_hash)
+
+        with tempfile.TemporaryDirectory() as first_dir, tempfile.TemporaryDirectory() as second_dir:
+            first = self._archive(
+                source,
+                Path(first_dir),
+                source_file_sha256=compact_file_hash,
+            )
+            second = self._archive(
+                source,
+                Path(second_dir),
+                source_file_sha256=pretty_file_hash,
+            )
+            first_manifest = json.loads(
+                (first.archive_dir / "manifest.json").read_text(encoding="utf-8")
+            )
+            second_manifest = json.loads(
+                (second.archive_dir / "manifest.json").read_text(encoding="utf-8")
+            )
+
+        self.assertNotEqual(
+            first_manifest["source_file_sha256"],
+            second_manifest["source_file_sha256"],
+        )
+        self.assertEqual(
+            first_manifest["source_content_sha256"],
+            second_manifest["source_content_sha256"],
+        )
+        self.assertNotEqual(first_manifest["content_hash"], second_manifest["content_hash"])
+
+    def test_same_batch_different_source_bytes_are_a_conflict(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            source = _source()
+            root = Path(directory)
+            first = self._archive(
+                source,
+                root,
+                source_file_sha256=hashlib.sha256(_source_bytes(source)).hexdigest(),
+            )
+            before = {
+                name: hashlib.sha256((first.archive_dir / name).read_bytes()).hexdigest()
+                for name in ("signals.json", "signals.parquet", "manifest.json")
+            }
+
+            with self.assertRaisesRegex(ArchiveConflictError, "original preserved"):
+                self._archive(
+                    source,
+                    root,
+                    source_file_sha256=hashlib.sha256(
+                        _source_bytes(source, pretty=True)
+                    ).hexdigest(),
+                )
+
+            after = {
+                name: hashlib.sha256((first.archive_dir / name).read_bytes()).hexdigest()
+                for name in ("signals.json", "signals.parquet", "manifest.json")
+            }
+            self.assertEqual(after, before)
+
+    def test_artifact_market_time_records_source_and_declared_precision(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            result = self._archive(_source(), Path(directory))
+            payload = json.loads(
+                (result.archive_dir / "signals.json").read_text(encoding="utf-8")
+            )
+            manifest = json.loads(
+                (result.archive_dir / "manifest.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(payload["market_data_at_source"], "artifact_field")
+            self.assertEqual(payload["market_data_at_precision"], "exact_snapshot")
+            self.assertEqual(
+                {record["market_data_at_source"] for record in payload["signals"]},
+                {"artifact_field"},
+            )
+            self.assertEqual(
+                {record["market_data_at_precision"] for record in payload["signals"]},
+                {"exact_snapshot"},
+            )
+            self.assertEqual(manifest["market_data_at_source"], "artifact_field")
+            self.assertEqual(manifest["market_data_at_precision"], "exact_snapshot")
+
+    def test_artifact_market_time_without_precision_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            source = _source()
+            source.pop("market_data_at_precision")
+            with self.assertRaisesRegex(
+                SignalValidationError, "market_data_at_precision"
+            ):
+                self._archive(source, Path(directory))
+
+    def test_cli_market_time_override_requires_source_and_precision(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = _source()
+            source.pop("market_data_at")
+            source.pop("market_data_at_precision")
+            input_path = root / "source.json"
+            input_path.write_bytes(_source_bytes(source))
+            base_args = [
+                "archive-signals",
+                "--input",
+                str(input_path),
+                "--output",
+                str(root / "output"),
+                "--market-data-at",
+                "2026-08-03T10:00:00+08:00",
+            ]
+
+            for extra, missing_field in (
+                ([], "market_data_at_source"),
+                (["--market-data-at-source", "operator_override"], "market_data_at_precision"),
+            ):
+                with self.subTest(missing=missing_field):
+                    stderr = io.StringIO()
+                    with redirect_stderr(stderr):
+                        exit_code = cli_main(base_args + extra)
+                    self.assertEqual(exit_code, 2)
+                    self.assertIn(missing_field, stderr.getvalue())
+
+    def test_operator_override_is_not_implicitly_exact(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            source = _source()
+            source.pop("market_data_at")
+            source.pop("market_data_at_precision")
+            result = self._archive(
+                source,
+                Path(directory),
+                market_data_at="2026-08-03T10:00:00+08:00",
+                market_data_at_source="operator_override",
+                market_data_at_precision="batch_completion_upper_bound",
+            )
+            payload = json.loads(
+                (result.archive_dir / "signals.json").read_text(encoding="utf-8")
+            )
+            fake_parquet_records = json.loads(
+                (result.archive_dir / "signals.parquet").read_bytes().split(b"\n", 1)[1]
+            )
+            manifest = json.loads(
+                (result.archive_dir / "manifest.json").read_text(encoding="utf-8")
+            )
+            for record in payload["signals"] + fake_parquet_records:
+                self.assertEqual(record["market_data_at_source"], "operator_override")
+                self.assertEqual(
+                    record["market_data_at_precision"],
+                    "batch_completion_upper_bound",
+                )
+                self.assertNotEqual(record["market_data_at_precision"], "exact_snapshot")
+            self.assertEqual(manifest["market_data_at_source"], "operator_override")
+            self.assertEqual(
+                manifest["market_data_at_precision"],
+                "batch_completion_upper_bound",
+            )
 
     def test_repeated_archive_is_idempotent_and_keeps_original_archive_time(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -303,15 +521,23 @@ class TestSignalArchive(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             source = _source()
             source.pop("market_data_at")
+            source.pop("market_data_at_precision")
             result = self._archive(
                 source,
                 Path(directory),
                 market_data_at="2026-08-03T10:00:00+08:00",
+                market_data_at_source="operator_override",
+                market_data_at_precision="batch_completion_upper_bound",
             )
             signal = json.loads(
                 (result.archive_dir / "signals.json").read_text(encoding="utf-8")
             )["signals"][0]
             self.assertEqual(signal["market_data_at"], "2026-08-03T10:00:00+08:00")
+            self.assertEqual(signal["market_data_at_source"], "operator_override")
+            self.assertEqual(
+                signal["market_data_at_precision"],
+                "batch_completion_upper_bound",
+            )
 
     def test_naive_times_are_rejected(self) -> None:
         for field in ("generated_at", "market_data_at"):
@@ -366,6 +592,7 @@ class TestSignalArchive(unittest.TestCase):
             result = archive_signals(
                 _source(),
                 output_root=Path(directory),
+                source_file_sha256=_source_file_sha256(_source()),
                 source_artifact="market_screening_TEST.json",
                 archived_at=self.archive_time,
             )

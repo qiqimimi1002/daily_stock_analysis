@@ -5,6 +5,7 @@
   "signal_date": "2026-08-03",
   "generated_at": "2026-08-03T10:00:30+08:00",
   "market_data_at": "2026-08-03T10:00:00+08:00",
+  "market_data_at_precision": "exact_snapshot",
   "data_source": "synthetic-test-source",
   "model_version": "V2.1-TEST",
   "candidates": [

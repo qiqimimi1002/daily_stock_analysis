@@ -23,10 +23,17 @@ from zoneinfo import ZoneInfo
 
 
 SHANGHAI_TZ = ZoneInfo("Asia/Shanghai")
-ARCHIVE_SCHEMA_VERSION = "V2.2.1"
+ARCHIVE_SCHEMA_VERSION = "V2.2.2"
 SIGNAL_ID_NAMESPACE = uuid.UUID("23ca9f50-850c-4d27-b465-02d887e93788")
 _CLOSE_PRICE_TYPES = {"close", "daily_close", "official_close", "当日收盘价", "收盘价"}
 _STOCK_CODE_RE = re.compile(r"^[0-9]{6}$")
+_SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+MARKET_DATA_AT_SOURCES = frozenset(
+    {"artifact_field", "operator_override", "workflow_metadata", "unknown"}
+)
+MARKET_DATA_AT_PRECISIONS = frozenset(
+    {"exact_snapshot", "batch_level", "batch_completion_upper_bound", "unknown"}
+)
 
 
 class SignalValidationError(ValueError):
@@ -57,8 +64,23 @@ class ArchiveResult:
         }
 
 
+@dataclass(frozen=True)
+class LoadedSourceArtifact:
+    """One source file parsed from the exact bytes that were hashed."""
+
+    source: Mapping[str, Any]
+    source_file_sha256: str
+
+
 def _sha256_bytes(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
+
+
+def _sha256_digest(value: Any, *, field: str) -> str:
+    digest = _required_text(value, field=field).lower()
+    if not _SHA256_RE.fullmatch(digest):
+        raise SignalValidationError(f"{field} must be a 64-character SHA-256 hex digest")
+    return digest
 
 
 def _canonical_json_bytes(value: Any) -> bytes:
@@ -161,6 +183,71 @@ def _aware_shanghai_datetime(value: Any, *, field: str) -> datetime:
     return parsed.astimezone(SHANGHAI_TZ)
 
 
+def _choice(value: Any, *, field: str, allowed: Iterable[str]) -> str:
+    selected = _required_text(value, field=field)
+    allowed_values = set(allowed)
+    if selected not in allowed_values:
+        choices = ", ".join(sorted(allowed_values))
+        raise SignalValidationError(f"{field} must be one of: {choices}")
+    return selected
+
+
+def _market_data_metadata(
+    root: Mapping[str, Any],
+    *,
+    market_data_at: Optional[str],
+    market_data_at_source: Optional[str],
+    market_data_at_precision: Optional[str],
+) -> tuple[Any, str, str]:
+    environment_value = root.get("market_environment")
+    environment = (
+        {}
+        if environment_value is None
+        else _as_mapping(environment_value, field="market_environment")
+    )
+    artifact_time = root.get("market_data_at") or environment.get("market_data_at")
+
+    if market_data_at is not None:
+        source = _choice(
+            market_data_at_source,
+            field="market_data_at_source",
+            allowed=MARKET_DATA_AT_SOURCES,
+        )
+        precision = _choice(
+            market_data_at_precision,
+            field="market_data_at_precision",
+            allowed=MARKET_DATA_AT_PRECISIONS,
+        )
+        if source == "artifact_field":
+            raise SignalValidationError(
+                "market_data_at_source cannot be artifact_field when "
+                "market_data_at is supplied as an override"
+            )
+        return market_data_at, source, precision
+
+    if artifact_time is None:
+        raise SignalValidationError("market_data_at is required")
+
+    declared_source = (
+        market_data_at_source
+        or root.get("market_data_at_source")
+        or environment.get("market_data_at_source")
+    )
+    if declared_source is not None and declared_source != "artifact_field":
+        raise SignalValidationError(
+            "an artifact-provided market_data_at must use "
+            "market_data_at_source=artifact_field"
+        )
+    precision = _choice(
+        market_data_at_precision
+        or root.get("market_data_at_precision")
+        or environment.get("market_data_at_precision"),
+        field="market_data_at_precision",
+        allowed=MARKET_DATA_AT_PRECISIONS,
+    )
+    return artifact_time, "artifact_field", precision
+
+
 def _signal_date(value: Any, *, generated_at: datetime) -> date:
     if value in (None, ""):
         return generated_at.date()
@@ -245,6 +332,8 @@ def _normalize_signal(
     signal_date: date,
     signal_generated_at: datetime,
     market_data_at: datetime,
+    market_data_at_source: str,
+    market_data_at_precision: str,
     archived_at: datetime,
     data_source: str,
     model_version: str,
@@ -275,6 +364,8 @@ def _normalize_signal(
         "signal_date": signal_date.isoformat(),
         "signal_generated_at": signal_generated_at.isoformat(timespec="seconds"),
         "market_data_at": market_data_at.isoformat(timespec="seconds"),
+        "market_data_at_source": market_data_at_source,
+        "market_data_at_precision": market_data_at_precision,
         "stock_code": code,
         "stock_name": _optional_text(candidate.get("name", candidate.get("stock_name"))),
         "reference_price": reference_price,
@@ -365,6 +456,8 @@ def _archive_content(
     records: Sequence[Mapping[str, Any]],
     batch_id: str,
     source_artifact: str,
+    source_file_sha256: str,
+    source_content_sha256: str,
 ) -> Dict[str, Any]:
     records_without_archive_time = [
         {key: value for key, value in record.items() if key != "archived_at"}
@@ -374,6 +467,8 @@ def _archive_content(
         "archive_schema_version": ARCHIVE_SCHEMA_VERSION,
         "batch_id": batch_id,
         "source_artifact": source_artifact,
+        "source_file_sha256": source_file_sha256,
+        "source_content_sha256": source_content_sha256,
         "signals": records_without_archive_time,
         "raw_source": _clean_json_value(source),
     }
@@ -390,7 +485,13 @@ def _archive_directory(output_root: Path, *, signal_date: date, batch_id: str) -
     )
 
 
-def _existing_result(archive_dir: Path, *, content_hash: str) -> ArchiveResult:
+def _existing_result(
+    archive_dir: Path,
+    *,
+    content_hash: str,
+    source_file_sha256: str,
+    source_content_sha256: str,
+) -> ArchiveResult:
     manifest_path = archive_dir / "manifest.json"
     if not manifest_path.is_file():
         raise ArchiveConflictError(
@@ -402,6 +503,16 @@ def _existing_result(archive_dir: Path, *, content_hash: str) -> ArchiveResult:
         raise ArchiveConflictError(
             f"existing manifest cannot be verified: {archive_dir}"
         ) from exc
+    if manifest.get("source_file_sha256") != source_file_sha256:
+        raise ArchiveConflictError(
+            "immutable source file conflict; original preserved at "
+            f"{archive_dir}"
+        )
+    if manifest.get("source_content_sha256") != source_content_sha256:
+        raise ArchiveConflictError(
+            "immutable source content conflict; original preserved at "
+            f"{archive_dir}"
+        )
     if manifest.get("content_hash") != content_hash:
         raise ArchiveConflictError(
             f"immutable archive conflict; original preserved at {archive_dir}"
@@ -451,12 +562,18 @@ def _existing_result(archive_dir: Path, *, content_hash: str) -> ArchiveResult:
                 records=payload_records,
                 batch_id=payload_batch,
                 source_artifact=payload_artifact,
+                source_file_sha256=source_file_sha256,
+                source_content_sha256=source_content_sha256,
             )
         )
+    )
+    recomputed_source_content_hash = _sha256_bytes(
+        _canonical_json_bytes(_clean_json_value(payload_source))
     )
     payload_ids = [record.get("signal_id") for record in payload_records]
     if (
         recomputed_hash != content_hash
+        or recomputed_source_content_hash != source_content_sha256
         or manifest.get("signal_count") != len(payload_records)
         or manifest.get("signal_ids") != payload_ids
     ):
@@ -476,7 +593,10 @@ def archive_signals(
     source: Mapping[str, Any],
     *,
     output_root: Path | str,
+    source_file_sha256: str,
     market_data_at: Optional[str] = None,
+    market_data_at_source: Optional[str] = None,
+    market_data_at_precision: Optional[str] = None,
     batch_id: Optional[str] = None,
     source_artifact: str,
     archived_at: Optional[datetime] = None,
@@ -484,17 +604,21 @@ def archive_signals(
 ) -> ArchiveResult:
     """Archive one existing V2.1 result without recalculating its candidates."""
     root = _as_mapping(source, field="input")
+    source_file_hash = _sha256_digest(
+        source_file_sha256, field="source_file_sha256"
+    )
+    cleaned_source = _clean_json_value(root)
+    source_content_hash = _sha256_bytes(_canonical_json_bytes(cleaned_source))
     generated_at = _aware_shanghai_datetime(
         root.get("generated_at", root.get("signal_generated_at")),
         field="signal_generated_at",
     )
     signal_day = _signal_date(root.get("signal_date"), generated_at=generated_at)
-    market_time_value = (
-        market_data_at
-        or root.get("market_data_at")
-        or _as_mapping(root.get("market_environment") or {}, field="market_environment").get(
-            "market_data_at"
-        )
+    market_time_value, quote_time_source, quote_time_precision = _market_data_metadata(
+        root,
+        market_data_at=market_data_at,
+        market_data_at_source=market_data_at_source,
+        market_data_at_precision=market_data_at_precision,
     )
     quote_time = _aware_shanghai_datetime(market_time_value, field="market_data_at")
     if quote_time > generated_at:
@@ -530,6 +654,8 @@ def archive_signals(
                 signal_date=signal_day,
                 signal_generated_at=generated_at,
                 market_data_at=quote_time,
+                market_data_at_source=quote_time_source,
+                market_data_at_precision=quote_time_precision,
                 archived_at=archive_time,
                 data_source=data_source,
                 model_version=model_version,
@@ -547,13 +673,20 @@ def archive_signals(
         records=records,
         batch_id=stable_batch,
         source_artifact=artifact,
+        source_file_sha256=source_file_hash,
+        source_content_sha256=source_content_hash,
     )
     content_hash = _sha256_bytes(_canonical_json_bytes(content))
     target = _archive_directory(
         Path(output_root), signal_date=signal_day, batch_id=stable_batch
     )
     if target.exists():
-        return _existing_result(target, content_hash=content_hash)
+        return _existing_result(
+            target,
+            content_hash=content_hash,
+            source_file_sha256=source_file_hash,
+            source_content_sha256=source_content_hash,
+        )
 
     payload = {
         "archive_schema_version": ARCHIVE_SCHEMA_VERSION,
@@ -562,11 +695,13 @@ def archive_signals(
         "signal_date": signal_day.isoformat(),
         "signal_generated_at": generated_at.isoformat(timespec="seconds"),
         "market_data_at": quote_time.isoformat(timespec="seconds"),
+        "market_data_at_source": quote_time_source,
+        "market_data_at_precision": quote_time_precision,
         "archived_at": archive_time.isoformat(timespec="seconds"),
         "source_artifact": artifact,
         "signals": records,
         "raw_signals": raw_signals,
-        "raw_source": _clean_json_value(root),
+        "raw_source": cleaned_source,
     }
     json_bytes = _strict_json_bytes(payload)
 
@@ -586,6 +721,8 @@ def archive_signals(
             "signal_date": signal_day.isoformat(),
             "signal_generated_at": generated_at.isoformat(timespec="seconds"),
             "market_data_at": quote_time.isoformat(timespec="seconds"),
+            "market_data_at_source": quote_time_source,
+            "market_data_at_precision": quote_time_precision,
             "archived_at": archive_time.isoformat(timespec="seconds"),
             "data_source": data_source,
             "model_version": model_version,
@@ -593,9 +730,8 @@ def archive_signals(
             "signal_count": len(records),
             "signal_ids": [record["signal_id"] for record in records],
             "content_hash": content_hash,
-            "raw_source_hash": _sha256_bytes(
-                _canonical_json_bytes(_clean_json_value(root))
-            ),
+            "source_file_sha256": source_file_hash,
+            "source_content_sha256": source_content_hash,
             "files": {
                 "signals.json": _sha256_bytes(json_path.read_bytes()),
                 "signals.parquet": _sha256_bytes(parquet_path.read_bytes()),
@@ -606,7 +742,12 @@ def archive_signals(
             os.rename(temp_dir, target)
         except OSError:
             if target.exists():
-                existing = _existing_result(target, content_hash=content_hash)
+                existing = _existing_result(
+                    target,
+                    content_hash=content_hash,
+                    source_file_sha256=source_file_hash,
+                    source_content_sha256=source_content_hash,
+                )
                 shutil.rmtree(temp_dir, ignore_errors=True)
                 return existing
             raise
@@ -623,14 +764,27 @@ def archive_signals(
     )
 
 
-def load_source(path: Path | str) -> Mapping[str, Any]:
-    """Load a strict JSON V2.1 screening artifact."""
+def load_source_artifact(path: Path | str) -> LoadedSourceArtifact:
+    """Hash exact source bytes, then parse those same bytes as strict JSON."""
     source_path = Path(path)
     try:
+        source_bytes = source_path.read_bytes()
+    except OSError as exc:
+        raise SignalValidationError(f"cannot read input JSON: {source_path}") from exc
+    source_file_hash = _sha256_bytes(source_bytes)
+    try:
         value = json.loads(
-            source_path.read_text(encoding="utf-8"),
+            source_bytes.decode("utf-8"),
             parse_constant=lambda token: float(token),
         )
-    except (OSError, json.JSONDecodeError) as exc:
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise SignalValidationError(f"cannot read input JSON: {source_path}") from exc
-    return _as_mapping(value, field="input")
+    return LoadedSourceArtifact(
+        source=_as_mapping(value, field="input"),
+        source_file_sha256=source_file_hash,
+    )
+
+
+def load_source(path: Path | str) -> Mapping[str, Any]:
+    """Load a strict JSON V2.1 artifact (compatibility wrapper)."""
+    return load_source_artifact(path).source

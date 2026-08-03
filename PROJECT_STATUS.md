@@ -36,6 +36,14 @@
   without replacing the original directory or files.
 - Existing JSON/Parquet file hashes, manifest consistency, and normalized
   content hash are verified before an archive is reported as existing.
+- Records both `source_file_sha256` (exact artifact bytes before parsing) and
+  `source_content_sha256` (cleaned canonical JSON). A same-batch byte change,
+  including formatting-only changes, is an immutable conflict even when the
+  canonical content is unchanged.
+- Records `market_data_at_source` and `market_data_at_precision` in every
+  normalized signal, Parquet row, JSON batch, and manifest. CLI overrides must
+  declare both values explicitly; no override is treated as an exact snapshot
+  by default.
 - Missing optional fields stay null/empty; non-finite optional numbers become
   null; required reference prices must be finite and positive.
 - Same-day intraday signals cannot label the current reference price as a
@@ -46,11 +54,11 @@
 
 ## Verification evidence
 
-- Isolated research environment (`pyarrow` and `tzdata` only): 18 tests passed,
+- Isolated research environment (`pyarrow` and `tzdata` only): 25 tests passed,
   including real Parquet write/read.
 - Real CLI example run: first invocation returned `created`; identical second
   invocation returned `exists` with identical signal IDs and content hash.
-- Repository pytest selection: 35 passed, 1 optional PyArrow test skipped in the
+- Repository pytest selection: 42 passed, 1 optional PyArrow test skipped in the
   production Python environment.
 - Existing V2.1 suites included in that selection:
   `tests/test_market_scoring.py` and `tests/test_market_screener.py`, 18 passed.
@@ -84,25 +92,35 @@
   identity, price, score, coverage, model, time, and signal-ID fields.
 - All three stored timestamps were timezone-aware `+08:00` values. Temporary
   acceptance output was kept outside the repository and was not committed.
+- The repeated acceptance used explicit legacy-artifact metadata:
+  `market_data_at=2026-08-03T11:15:14+08:00`,
+  `market_data_at_source=operator_override`, and
+  `market_data_at_precision=batch_completion_upper_bound`.
+- The first run returned `created`; the second returned `exists`, with the same
+  archive path, content hash `deb91ebec...`, and all five signal IDs.
+- The manifest's exact source-file hash
+  `9649740870f31687e53e95c6e217f8d760d5e1c88a9309bef8e09c0175230c14`
+  and canonical source-content hash
+  `94b3a52fa9099da9c672111de5cd0a089bdbd07975000b6e8db94169cf52043f`
+  independently matched recomputation from the real artifact.
+- JSON, Parquet, and manifest agreed on time provenance/precision and on the
+  sampled `600089` and `600309` identity, price, score, coverage, model, and
+  signal-ID fields.
+- Changing `600089` latest price from `21.27` to `21.28` returned exit code 3
+  with `ArchiveConflictError`. The original JSON, Parquet, and manifest hashes
+  remained unchanged, and exactly one batch directory remained.
 
 ## Acceptance findings
 
-- Status: **changes required before acceptance**; PR #5 must remain a draft
-  and unmerged.
-- Medium: `manifest.raw_source_hash` matches the canonicalized parsed JSON
-  object (`94b3a52f...`), but not the original artifact file bytes
-  (`96497408...`). Add a separately named byte-level source artifact SHA-256
-  while retaining the semantic/canonical hash.
-- Medium provenance limitation: the real legacy V2.1 artifact has no
-  `market_data_at`. The acceptance run used the explicitly supplied
-  `2026-08-03T11:15:14+08:00`, supported by the artifact generation time and
-  workflow completion log, but this is an auditable upper bound rather than a
-  captured per-quote timestamp. Do not describe it as an exact quote time.
+- Status: **passed pre-merge acceptance** for the requested V2.2 phase-1 scope.
+- The two medium provenance findings are resolved: exact artifact bytes and
+  canonical JSON have separate hashes, and quote-time provenance/precision are
+  explicit and cross-file consistent.
+- The real legacy artifact remains correctly labelled as an operator-supplied
+  batch-completion upper bound, not an exact quote snapshot.
+- PR #5 intentionally remains Draft and unmerged for human review.
 
 ## Next actions
 
-1. Correct only the two V2.2 phase-1 provenance findings above; do not expand
-   scope or change V2.1, workflows, reports, or screening/review schedules.
-2. Repeat the same real-artifact acceptance checks; keep PR #5 draft and
-   unmerged until they pass.
-3. Human acceptance must occur before any V2.2 phase 2 outcome design begins.
+1. Review the final Draft PR #5 diff and CI results; do not merge automatically.
+2. Human acceptance must occur before any V2.2 phase 2 outcome design begins.
