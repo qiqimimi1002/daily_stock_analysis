@@ -65,8 +65,14 @@
   Python environment lacks production CI dependencies such as `python-dotenv`
   and `sqlalchemy`; this is an environment limitation, not a test assertion
   failure. The repository PR CI must run the full dependency-backed gate.
-- Local implementation is ready for review but has not yet been committed,
-  pushed, or opened as a PR.
+- Draft PR [#7](https://github.com/qiqimimi1002/daily_stock_analysis/pull/7)
+  was opened from `agent/screening-results-manifest`; implementation commit is
+  `93c610044ca05f79a7a406c3f526a2713912d7da`.
+- GitHub CI run
+  [#30879799585](https://github.com/qiqimimi1002/daily_stock_analysis/actions/runs/30879799585)
+  passed: change detection, AI governance, backend-gate, and Docker build all
+  succeeded; unrelated desktop/web jobs were correctly skipped.
+- PR #7 remains Draft and has not been merged.
 
 ## V2.2 phase 1 delivered on the branch
 
