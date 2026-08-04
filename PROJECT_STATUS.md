@@ -20,8 +20,8 @@
 - V2.2 research phase 2 is implemented on the independent branch
   `agent/v2-2-outcomes`, created from the latest `main` commit
   `e4809e974185292ba6acd62fe5df1f1dfb5bee14`.
-- Phase 2 is awaiting review in a new Draft PR and must not be merged before
-  human acceptance.
+- Phase 2 Draft PR [#6](https://github.com/qiqimimi1002/daily_stock_analysis/pull/6)
+  is awaiting human acceptance and must not be merged yet.
 - Do not use or merge the abandoned branch `v2-1-market-scoring`.
 
 ## V2.2 phase 1 delivered on the branch
@@ -190,5 +190,9 @@
   and corporate-action review using raw unadjusted observations.
 - Python compilation, flake8 checks, JSON validation, and `git diff --check`
   passed before publication.
+- Draft PR #6 CI run
+  [#30870181331](https://github.com/qiqimimi1002/daily_stock_analysis/actions/runs/30870181331)
+  completed successfully on implementation commit
+  `4ed6da84f3b1bfe424699b71ced149310740bdee`.
 - No GitHub Actions, V2.1 scoring, 10:00 screening, 10:30 review, formal report,
   or production dependency file was modified.
