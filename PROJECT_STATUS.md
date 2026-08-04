@@ -1,6 +1,6 @@
 # Project Status
 
-> Last updated: 2026-08-03 (Asia/Shanghai)
+> Last updated: 2026-08-04 (Asia/Shanghai)
 >
 > Codex workflow rule: read this file before substantial project work and
 > update it after every completed material task. Complete safe in-scope work
@@ -17,8 +17,11 @@
   was marked Ready and squash-merged into `main` on 2026-08-03.
 - Phase-1 squash commit:
   `41d64f6ea504129bb93b78cb97694b0a553b43d8`.
-- Next authorized objective: V2.2 research phase 2, future outcome calculation,
-  on a new branch created from the latest `main`; development has not started.
+- V2.2 research phase 2 is implemented on the independent branch
+  `agent/v2-2-outcomes`, created from the latest `main` commit
+  `e4809e974185292ba6acd62fe5df1f1dfb5bee14`.
+- Phase 2 is awaiting review in a new Draft PR and must not be merged before
+  human acceptance.
 - Do not use or merge the abandoned branch `v2-1-market-scoring`.
 
 ## V2.2 phase 1 delivered on the branch
@@ -84,8 +87,8 @@
 
 ## Explicitly not implemented
 
-- No forward 1/3/5/10/20-day returns, maximum rise, maximum drawdown, win rate,
-  factor research, backtest library, performance library, or order execution.
+- No aggregate or grouped win rate, factor research, backtest library,
+  performance library, or order execution.
 - No intraday buy/sell points.
 - No V2.1 scoring/weight changes.
 - No 10:00 screening workflow, 10:30 review, formal report, or production
@@ -140,7 +143,52 @@
 
 ## Next actions
 
-1. Start V2.2 phase 2 only from the latest `main` on a new independent branch.
+1. Review and manually accept the V2.2 phase-2 Draft PR; do not merge it yet.
 2. Keep `agent/v2-2-signal-archive` until the user authorizes deletion.
-3. Phase 2 must remain isolated from V2.1 scoring, production workflows, and
-   formal reports, and its pull request must remain Draft for human acceptance.
+3. Do not begin aggregate win-rate or factor research until phase 2 passes
+   human acceptance.
+
+## V2.2 phase 2 implementation
+
+- Added the manual/local `calculate-outcomes` CLI. It reads verified immutable
+  phase-1 signal batches and never writes into their directories.
+- Calculates independent 1, 3, 5, 10, and 20 exchange-trading-day observation
+  outcomes for every `signal_id`, using its archived `reference_price`.
+- Stores target close/return, maximum upside from actual highs, maximum adverse
+  excursion from actual lows, and true peak-to-later-trough maximum drawdown
+  over the reference-price-plus-close path.
+- Uses an explicit exchange calendar supplied by the price artifact; weekends,
+  holidays, and suspensions never extend the requested horizon.
+- Supports `pending`, `complete`, `missing_price`, `suspended`,
+  `corporate_action_review`, and `data_conflict` outcomes without filling or
+  guessing missing target prices.
+- Records target limit-up/down state, signal-price proximity to limit-up, and
+  execution-risk labels while making no fill or achievable-return claim.
+- Stores results independently under
+  `research/data/outcomes/YYYY/MM/DD/batch-<hash>/` as JSON, Parquet, and a
+  provenance/hash manifest.
+- Stable result identity is UUIDv5 over
+  `signal_id | horizon_days | calculation_version`; identical inputs are
+  idempotent, while changed price bytes or calculation version produce a new
+  preserved batch.
+- Prevents future leakage with an explicit timezone-aware `--as-of`, immutable
+  archived scores, a price-data cutoff, fixed target exchange dates, and a
+  15:00 Asia/Shanghai daily-session maturity rule.
+- Added a clearly labelled synthetic raw-OHLC fixture and three hand-calculated
+  cases; they are test data, not recommendations or real performance.
+
+## V2.2 phase 2 verification
+
+- Isolated research environment with PyArrow: 48 tests passed across phase-1
+  archive and phase-2 outcomes, including real Parquet write/read and CLI use.
+- Repository regression selection: 63 passed, 3 optional PyArrow tests skipped
+  only because the production Python environment lacks the isolated research
+  dependency. This selection includes both research phases and existing V2.1
+  scoring/screener suites.
+- The three manual cases agree with the implementation: normal-path returns and
+  excursions, true close-path drawdown, exact-date suspension without rollover,
+  and corporate-action review using raw unadjusted observations.
+- Python compilation, flake8 checks, JSON validation, and `git diff --check`
+  passed before publication.
+- No GitHub Actions, V2.1 scoring, 10:00 screening, 10:30 review, formal report,
+  or production dependency file was modified.

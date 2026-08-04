@@ -1,8 +1,10 @@
-# V2.2 Research: immutable signal archive
+# V2.2 Research
 
-This first V2.2 stage records the V2.1 observation list exactly as it existed
-when the signal was generated. It does not recalculate candidates and does not
-calculate forward returns, drawdowns, win rates, or trading points.
+Phase 1 records the V2.1 observation list exactly as it existed when the signal
+was generated. Phase 2 reads those immutable records and stores per-signal
+1/3/5/10/20-trading-day price outcomes without calculating aggregate win rates
+or trading points. See [OUTCOMES.md](OUTCOMES.md) for the phase-2 input,
+calculation, status, and storage contracts.
 
 ## Input contract
 
@@ -145,9 +147,10 @@ Missing optional values are stored as `null`, empty objects, or empty lists.
 NaN and Infinity become `null`; required positive reference prices instead
 fail validation. No missing evidence is guessed or imputed.
 
-## Explicitly out of scope
+## Phase-1 archive command boundaries
 
-- forward 1/3/5/10/20-day returns;
-- maximum rise, drawdown, win rate, or performance statistics;
+- forward outcomes are never calculated by `archive-signals`; phase 2 uses the
+  separate `calculate-outcomes` command and independent storage;
+- aggregate win rate or performance statistics;
 - Alphalens, VectorBT, QuantStats, or order execution;
 - V2.1 scoring, 10:00 workflow, 10:30 review, or formal report changes.
