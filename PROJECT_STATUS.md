@@ -72,7 +72,40 @@
   [#30879799585](https://github.com/qiqimimi1002/daily_stock_analysis/actions/runs/30879799585)
   passed: change detection, AI governance, backend-gate, and Docker build all
   succeeded; unrelated desktop/web jobs were correctly skipped.
-- PR #7 remains Draft and has not been merged.
+- PR #7 was marked Ready and squash-merged into `main` on 2026-08-04.
+- PR #7 squash commit:
+  `bc6622df517e6ee0d979ea2365fe9f6b567ff3a9`.
+
+### First production validation after PR #7
+
+- Manual `main` run: run number 14, ID `30881432666`, with `top_n=5`,
+  `run_deep_analysis=true`, and `force_run=false`.
+- Runtime: 2026-08-04 13:40:39 to 13:49:56 Asia/Shanghai.
+- Full-market screening succeeded with five candidates: `000630`, `600089`,
+  `601168`, `000807`, and `002202`; the first three were selected for deep
+  analysis.
+- Artifact `market-screening-14` (ID `8881599255`) uploaded successfully and
+  contains the screening JSON, screened codes, manifest, market report, and
+  logs. All manifest-listed SHA-256 values match the downloaded files.
+- The independent `screening-results` branch was created at
+  `45441bf258d78c98e168a1e26b207fef9c50ca7e`. Its `latest/` and
+  `history/2026-08-04/` files are byte-identical to the dynamic Artifact.
+- `main` contains no daily runtime output files; the result branch contains
+  only `latest/` and date-partitioned `history/` outputs.
+- Final manifest status is `partial_success`, with the sole integrity error
+  `deep_analysis_incomplete`. All three Gemini analyses failed to produce
+  reports because the external service returned 503 high-demand responses and
+  then a 429 quota/rate-limit response. Initial screening, Artifact upload, and
+  fixed-entry publication all succeeded.
+- The workflow conclusion is `failure` because strict manifest validation
+  correctly rejected an incomplete deep-analysis result; this is not a V2.1
+  screening or publication failure.
+- Live reader states (`not_started`, `queued`, `in_progress`, and
+  `artifact_read_failure`) are currently specified in documentation but do not
+  yet have an executable reader classifier or tests. Do not restore the 10:20
+  reader as fully operational until that reader-side logic is implemented.
+- Draft PR #6 remains unchanged at
+  `50c995dc10765bb0bb822212663b7cd1b4c35120` and was not merged.
 
 ## V2.2 phase 1 delivered on the branch
 
@@ -193,12 +226,13 @@
 
 ## Next actions
 
-1. Review and publish `agent/screening-results-manifest` as an independent PR,
-   then require GitHub CI to pass before merge.
-2. After merge, manually run “全市场初筛” once to create the initial
-   `screening-results` branch and verify the fixed raw manifest URL.
+1. Do not rerun deep analysis until Gemini capacity/quota is available; when it
+   is available, rerun run 14's parameters and require a `success` manifest
+   with three completed reports.
+2. Before restoring the 10:20 reader, implement and test the documented live
+   state classifier and read `screening-results/latest/manifest.json` first,
+   with dynamic Artifact fallback.
 3. Keep 10:20 as the first state check rather than a guaranteed result time;
-   retry at 10:40 or 11:00 when Actions reports `not_started`, `queued`, or
-   `in_progress`.
-4. Keep Draft PR #6 independent and do not merge it as part of this work.
+   retry at 10:40 or 11:00 for `not_started`, `queued`, or `in_progress`.
+4. Keep Draft PR #6 independent until the user starts its acceptance task.
 5. Keep `agent/v2-2-signal-archive` until the user authorizes deletion.
