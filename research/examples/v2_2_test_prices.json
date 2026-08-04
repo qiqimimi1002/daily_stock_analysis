@@ -1,0 +1,70 @@
+{
+  "test_data": true,
+  "description": "Synthetic unadjusted OHLC for V2.2 outcome tests; not real prices or an investment recommendation.",
+  "price_source": "synthetic-unadjusted-ohlc",
+  "price_data_as_of": "2026-01-13T16:00:00+08:00",
+  "calendar_source": "synthetic-sse-szse-calendar",
+  "market_trade_dates": [
+    "2026-01-05",
+    "2026-01-06",
+    "2026-01-08",
+    "2026-01-09",
+    "2026-01-12",
+    "2026-01-13",
+    "2026-01-14",
+    "2026-01-15",
+    "2026-01-16",
+    "2026-01-19",
+    "2026-01-20",
+    "2026-01-21",
+    "2026-01-22",
+    "2026-01-23",
+    "2026-01-26",
+    "2026-01-27",
+    "2026-01-28",
+    "2026-01-29",
+    "2026-01-30",
+    "2026-02-02",
+    "2026-02-03"
+  ],
+  "stocks": {
+    "600100": {
+      "prices": [
+        {"trade_date": "2026-01-05", "open": 100, "high": 100, "low": 99, "close": 100, "volume": 1000, "is_suspended": false, "limit_up_price": 101},
+        {"trade_date": "2026-01-06", "open": 104, "high": 105, "low": 98, "close": 104, "volume": 1000, "is_suspended": false, "is_limit_up": true},
+        {"trade_date": "2026-01-08", "open": 107, "high": 108, "low": 101, "close": 107, "volume": 1000, "is_suspended": false},
+        {"trade_date": "2026-01-09", "open": 96, "high": 106, "low": 95, "close": 96, "volume": 1000, "is_suspended": false, "is_limit_down": true},
+        {"trade_date": "2026-01-12", "open": 100, "high": 102, "low": 94, "close": 100, "volume": 1000, "is_suspended": false},
+        {"trade_date": "2026-01-13", "open": 110, "high": 112, "low": 99, "close": 110, "volume": 1000, "is_suspended": false}
+      ],
+      "corporate_actions": [],
+      "data_conflicts": []
+    },
+    "600200": {
+      "prices": [
+        {"trade_date": "2026-01-05", "open": 100, "high": 100, "low": 99, "close": 100, "volume": 1000, "is_suspended": false},
+        {"trade_date": "2026-01-06", "open": 104, "high": 105, "low": 98, "close": 104, "volume": 1000, "is_suspended": false},
+        {"trade_date": "2026-01-08", "open": 107, "high": 108, "low": 101, "close": 107, "volume": 1000, "is_suspended": false},
+        {"trade_date": "2026-01-09", "volume": 0, "is_suspended": true},
+        {"trade_date": "2026-01-12", "open": 100, "high": 102, "low": 94, "close": 100, "volume": 1000, "is_suspended": false},
+        {"trade_date": "2026-01-13", "open": 110, "high": 112, "low": 99, "close": 110, "volume": 1000, "is_suspended": false}
+      ],
+      "corporate_actions": [],
+      "data_conflicts": []
+    },
+    "600300": {
+      "prices": [
+        {"trade_date": "2026-01-05", "open": 100, "high": 100, "low": 99, "close": 100, "volume": 1000, "is_suspended": false},
+        {"trade_date": "2026-01-06", "open": 104, "high": 105, "low": 98, "close": 104, "volume": 1000, "is_suspended": false},
+        {"trade_date": "2026-01-08", "open": 107, "high": 108, "low": 101, "close": 107, "volume": 1000, "is_suspended": false},
+        {"trade_date": "2026-01-09", "open": 96, "high": 106, "low": 95, "close": 96, "volume": 1000, "is_suspended": false},
+        {"trade_date": "2026-01-12", "open": 100, "high": 102, "low": 94, "close": 100, "volume": 1000, "is_suspended": false},
+        {"trade_date": "2026-01-13", "open": 110, "high": 112, "low": 99, "close": 110, "volume": 1000, "is_suspended": false}
+      ],
+      "corporate_actions": [
+        {"trade_date": "2026-01-08", "action_type": "cash_dividend"}
+      ],
+      "data_conflicts": []
+    }
+  }
+}
