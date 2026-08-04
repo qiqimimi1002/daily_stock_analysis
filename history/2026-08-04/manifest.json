@@ -1,0 +1,71 @@
+{
+  "schema_version": "1.0",
+  "trade_date": "2026-08-04",
+  "workflow_name": "全市场初筛",
+  "run_id": "30881432666",
+  "run_number": "14",
+  "status": "partial_success",
+  "started_at": "2026-08-04T13:40:47+08:00",
+  "completed_at": "2026-08-04T13:49:48+08:00",
+  "screening_generated_at": "2026-08-04T13:44:26+08:00",
+  "market_data_at": null,
+  "data_source": "AKShare/东方财富；失败时使用新浪原始接口或 efinance",
+  "model_version": "V2.1",
+  "screening_outcome": "success",
+  "deep_analysis_outcome": "success",
+  "deep_analysis_status": "incomplete",
+  "deep_analysis_requested": true,
+  "market_record_count": 5535,
+  "preselected_count": 60,
+  "history_success_count": 49,
+  "history_failure_count": 11,
+  "enrichment_success_count": 8,
+  "enrichment_failure_count": 0,
+  "candidate_count": 5,
+  "candidate_codes": [
+    "000630",
+    "600089",
+    "601168",
+    "000807",
+    "002202"
+  ],
+  "analysis_codes": [
+    "000630",
+    "600089",
+    "601168"
+  ],
+  "screening_json": "data/market_screening_20260804_1344.json",
+  "screened_codes": "data/screened_codes.txt",
+  "screening_reports": [
+    "reports/market_screening_20260804_1344.md"
+  ],
+  "deep_analysis_reports": [],
+  "deep_analysis_missing_codes": [
+    "000630",
+    "600089",
+    "601168"
+  ],
+  "artifact_name": "market-screening-14",
+  "fixed_result_entry": {
+    "branch": "screening-results",
+    "latest_manifest": "latest/manifest.json",
+    "latest_screening_json": "latest/market_screening.json",
+    "latest_screened_codes": "latest/screened_codes.txt",
+    "latest_reports": "latest/reports/",
+    "history_prefix": "history/2026-08-04/"
+  },
+  "evidence_coverage_average": 38.0,
+  "evidence_coverage_minimum": 38.0,
+  "result_file_sha256": {
+    "data/market_screening_20260804_1344.json": "6a00d33586e7503db4052eba807fa2f5d1bb3c45d1b2e75d9626b48ad9e75180",
+    "data/screened_codes.txt": "2f6195ced04015579431dc062946c24f49d22ce113debc60a3c32f1ad87a458b",
+    "reports/market_screening_20260804_1344.md": "c929f9d2995c25abc1b0af9fec6c271ad63a2aec06352877d2639a631673e81b"
+  },
+  "integrity": {
+    "ok": false,
+    "errors": [
+      "deep_analysis_incomplete"
+    ],
+    "screening_json_count": 1
+  }
+}
