@@ -1,6 +1,6 @@
 # Project Status
 
-> Last updated: 2026-08-03 (Asia/Shanghai)
+> Last updated: 2026-08-04 (Asia/Shanghai)
 >
 > Codex workflow rule: read this file before substantial project work and
 > update it after every completed material task. Complete safe in-scope work
@@ -17,9 +17,56 @@
   was marked Ready and squash-merged into `main` on 2026-08-03.
 - Phase-1 squash commit:
   `41d64f6ea504129bb93b78cb97694b0a553b43d8`.
-- Next authorized objective: V2.2 research phase 2, future outcome calculation,
-  on a new branch created from the latest `main`; development has not started.
+- V2.2 phase 2 is under review in Draft PR
+  [#6](https://github.com/qiqimimi1002/daily_stock_analysis/pull/6), branch
+  `agent/v2-2-outcomes`; its current CI checks pass. This work is separate from
+  the screening-result publication change below and was not modified here.
 - Do not use or merge the abandoned branch `v2-1-market-scoring`.
+
+## 2026-08-04 screening-result readability work
+
+- Baseline: latest `main` commit
+  `e4809e974185292ba6acd62fe5df1f1dfb5bee14`.
+- Implementation branch: `agent/screening-results-manifest`.
+- Actual incident finding: as of 2026-08-04 12:59 Asia/Shanghai, no scheduled
+  “全市场初筛” run existed for 2026-08-04. Therefore the 10:00 reader state was
+  `not_started`; there was no run ID, queue record, Artifact, or candidate file
+  to read. This is not evidence that V2.1 screening code failed.
+- The workflow remains active and its cron remains `40 1 * * 1-5` (09:40
+  Asia/Shanghai). The prior scheduled run 13 (ID `30814967880`) did not start
+  until 2026-08-03 20:46:24 Asia/Shanghai, showing that GitHub schedule
+  creation can be substantially delayed even when cron and timezone are right.
+- Added `scripts/build_screening_run_manifest.py` to create and validate
+  `data/screening_run_manifest.json`, including run identity/times, source and
+  model, counts, candidate/deep-analysis status, SHA-256 hashes, evidence
+  coverage, fixed-entry paths, and machine-readable integrity errors.
+- Updated `.github/workflows/01-market-screening.yml` to upload the manifest
+  with the existing Artifact and publish `latest/` plus date-partitioned
+  `history/` results to the dedicated `screening-results` branch. Publication
+  is non-blocking and never writes daily outputs to `main`.
+- Added live-reader state guidance: query Actions first for `not_started`,
+  `queued`, `in_progress`, or workflow `failure`; use the final manifest for
+  `screening_completed`, `success`, or `partial_success`; distinguish a
+  successful run whose output cannot be fetched as `artifact_read_failure`.
+- No V2.1 filter/score/weight, main-board/ST rule, 09:40 cron, formal report,
+  research dependency, 10:00/10:30 logic, or production analysis code changed.
+
+### Screening-result verification
+
+- New manifest tests plus V2.1 regression suites: 27 passed.
+- Python compile, critical flake8 checks, YAML parse, and `git diff --check`:
+  passed.
+- Real Artifact run 12 (ID `30781220470`) produced a valid manifest with five
+  candidates and all three requested deep analyses detected in the combined
+  report.
+- Real Artifact run 13 (ID `30814967880`) produced a valid manifest with zero
+  candidates and `not_required_no_candidates`, matching the real files.
+- A full local offline-suite attempt could not collect because this desktop
+  Python environment lacks production CI dependencies such as `python-dotenv`
+  and `sqlalchemy`; this is an environment limitation, not a test assertion
+  failure. The repository PR CI must run the full dependency-backed gate.
+- Local implementation is ready for review but has not yet been committed,
+  pushed, or opened as a PR.
 
 ## V2.2 phase 1 delivered on the branch
 
@@ -140,7 +187,12 @@
 
 ## Next actions
 
-1. Start V2.2 phase 2 only from the latest `main` on a new independent branch.
-2. Keep `agent/v2-2-signal-archive` until the user authorizes deletion.
-3. Phase 2 must remain isolated from V2.1 scoring, production workflows, and
-   formal reports, and its pull request must remain Draft for human acceptance.
+1. Review and publish `agent/screening-results-manifest` as an independent PR,
+   then require GitHub CI to pass before merge.
+2. After merge, manually run “全市场初筛” once to create the initial
+   `screening-results` branch and verify the fixed raw manifest URL.
+3. Keep 10:20 as the first state check rather than a guaranteed result time;
+   retry at 10:40 or 11:00 when Actions reports `not_started`, `queued`, or
+   `in_progress`.
+4. Keep Draft PR #6 independent and do not merge it as part of this work.
+5. Keep `agent/v2-2-signal-archive` until the user authorizes deletion.
