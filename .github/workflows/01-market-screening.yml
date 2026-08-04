@@ -30,6 +30,9 @@ concurrency:
   group: market-screening
   cancel-in-progress: false
 
+permissions:
+  contents: write
+
 jobs:
   screen:
     runs-on: ubuntu-latest
@@ -37,6 +40,10 @@ jobs:
     steps:
       - name: 检出代码
         uses: actions/checkout@v5
+
+      - name: 记录运行开始时间
+        shell: bash
+        run: echo "SCREENING_RUN_STARTED_AT=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_ENV"
 
       - name: 设置 Python 环境
         uses: actions/setup-python@v6
@@ -53,6 +60,7 @@ jobs:
         run: mkdir -p data reports logs
 
       - name: 执行沪深主板全市场初筛
+        id: screening
         env:
           SCREEN_TOP_N: ${{ inputs.top_n || vars.SCREEN_TOP_N || '5' }}
           SCREEN_ANALYSIS_LIMIT: ${{ vars.SCREEN_ANALYSIS_LIMIT || '3' }}
@@ -74,6 +82,7 @@ jobs:
 
       - name: 读取候选代码
         id: selected
+        if: steps.screening.outcome == 'success'
         shell: bash
         run: |
           CODES="$(tr -d '\r\n ' < data/screened_codes.txt)"
@@ -81,6 +90,7 @@ jobs:
           echo "深度分析候选: ${CODES:-无}"
 
       - name: 对候选运行 Daily Stock 深度分析
+        id: deep_analysis
         if: >-
           steps.selected.outputs.codes != '' &&
           (github.event_name == 'schedule' || inputs.run_deep_analysis)
@@ -112,6 +122,75 @@ jobs:
             --no-market-review \
             $FORCE_ARG
 
+      - name: 生成并校验运行清单
+        if: always()
+        env:
+          SCREENING_OUTCOME: ${{ steps.screening.outcome || 'skipped' }}
+          DEEP_ANALYSIS_OUTCOME: ${{ steps.deep_analysis.outcome || 'skipped' }}
+          DEEP_ANALYSIS_REQUESTED: ${{ github.event_name == 'schedule' || inputs.run_deep_analysis }}
+        shell: bash
+        run: |
+          python scripts/build_screening_run_manifest.py \
+            --run-id "${{ github.run_id }}" \
+            --run-number "${{ github.run_number }}" \
+            --artifact-name "market-screening-${{ github.run_number }}" \
+            --screening-outcome "$SCREENING_OUTCOME" \
+            --deep-analysis-outcome "$DEEP_ANALYSIS_OUTCOME" \
+            --deep-analysis-requested "$DEEP_ANALYSIS_REQUESTED" \
+            --started-at "$SCREENING_RUN_STARTED_AT" \
+            --completed-at "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
+            --summary "$GITHUB_STEP_SUMMARY" \
+            --strict
+
+      - name: 发布固定结果入口
+        if: always() && hashFiles('data/screening_run_manifest.json') != ''
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          TRADE_DATE="$(python -c 'import json; print(json.load(open("data/screening_run_manifest.json", encoding="utf-8"))["trade_date"])')"
+          PAYLOAD_DIR="$RUNNER_TEMP/screening-payload"
+          PUBLISH_DIR="$RUNNER_TEMP/screening-results"
+          rm -rf "$PAYLOAD_DIR" "$PUBLISH_DIR"
+          mkdir -p "$PAYLOAD_DIR/latest/reports" "$PAYLOAD_DIR/history/$TRADE_DATE/reports"
+
+          cp data/screening_run_manifest.json "$PAYLOAD_DIR/latest/manifest.json"
+          if compgen -G 'data/market_screening_*.json' > /dev/null; then
+            cp "$(ls -1 data/market_screening_*.json | tail -n 1)" "$PAYLOAD_DIR/latest/market_screening.json"
+          fi
+          if [ -f data/screened_codes.txt ]; then
+            cp data/screened_codes.txt "$PAYLOAD_DIR/latest/screened_codes.txt"
+          fi
+          if compgen -G 'reports/*.md' > /dev/null; then
+            cp reports/*.md "$PAYLOAD_DIR/latest/reports/"
+          fi
+          cp -a "$PAYLOAD_DIR/latest/." "$PAYLOAD_DIR/history/$TRADE_DATE/"
+
+          if git fetch origin screening-results; then
+            git worktree add -B screening-results "$PUBLISH_DIR" origin/screening-results
+          else
+            git worktree add --detach "$PUBLISH_DIR" "$GITHUB_SHA"
+            cd "$PUBLISH_DIR"
+            git switch --orphan screening-results
+            git rm -rf . || true
+          fi
+
+          cd "$PUBLISH_DIR"
+          rm -rf latest "history/$TRADE_DATE"
+          mkdir -p history
+          cp -a "$PAYLOAD_DIR/latest" latest
+          mkdir -p "history/$TRADE_DATE"
+          cp -a "$PAYLOAD_DIR/history/$TRADE_DATE/." "history/$TRADE_DATE/"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add latest "history/$TRADE_DATE"
+          if git diff --cached --quiet; then
+            echo "固定结果入口没有变化，无需提交。"
+            exit 0
+          fi
+          git commit -m "publish screening results for $TRADE_DATE (run ${{ github.run_number }})"
+          git push origin HEAD:screening-results
+
       - name: 上传初筛及深度分析结果
         if: always()
         uses: actions/upload-artifact@v7
@@ -120,6 +199,7 @@ jobs:
           path: |
             data/market_screening_*.json
             data/screened_codes.txt
+            data/screening_run_manifest.json
             reports/*.md
             logs/*.log
           if-no-files-found: warn
