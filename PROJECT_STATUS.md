@@ -69,9 +69,18 @@
 - No V2.1 score/filter/weight, stock-universe rule, 09:40 cron, formal report,
   research module, or production dependency file changed. Draft PR #6 remains
   outside this branch and must not be modified or merged.
-- Remaining before acceptance: GitHub full CI and a feature-branch manual
-  workflow run. Because this work must remain a Draft PR, a new-code run from
-  `main` is intentionally deferred until after human review and merge.
+- Remaining before acceptance: final PR-head CI after this status update and a
+  feature-branch manual workflow run. Because this work must remain a Draft PR,
+  a new-code run from `main` is intentionally deferred until after human review
+  and merge.
+- Draft PR [#8](https://github.com/qiqimimi1002/daily_stock_analysis/pull/8)
+  was opened from `agent/screening-reader-retry`; implementation commit is
+  `420e6ad9ae7ff5d23ff4e04a13e43a9d49b093f1`.
+- GitHub CI run
+  [#31154295127](https://github.com/qiqimimi1002/daily_stock_analysis/actions/runs/31154295127)
+  passed on the implementation commit: change detection, AI governance,
+  backend-gate (including the full offline suite), Docker build, and Docker
+  smoke all succeeded; unrelated desktop/web jobs were correctly skipped.
 
 ## 2026-08-04 screening-result readability work
 
