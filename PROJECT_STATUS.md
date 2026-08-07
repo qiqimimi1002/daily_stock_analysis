@@ -1,6 +1,6 @@
 # Project Status
 
-> Last updated: 2026-08-04 (Asia/Shanghai)
+> Last updated: 2026-08-07 (Asia/Shanghai)
 >
 > Codex workflow rule: read this file before substantial project work and
 > update it after every completed material task. Complete safe in-scope work
@@ -22,6 +22,65 @@
   `agent/v2-2-outcomes`; its current CI checks pass. This work is separate from
   the screening-result publication change below and was not modified here.
 - Do not use or merge the abandoned branch `v2-1-market-scoring`.
+
+## 2026-08-04 executable reader and Gemini retry work
+
+- Baseline: latest `main` commit
+  `086fe4b749b3fcb839861391958d9dde60981ac9`; this includes PR #7 and its
+  verified fixed `screening-results` entry.
+- Implementation branch: `agent/screening-reader-retry` (Draft PR pending).
+- Added `scripts/read_screening_status.py`. It queries the current trade day's
+  Actions runs first, then validates `trade_date`, `run_id`, and `run_number`
+  before accepting the fixed manifest; a valid dynamic Artifact is the fallback.
+- The executable reader returns `not_started`, `queued`, `in_progress`,
+  `failure`, `artifact_read_failure`, `screening_completed`, `partial_success`,
+  or `success`, with run identity, workflow conclusion, screening/deep-analysis
+  states, availability flags, candidate count, manifest source, and reason codes.
+- A live read of 2026-08-04 run 14 / ID `30881432666` returned
+  `partial_success`: workflow `completed/failure`, screening `success`, deep
+  analysis `incomplete`, five candidates, and a valid run-matched fixed entry.
+- Added a bounded Gemini retry policy. Only explicit 429 and 503 failures are
+  retried with exponential backoff and a maximum delay. A second configured
+  Gemini key is selected only after an explicit 429; 503 and ordinary business
+  errors never rotate keys. Retries are finite and secret values are excluded
+  from logs and manifests.
+- The screening workflow uses two retries by default (5-second base, 20-second
+  maximum), writes sanitized JSONL retry events, and still publishes the fixed
+  entry and dynamic Artifact when deep analysis remains incomplete.
+- Manifest schema 1.1 records sanitized retry events, exhausted per-stock
+  failures, and `gemini_429` / `gemini_503` reason codes. Missing deep reports
+  remain `partial_success`; no empty or fabricated report is produced.
+- Local verification: 50 reader/retry/manifest/V2.1 tests passed; 72 affected
+  analyzer regression tests passed; Python compilation, YAML parsing, critical
+  flake8 checks, and `git diff --check` passed.
+- The 2026-08-07 11:00 reader observation correctly found no current-day result
+  and refused to reuse Run 17 from 2026-08-06. A later live check found main
+  Run 18 / ID `31152495332`: four candidates, completed deep analysis, valid
+  fixed entry, normal data quality, and final reader status `success`.
+- Authenticated historical fallback was verified against Run 17 / ID
+  `31095796250` after `latest` advanced to Run 18. The reader downloaded
+  Artifact `market-screening-17`, returned `manifest_source=artifact`, and
+  reported `data_quality_status=degraded` / `history_data_all_failed` because
+  all 60 preselected symbols failed history retrieval. This warning does not
+  alter V2.1 scoring or falsely turn file-integrity success into a code failure.
+- The real Artifact test exposed and fixed a cross-host redirect issue: the
+  GitHub bearer token is now removed before following the signed blob URL, so
+  credentials are not leaked and authenticated Artifact fallback works.
+- No V2.1 score/filter/weight, stock-universe rule, 09:40 cron, formal report,
+  research module, or production dependency file changed. Draft PR #6 remains
+  outside this branch and must not be modified or merged.
+- Remaining before acceptance: final PR-head CI after this status update and a
+  feature-branch manual workflow run. Because this work must remain a Draft PR,
+  a new-code run from `main` is intentionally deferred until after human review
+  and merge.
+- Draft PR [#8](https://github.com/qiqimimi1002/daily_stock_analysis/pull/8)
+  was opened from `agent/screening-reader-retry`; implementation commit is
+  `420e6ad9ae7ff5d23ff4e04a13e43a9d49b093f1`.
+- GitHub CI run
+  [#31154295127](https://github.com/qiqimimi1002/daily_stock_analysis/actions/runs/31154295127)
+  passed on the implementation commit: change detection, AI governance,
+  backend-gate (including the full offline suite), Docker build, and Docker
+  smoke all succeeded; unrelated desktop/web jobs were correctly skipped.
 
 ## 2026-08-04 screening-result readability work
 

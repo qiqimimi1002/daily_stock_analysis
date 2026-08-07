@@ -19,8 +19,10 @@ class ScreeningRunManifestTest(unittest.TestCase):
         self.root = Path(self.temp.name)
         self.data = self.root / "data"
         self.reports = self.root / "reports"
+        self.logs = self.root / "logs"
         self.data.mkdir()
         self.reports.mkdir()
+        self.logs.mkdir()
 
     def tearDown(self) -> None:
         self.temp.cleanup()
@@ -76,6 +78,7 @@ class ScreeningRunManifestTest(unittest.TestCase):
             deep_analysis_requested=deep_analysis_requested,
             started_at=datetime(2026, 8, 4, 2, 10, tzinfo=timezone.utc),
             completed_at=datetime(2026, 8, 4, 2, 20, tzinfo=timezone.utc),
+            logs_dir=self.logs,
         )
 
     def test_success_manifest_has_counts_reports_hashes_and_shanghai_times(self) -> None:
@@ -127,6 +130,45 @@ class ScreeningRunManifestTest(unittest.TestCase):
         self.assertEqual(manifest["status"], "partial_success")
         self.assertEqual(manifest["deep_analysis_status"], "incomplete")
         self.assertIn("deep_analysis_incomplete", manifest["integrity"]["errors"])
+
+    def test_retry_events_are_safely_exposed_in_manifest(self) -> None:
+        self._write_screening(candidate_codes=["600089"], analysis_codes=["600089"])
+        events = [
+            {
+                "action": "retry",
+                "attempt": 1,
+                "max_attempts": 3,
+                "error_type": "gemini_503",
+                "stock_code": "600089",
+                "key_index": 0,
+                "key_switched": False,
+                "api_key": "SECRET_MUST_NOT_APPEAR",
+            },
+            {
+                "action": "exhausted",
+                "attempt": 3,
+                "max_attempts": 3,
+                "error_type": "gemini_429",
+                "stock_code": "600089",
+                "key_index": 1,
+                "key_switched": False,
+            },
+        ]
+        (self.logs / "llm_retry_events.jsonl").write_text(
+            "\n".join(json.dumps(event) for event in events) + "\n", encoding="utf-8"
+        )
+
+        manifest = self._build(deep_analysis_outcome="failure")
+
+        self.assertEqual(manifest["status"], "partial_success")
+        self.assertEqual(manifest["reason_codes"], [
+            "deep_analysis_incomplete",
+            "gemini_503",
+            "gemini_429",
+        ])
+        self.assertEqual(manifest["deep_analysis_failures"][0]["stock_code"], "600089")
+        self.assertIn("logs/llm_retry_events.jsonl", manifest["result_file_sha256"])
+        self.assertNotIn("SECRET_MUST_NOT_APPEAR", json.dumps(manifest))
 
     def test_screened_codes_mismatch_is_reported(self) -> None:
         self._write_screening(candidate_codes=["600089", "600309"], analysis_codes=["600089"])
