@@ -165,8 +165,11 @@
   stopped before execution because this local Python environment lacks existing
   production dependencies such as `markdown2`; GitHub backend-gate remains the
   authoritative full dependency-backed suite.
-- Draft PR [#9](https://github.com/qiqimimi1002/daily_stock_analysis/pull/9)
-  was opened from `agent/history-coverage-reliability` and remains unmerged.
+- PR [#9](https://github.com/qiqimimi1002/daily_stock_analysis/pull/9)
+  was opened from `agent/history-coverage-reliability`, passed production-readiness
+  acceptance, was marked Ready, and was squash-merged into `main` on 2026-08-07.
+  The squash commit is `b2b89c6ceb2cdb00d108d23849e2c4b1fd54663d`;
+  the source branch was retained for traceability.
   The first normalized PR head was
   `f728f50f47959414d59d302e82dcdbcbe8ed1ec0`; all eight remote file blob SHAs
   matched the locally tested commit, and the final diff contained only the
@@ -176,9 +179,33 @@
   passed on that PR head: change detection, AI governance, backend-gate,
   Docker build, Docker smoke, and Docker import checks succeeded; unrelated
   desktop and web jobs were correctly skipped.
-- Delivery status: implementation, Run-19 diagnosis, local real-market
-  validation, Draft PR publication, and complete CI are finished. Keep PR #9
-  as Draft for human acceptance; do not merge it directly into `main`.
+- Pre-merge acceptance reran all 54 focused tests successfully. An additional
+  fixed-clock boundary check confirmed that a Friday cache entry is not reused
+  on the following Monday: the history window end changed from `20260807` to
+  `20260810`, both providers were called again, and both requests reported
+  `cache_hit=false`.
+- A three-symbol live probe (`600519`, `000001`, `002241`) observed Eastmoney
+  remote disconnects on both bounded attempts for every symbol. Sina then
+  succeeded on its first attempt for all three, returning 83 valid rows each;
+  the same-family efinance fallback was correctly skipped after the Eastmoney
+  outage. No source conflict was fabricated.
+- The single post-merge equivalent-production run used the production-scale
+  60-symbol history preselection and eight history workers. It completed
+  normally with 5,538 market rows, 60 preselected symbols, 43 history successes,
+  17 failures, and 71.67% coverage. Eastmoney succeeded for 2/60 symbols while
+  Sina succeeded for 42/60; the structured failure summary recorded 16
+  `all_sources_failed` and one `provider_error` result. Cross-source diagnostics
+  recorded one match, 42 single-backend results, 17 not-checked results, and no
+  conflicts.
+- The post-merge run correctly downgraded data quality to `degraded` / medium
+  confidence, retained five candidates, and did not guess missing values or
+  relax V2.1 filters. This is a remaining P1 external-source availability risk
+  for Monday, not a code-integrity or merge blocker; the 09:40 run must be
+  monitored through its coverage and failure-reason fields.
+- Delivery status: PR #9 is merged and the one allowed post-merge production
+  validation is complete. No further feature work is authorized before next
+  week; Draft PR #6 remains unchanged at
+  `50c995dc10765bb0bb822212663b7cd1b4c35120`.
 
 ## 2026-08-04 screening-result readability work
 
