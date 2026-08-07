@@ -105,6 +105,28 @@ class ScreeningStatusClassifierTest(unittest.TestCase):
         self.assertEqual(result["data_quality_status"], "degraded")
         self.assertIn("history_data_all_failed", result["reason_codes"])
 
+    def test_declared_insufficient_history_coverage_is_preserved(self) -> None:
+        insufficient = manifest()
+        insufficient.update(
+            {
+                "history_success_count": 19,
+                "history_failure_count": 41,
+                "history_success_rate": 31.67,
+                "history_data_quality": {"status": "insufficient"},
+            }
+        )
+        result = classify_screening_status(
+            trade_date=TRADE_DATE,
+            run=RUN,
+            fixed_manifest=insufficient,
+            fixed_entry_reachable=True,
+        )
+
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["data_quality_status"], "insufficient")
+        self.assertEqual(result["history_success_rate"], 31.67)
+        self.assertIn("history_coverage_insufficient", result["reason_codes"])
+
     def test_stale_latest_is_not_used(self) -> None:
         stale = manifest()
         stale["trade_date"] = "2026-08-03"
