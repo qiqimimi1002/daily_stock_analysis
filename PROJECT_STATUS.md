@@ -28,7 +28,7 @@
 - Baseline: latest `main` commit
   `086fe4b749b3fcb839861391958d9dde60981ac9`; this includes PR #7 and its
   verified fixed `screening-results` entry.
-- Implementation branch: `agent/screening-reader-retry` (Draft PR pending).
+- Implementation branch: `agent/screening-reader-retry` (retained for traceability).
 - Added `scripts/read_screening_status.py`. It queries the current trade day's
   Actions runs first, then validates `trade_date`, `run_id`, and `run_number`
   before accepting the fixed manifest; a valid dynamic Artifact is the fallback.
@@ -69,18 +69,56 @@
 - No V2.1 score/filter/weight, stock-universe rule, 09:40 cron, formal report,
   research module, or production dependency file changed. Draft PR #6 remains
   outside this branch and must not be modified or merged.
-- Remaining before acceptance: final PR-head CI after this status update and a
-  feature-branch manual workflow run. Because this work must remain a Draft PR,
-  a new-code run from `main` is intentionally deferred until after human review
-  and merge.
-- Draft PR [#8](https://github.com/qiqimimi1002/daily_stock_analysis/pull/8)
+- PR [#8](https://github.com/qiqimimi1002/daily_stock_analysis/pull/8)
   was opened from `agent/screening-reader-retry`; implementation commit is
-  `420e6ad9ae7ff5d23ff4e04a13e43a9d49b093f1`.
+  `420e6ad9ae7ff5d23ff4e04a13e43a9d49b093f1` and the final PR head was
+  `e36f3650a668d5520f22f0fc08d4db939ce7228b`.
 - GitHub CI run
   [#31154295127](https://github.com/qiqimimi1002/daily_stock_analysis/actions/runs/31154295127)
   passed on the implementation commit: change detection, AI governance,
   backend-gate (including the full offline suite), Docker build, and Docker
   smoke all succeeded; unrelated desktop/web jobs were correctly skipped.
+- Final PR-head CI run
+  [#31154741247](https://github.com/qiqimimi1002/daily_stock_analysis/actions/runs/31154741247)
+  also passed. PR #8 was marked Ready and squash-merged into `main` on
+  2026-08-07; squash commit is
+  `09d8c73309c6c49cb1a426d23cf323c4efeace92`. The source branch was retained.
+
+### PR #8 production acceptance
+
+- Manual `main` validation used run number 19 / ID `31155790869`, commit
+  `09d8c73309c6c49cb1a426d23cf323c4efeace92`, with `top_n=5`,
+  `run_deep_analysis=true`, and `force_run=false`.
+- Runtime was 2026-08-07 14:57:13 to 15:09:27 Asia/Shanghai. Screening
+  succeeded with five candidates; 19 of 60 preselected symbols returned
+  history data and all eight evidence-enrichment requests succeeded.
+- Gemini naturally returned 503. `000933` retried after 5 and 10 seconds and
+  exhausted on attempt 3 without key rotation; `000807` retried once after
+  5 seconds and recovered. Reports were produced for `000807` and `600089`;
+  no blank report was fabricated for `000933`.
+- Manifest schema 1.1 correctly recorded sanitized retry events and returned
+  `partial_success` / `deep_analysis_incomplete` / `gemini_503`. The reader
+  returned `partial_success`, normal screening data-quality status, and a valid
+  run-matched fixed entry. Overall Actions conclusion remained `failure`
+  because strict integrity validation rejects an incomplete deep-analysis set.
+- Dynamic Artifact `market-screening-19` (ID `8985350349`) and the
+  `screening-results` fixed entry both published successfully. All five
+  manifest-listed Artifact hashes matched, and the fixed-entry Git blobs for
+  the manifest, screening JSON, screened codes, and two reports matched the
+  same source bytes. No secret-like key value was found in the saved logs or
+  manifest.
+- The merged reader classified Run 18 / ID `31152495332` as `success`; Run 17
+  / ID `31095796250` through its matching Artifact as `success` with degraded
+  data quality and `history_data_all_failed`; and Run 14 / ID `30881432666` as
+  `partial_success`. The current Run 19 is `partial_success`.
+- Post-merge local verification repeated 50 reader/retry/manifest/V2.1 tests,
+  all passing, plus Python compilation and diff checks. `main` still contains
+  no daily runtime output. Draft PR #6 remained unchanged at
+  `50c995dc10765bb0bb822212663b7cd1b4c35120`.
+- Acceptance conclusion: no P0 code or publication blocker. The 10:20 reader
+  can be restored with its documented handling for queued, in-progress, and
+  partial-success runs. External Gemini availability and partial history-data
+  coverage remain non-blocking operational risks to monitor.
 
 ## 2026-08-04 screening-result readability work
 
