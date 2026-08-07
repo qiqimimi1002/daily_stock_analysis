@@ -170,6 +170,43 @@ class ScreeningRunManifestTest(unittest.TestCase):
         self.assertIn("logs/llm_retry_events.jsonl", manifest["result_file_sha256"])
         self.assertNotIn("SECRET_MUST_NOT_APPEAR", json.dumps(manifest))
 
+    def test_history_quality_diagnostics_are_preserved_without_failing_integrity(self) -> None:
+        self._write_screening(candidate_codes=[], analysis_codes=[])
+        path = self.data / "market_screening_20260804_1018.json"
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        payload.update(
+            {
+                "history_success_rate": 31.67,
+                "history_failure_reasons": {
+                    "counts": {"remote_disconnect": 41},
+                    "by_code": [{"stock_code": "600030", "reason": "remote_disconnect"}],
+                },
+                "history_source_stats": {
+                    "akshare_eastmoney": {"attempts": 101, "successes": 19, "failures": 41, "retries": 41}
+                },
+                "history_consistency": {
+                    "status_counts": {"single_backend": 19},
+                    "checked_count": 0,
+                    "conflict_count": 0,
+                },
+                "history_data_quality": {
+                    "status": "insufficient",
+                    "confidence_label": "low",
+                    "warning": "测试告警",
+                },
+            }
+        )
+        path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+        manifest = self._build(deep_analysis_outcome="skipped")
+
+        self.assertEqual(manifest["schema_version"], "1.2")
+        self.assertEqual(manifest["history_success_rate"], 31.67)
+        self.assertEqual(manifest["history_failure_reasons"]["counts"]["remote_disconnect"], 41)
+        self.assertEqual(manifest["history_data_quality"]["status"], "insufficient")
+        self.assertIn("history_coverage_insufficient", manifest["reason_codes"])
+        self.assertTrue(manifest["integrity"]["ok"])
+
     def test_screened_codes_mismatch_is_reported(self) -> None:
         self._write_screening(candidate_codes=["600089", "600309"], analysis_codes=["600089"])
         (self.data / "screened_codes.txt").write_text("600309", encoding="utf-8")

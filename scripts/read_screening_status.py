@@ -155,11 +155,23 @@ def classify_screening_status(
     preselected_count = int(manifest.get("preselected_count") or 0)
     history_success_count = int(manifest.get("history_success_count") or 0)
     history_failure_count = int(manifest.get("history_failure_count") or 0)
-    if preselected_count > 0 and history_success_count == 0 and history_failure_count >= preselected_count:
+    history_success_rate = manifest.get("history_success_rate")
+    base["history_success_rate"] = history_success_rate
+    history_quality = manifest.get("history_data_quality")
+    declared_quality = (
+        str(history_quality.get("status") or "")
+        if isinstance(history_quality, Mapping)
+        else ""
+    )
+    if declared_quality in {"ok", "degraded", "insufficient", "not_applicable"}:
+        base["data_quality_status"] = declared_quality
+    elif preselected_count > 0 and history_success_count == 0 and history_failure_count >= preselected_count:
         base["data_quality_status"] = "degraded"
         reasons.append("history_data_all_failed")
     else:
         base["data_quality_status"] = "ok"
+    if declared_quality in {"degraded", "insufficient"}:
+        reasons.append(f"history_coverage_{declared_quality}")
     manifest_reasons = manifest.get("reason_codes")
     if isinstance(manifest_reasons, list):
         reasons.extend(str(reason) for reason in manifest_reasons if reason)

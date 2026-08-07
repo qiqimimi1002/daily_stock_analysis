@@ -231,6 +231,11 @@ def build_manifest(
     reason_codes: list[str] = []
     if deep_status == "incomplete":
         reason_codes.append("deep_analysis_incomplete")
+    history_data_quality = source.get("history_data_quality", {})
+    if isinstance(history_data_quality, Mapping):
+        history_quality_status = str(history_data_quality.get("status") or "")
+        if history_quality_status in {"degraded", "insufficient"}:
+            reason_codes.append(f"history_coverage_{history_quality_status}")
     reason_codes.extend(
         str(event["error_type"])
         for event in retry_events
@@ -249,7 +254,7 @@ def build_manifest(
         if path.is_file()
     }
     manifest = {
-        "schema_version": "1.1",
+        "schema_version": "1.2",
         "trade_date": trade_date,
         "workflow_name": workflow_name,
         "run_id": str(run_id),
@@ -269,6 +274,11 @@ def build_manifest(
         "preselected_count": int(source.get("spot_filtered_count", 0) or 0),
         "history_success_count": int(source.get("history_success_count", 0) or 0),
         "history_failure_count": int(source.get("history_failure_count", 0) or 0),
+        "history_success_rate": source.get("history_success_rate"),
+        "history_failure_reasons": source.get("history_failure_reasons", {}),
+        "history_source_stats": source.get("history_source_stats", {}),
+        "history_consistency": source.get("history_consistency", {}),
+        "history_data_quality": history_data_quality if isinstance(history_data_quality, Mapping) else {},
         "enrichment_success_count": int(source.get("evidence_success_count", 0) or 0),
         "enrichment_failure_count": int(source.get("evidence_failure_count", 0) or 0),
         "candidate_count": len(candidates),
