@@ -72,6 +72,12 @@ def main() -> int:
 
     print(f"全市场记录: {result.universe_count}")
     print(f"基础过滤后: {result.spot_filtered_count}")
+    print(
+        "历史行情成功/失败/覆盖率: "
+        f"{result.history_success_count}/{result.history_failure_count}/"
+        f"{result.history_success_rate if result.history_success_rate is not None else '无法确认'}%"
+    )
+    print(f"历史行情数据质量: {result.history_data_quality.get('status', 'unknown')}")
     print(f"最终候选: {len(result.candidates)}")
     print(f"证据增强成功/失败: {result.evidence_success_count}/{result.evidence_failure_count}")
     print(f"市场环境评分: {result.market_environment.get('score', '无法确认')}")
