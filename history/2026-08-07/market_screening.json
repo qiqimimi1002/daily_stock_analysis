@@ -1,17 +1,17 @@
 {
-  "generated_at": "2026-08-07T14:04:33+08:00",
+  "generated_at": "2026-08-07T15:01:47+08:00",
   "universe_count": 5538,
   "spot_filtered_count": 60,
-  "history_success_count": 39,
-  "history_failure_count": 21,
+  "history_success_count": 19,
+  "history_failure_count": 41,
   "evidence_success_count": 8,
   "evidence_failure_count": 0,
   "candidates": [
     {
       "code": "000933",
       "name": "神火股份",
-      "score": 44.8,
-      "raw_score": 33.6,
+      "score": 46.05,
+      "raw_score": 34.54,
       "available_max_score": 38.0,
       "score_coverage_pct": 38.0,
       "confidence_label": "低",
@@ -31,13 +31,13 @@
           "evidence": []
         },
         "capital": {
-          "score": 6.23,
+          "score": 7.18,
           "available_max": 8.0,
           "max_score": 20.0,
           "status": "partial",
           "evidence": [
-            "换手率 2.30%",
-            "成交额 13.85亿元"
+            "换手率 2.70%",
+            "成交额 16.24亿元"
           ]
         },
         "technical": {
@@ -47,28 +47,28 @@
           "status": "ok",
           "evidence": [
             "价格与MA5/MA10/MA20呈多头结构",
-            "近5日涨跌 +2.92%",
-            "相对MA20偏离 +6.57%",
-            "当日涨跌 +1.86%"
+            "近5日涨跌 +2.84%",
+            "相对MA20偏离 +6.49%",
+            "当日涨跌 +1.78%"
           ]
         },
         "valuation": {
-          "score": 8.66,
+          "score": 8.65,
           "available_max": 10.0,
           "max_score": 10.0,
           "status": "ok",
           "evidence": [
-            "动态PE 14.82",
+            "动态PE 14.81",
             "PB 2.18"
           ]
         }
       },
-      "latest_price": 26.83,
-      "daily_pct": 1.86,
-      "five_day_pct": 2.92,
-      "amount_yi": 13.85,
+      "latest_price": 26.81,
+      "daily_pct": 1.78,
+      "five_day_pct": 2.84,
+      "amount_yi": 16.24,
       "avg_amount_20d_yi": 19.26,
-      "turnover_pct": 2.3,
+      "turnover_pct": 2.7,
       "ma5": 25.93,
       "ma10": 25.72,
       "ma20": 25.18,
@@ -76,18 +76,18 @@
       "trend_label": "均线多头",
       "watch_zone": "25.18—25.93",
       "industry": "",
-      "pe_ratio": 14.82,
+      "pe_ratio": 14.81,
       "pb_ratio": 2.18,
       "historical_win_rate": null,
       "risk_gate": "需深度复核",
       "reasons": [
-        "V2.1综合评分44.80，证据覆盖率38.00%",
-        "成交额13.85亿元，满足流动性门槛",
-        "capital得分6.23/8.00",
+        "V2.1综合评分46.05，证据覆盖率38.00%",
+        "成交额16.24亿元，满足流动性门槛",
+        "capital得分7.18/8.00",
         "technical得分18.71/20.00",
-        "valuation得分8.66/10.00",
+        "valuation得分8.65/10.00",
         "近20日平均成交额19.26亿元，满足流动性门槛",
-        "近5日涨幅+2.92%，未进入追高区间"
+        "近5日涨幅+2.84%，未进入追高区间"
       ],
       "risks": [
         "盘中未完成K线不参与日线量能计算"
@@ -116,8 +116,8 @@
     {
       "code": "000807",
       "name": "云铝股份",
-      "score": 43.95,
-      "raw_score": 32.96,
+      "score": 45.03,
+      "raw_score": 33.77,
       "available_max_score": 38.0,
       "score_coverage_pct": 38.0,
       "confidence_label": "低",
@@ -137,44 +137,44 @@
           "evidence": []
         },
         "capital": {
-          "score": 6.06,
+          "score": 6.87,
           "available_max": 8.0,
           "max_score": 20.0,
           "status": "partial",
           "evidence": [
-            "换手率 2.05%",
-            "成交额 19.32亿元"
+            "换手率 2.43%",
+            "成交额 22.93亿元"
           ]
         },
         "technical": {
-          "score": 18.15,
+          "score": 18.16,
           "available_max": 20.0,
           "max_score": 20.0,
           "status": "ok",
           "evidence": [
             "价格与MA5/MA10/MA20呈多头结构",
-            "近5日涨跌 +2.07%",
-            "相对MA20偏离 +6.03%",
-            "当日涨跌 +1.91%"
+            "近5日涨跌 +1.88%",
+            "相对MA20偏离 +5.83%",
+            "当日涨跌 +1.73%"
           ]
         },
         "valuation": {
-          "score": 8.75,
+          "score": 8.74,
           "available_max": 10.0,
           "max_score": 10.0,
           "status": "ok",
           "evidence": [
-            "动态PE 15.53",
+            "动态PE 15.50",
             "PB 2.64"
           ]
         }
       },
-      "latest_price": 27.17,
-      "daily_pct": 1.91,
-      "five_day_pct": 2.07,
-      "amount_yi": 19.32,
+      "latest_price": 27.12,
+      "daily_pct": 1.73,
+      "five_day_pct": 1.88,
+      "amount_yi": 22.93,
       "avg_amount_20d_yi": 26.41,
-      "turnover_pct": 2.05,
+      "turnover_pct": 2.43,
       "ma5": 26.36,
       "ma10": 26.11,
       "ma20": 25.62,
@@ -182,18 +182,18 @@
       "trend_label": "均线多头",
       "watch_zone": "25.62—26.36",
       "industry": "",
-      "pe_ratio": 15.53,
+      "pe_ratio": 15.5,
       "pb_ratio": 2.64,
       "historical_win_rate": null,
       "risk_gate": "需深度复核",
       "reasons": [
-        "V2.1综合评分43.95，证据覆盖率38.00%",
-        "成交额19.32亿元，满足流动性门槛",
-        "capital得分6.06/8.00",
-        "technical得分18.15/20.00",
-        "valuation得分8.75/10.00",
+        "V2.1综合评分45.03，证据覆盖率38.00%",
+        "成交额22.93亿元，满足流动性门槛",
+        "capital得分6.87/8.00",
+        "technical得分18.16/20.00",
+        "valuation得分8.74/10.00",
         "近20日平均成交额26.41亿元，满足流动性门槛",
-        "近5日涨幅+2.07%，未进入追高区间"
+        "近5日涨幅+1.88%，未进入追高区间"
       ],
       "risks": [
         "盘中未完成K线不参与日线量能计算"
@@ -220,10 +220,10 @@
       ]
     },
     {
-      "code": "601600",
-      "name": "中国铝业",
-      "score": 41.33,
-      "raw_score": 31.0,
+      "code": "600089",
+      "name": "特变电工",
+      "score": 43.53,
+      "raw_score": 32.65,
       "available_max_score": 38.0,
       "score_coverage_pct": 38.0,
       "confidence_label": "低",
@@ -243,63 +243,63 @@
           "evidence": []
         },
         "capital": {
-          "score": 4.65,
+          "score": 5.4,
           "available_max": 8.0,
           "max_score": 20.0,
           "status": "partial",
           "evidence": [
-            "换手率 1.38%",
-            "成交额 17.81亿元"
+            "换手率 1.74%",
+            "成交额 18.61亿元"
           ]
         },
         "technical": {
-          "score": 18.28,
+          "score": 18.47,
           "available_max": 20.0,
           "max_score": 20.0,
           "status": "ok",
           "evidence": [
             "价格与MA5/MA10/MA20呈多头结构",
-            "近5日涨跌 +2.61%",
-            "相对MA20偏离 +6.61%",
-            "当日涨跌 +2.19%"
+            "近5日涨跌 +1.86%",
+            "相对MA20偏离 +5.49%",
+            "当日涨跌 +0.71%"
           ]
         },
         "valuation": {
-          "score": 8.07,
+          "score": 8.78,
           "available_max": 10.0,
           "max_score": 10.0,
           "status": "ok",
           "evidence": [
-            "动态PE 13.27",
-            "PB 2.09"
+            "动态PE 18.37",
+            "PB 1.50"
           ]
         }
       },
-      "latest_price": 9.82,
-      "daily_pct": 2.19,
-      "five_day_pct": 2.61,
-      "amount_yi": 17.81,
-      "avg_amount_20d_yi": 27.88,
-      "turnover_pct": 1.38,
-      "ma5": 9.6,
-      "ma10": 9.53,
-      "ma20": 9.21,
+      "latest_price": 21.33,
+      "daily_pct": 0.71,
+      "five_day_pct": 1.86,
+      "amount_yi": 18.61,
+      "avg_amount_20d_yi": 25.55,
+      "turnover_pct": 1.74,
+      "ma5": 21.3,
+      "ma10": 20.92,
+      "ma20": 20.22,
       "volume_ratio_5d": null,
       "trend_label": "均线多头",
-      "watch_zone": "9.21—9.60",
+      "watch_zone": "20.22—21.30",
       "industry": "",
-      "pe_ratio": 13.27,
-      "pb_ratio": 2.09,
+      "pe_ratio": 18.37,
+      "pb_ratio": 1.5,
       "historical_win_rate": null,
       "risk_gate": "需深度复核",
       "reasons": [
-        "V2.1综合评分41.33，证据覆盖率38.00%",
-        "成交额17.81亿元，满足流动性门槛",
-        "capital得分4.65/8.00",
-        "technical得分18.28/20.00",
-        "valuation得分8.07/10.00",
-        "近20日平均成交额27.88亿元，满足流动性门槛",
-        "近5日涨幅+2.61%，未进入追高区间"
+        "V2.1综合评分43.53，证据覆盖率38.00%",
+        "成交额18.61亿元，满足流动性门槛",
+        "capital得分5.40/8.00",
+        "technical得分18.47/20.00",
+        "valuation得分8.78/10.00",
+        "近20日平均成交额25.55亿元，满足流动性门槛",
+        "近5日涨幅+1.86%，未进入追高区间"
       ],
       "risks": [
         "盘中未完成K线不参与日线量能计算"
@@ -328,8 +328,8 @@
     {
       "code": "002241",
       "name": "歌尔股份",
-      "score": 40.69,
-      "raw_score": 30.52,
+      "score": 42.36,
+      "raw_score": 31.77,
       "available_max_score": 38.0,
       "score_coverage_pct": 38.0,
       "confidence_label": "低",
@@ -349,13 +349,13 @@
           "evidence": []
         },
         "capital": {
-          "score": 5.99,
+          "score": 7.24,
           "available_max": 8.0,
           "max_score": 20.0,
           "status": "partial",
           "evidence": [
-            "换手率 2.12%",
-            "成交额 15.60亿元"
+            "换手率 2.63%",
+            "成交额 19.35亿元"
           ]
         },
         "technical": {
@@ -384,9 +384,9 @@
       "latest_price": 23.28,
       "daily_pct": -0.68,
       "five_day_pct": 0.78,
-      "amount_yi": 15.6,
+      "amount_yi": 19.35,
       "avg_amount_20d_yi": 24.15,
-      "turnover_pct": 2.12,
+      "turnover_pct": 2.63,
       "ma5": 23.32,
       "ma10": 23.17,
       "ma20": 22.88,
@@ -399,13 +399,119 @@
       "historical_win_rate": null,
       "risk_gate": "需深度复核",
       "reasons": [
-        "V2.1综合评分40.69，证据覆盖率38.00%",
-        "成交额15.60亿元，满足流动性门槛",
-        "capital得分5.99/8.00",
+        "V2.1综合评分42.36，证据覆盖率38.00%",
+        "成交额19.35亿元，满足流动性门槛",
+        "capital得分7.24/8.00",
         "technical得分14.85/20.00",
         "valuation得分9.68/10.00",
         "近20日平均成交额24.15亿元，满足流动性门槛",
         "近5日涨幅+0.78%，未进入追高区间"
+      ],
+      "risks": [
+        "盘中未完成K线不参与日线量能计算"
+      ],
+      "evidence_gaps": [
+        "行业催化结构化证据尚未接入，预留20分不计分",
+        "最近3年净利润与毛利率趋势尚未完成结构化核验",
+        "连续亏损年数未取得，不能据此断言企业不存在连续亏损",
+        "基本面数据不完整",
+        "主力资金或多日资金流数据不完整",
+        "PE/PB已取得，但同行业估值分位尚未接入",
+        "历史类似信号胜率将在V2.2积累后提供",
+        "重大公告与监管风险仍需由后续深度分析复核"
+      ],
+      "trigger_conditions": [
+        "保持在上一完整交易日MA20上方",
+        "盘中量价关系保持温和，不出现巨量冲高回落",
+        "深度分析补齐公告、财务和资金流证据后仍未触发风险降级"
+      ],
+      "abandon_conditions": [
+        "跌破MA20且无法快速收复",
+        "出现重大风险公告、监管处罚或最新财务亏损证据",
+        "高开急拉、巨量冲高回落或近5日涨幅突破追高上限"
+      ]
+    },
+    {
+      "code": "601991",
+      "name": "大唐发电",
+      "score": 41.49,
+      "raw_score": 31.12,
+      "available_max_score": 38.0,
+      "score_coverage_pct": 38.0,
+      "confidence_label": "低",
+      "score_breakdown": {
+        "fundamental": {
+          "score": 0.0,
+          "available_max": 0.0,
+          "max_score": 30.0,
+          "status": "unavailable",
+          "evidence": []
+        },
+        "industry_catalyst": {
+          "score": 0.0,
+          "available_max": 0.0,
+          "max_score": 20.0,
+          "status": "unavailable",
+          "evidence": []
+        },
+        "capital": {
+          "score": 7.88,
+          "available_max": 8.0,
+          "max_score": 20.0,
+          "status": "partial",
+          "evidence": [
+            "换手率 3.21%",
+            "成交额 24.98亿元"
+          ]
+        },
+        "technical": {
+          "score": 13.94,
+          "available_max": 20.0,
+          "max_score": 20.0,
+          "status": "ok",
+          "evidence": [
+            "价格位于MA20上方且短期均线未转弱",
+            "近5日涨跌 +7.95%",
+            "相对MA20偏离 +2.70%",
+            "当日涨跌 +2.08%"
+          ]
+        },
+        "valuation": {
+          "score": 9.3,
+          "available_max": 10.0,
+          "max_score": 10.0,
+          "status": "ok",
+          "evidence": [
+            "动态PE 20.22",
+            "PB 3.21"
+          ]
+        }
+      },
+      "latest_price": 6.38,
+      "daily_pct": 2.08,
+      "five_day_pct": 7.95,
+      "amount_yi": 24.98,
+      "avg_amount_20d_yi": 36.74,
+      "turnover_pct": 3.21,
+      "ma5": 6.22,
+      "ma10": 6.15,
+      "ma20": 6.21,
+      "volume_ratio_5d": null,
+      "trend_label": "趋势偏强",
+      "watch_zone": "6.21—6.22",
+      "industry": "",
+      "pe_ratio": 20.22,
+      "pb_ratio": 3.21,
+      "historical_win_rate": null,
+      "risk_gate": "需深度复核",
+      "reasons": [
+        "V2.1综合评分41.49，证据覆盖率38.00%",
+        "成交额24.98亿元，满足流动性门槛",
+        "capital得分7.88/8.00",
+        "technical得分13.94/20.00",
+        "valuation得分9.30/10.00",
+        "近20日平均成交额36.74亿元，满足流动性门槛",
+        "近5日涨幅+7.95%，未进入追高区间"
       ],
       "risks": [
         "盘中未完成K线不参与日线量能计算"
@@ -435,7 +541,7 @@
   "analysis_codes": [
     "000933",
     "000807",
-    "601600"
+    "600089"
   ],
   "config": {
     "top_n": 5,
@@ -468,16 +574,16 @@
   ],
   "model_version": "V2.1",
   "market_environment": {
-    "score": 52.51,
+    "score": 62.58,
     "strategy": "中性观察，控制候选数量",
     "coverage": "partial",
     "coverage_note": "当前仅使用全市场涨跌广度；指数趋势和历史成交额基线待后续接入",
-    "advance_ratio_pct": 43.21,
-    "median_pct_change": -0.26,
-    "limit_up_count": 131,
+    "advance_ratio_pct": 51.68,
+    "median_pct_change": 0.12,
+    "limit_up_count": 157,
     "limit_down_count": 9,
     "snapshot_status": "active",
     "active_quote_count": 5534,
-    "observation_limit": 4
+    "observation_limit": 5
   }
 }

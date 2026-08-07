@@ -1,48 +1,113 @@
 {
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "trade_date": "2026-08-07",
   "workflow_name": "全市场初筛",
-  "run_id": "31152495332",
-  "run_number": "18",
-  "status": "success",
-  "started_at": "2026-08-07T14:01:06+08:00",
-  "completed_at": "2026-08-07T14:08:19+08:00",
-  "screening_generated_at": "2026-08-07T14:04:33+08:00",
+  "run_id": "31155790869",
+  "run_number": "19",
+  "status": "partial_success",
+  "started_at": "2026-08-07T14:57:19+08:00",
+  "completed_at": "2026-08-07T15:09:22+08:00",
+  "screening_generated_at": "2026-08-07T15:01:47+08:00",
   "market_data_at": null,
   "data_source": "AKShare/东方财富；失败时使用新浪原始接口或 efinance",
   "model_version": "V2.1",
   "screening_outcome": "success",
   "deep_analysis_outcome": "success",
-  "deep_analysis_status": "completed",
+  "deep_analysis_status": "incomplete",
   "deep_analysis_requested": true,
   "market_record_count": 5538,
   "preselected_count": 60,
-  "history_success_count": 39,
-  "history_failure_count": 21,
+  "history_success_count": 19,
+  "history_failure_count": 41,
   "enrichment_success_count": 8,
   "enrichment_failure_count": 0,
-  "candidate_count": 4,
+  "candidate_count": 5,
   "candidate_codes": [
     "000933",
     "000807",
-    "601600",
-    "002241"
+    "600089",
+    "002241",
+    "601991"
   ],
   "analysis_codes": [
     "000933",
     "000807",
-    "601600"
+    "600089"
   ],
-  "screening_json": "data/market_screening_20260807_1404.json",
+  "screening_json": "data/market_screening_20260807_1501.json",
   "screened_codes": "data/screened_codes.txt",
   "screening_reports": [
-    "reports/market_screening_20260807_1404.md"
+    "reports/market_screening_20260807_1501.md"
   ],
   "deep_analysis_reports": [
     "reports/report_20260807.md"
   ],
-  "deep_analysis_missing_codes": [],
-  "artifact_name": "market-screening-18",
+  "deep_analysis_missing_codes": [
+    "000933"
+  ],
+  "llm_retry_events": [
+    {
+      "action": "retry",
+      "error_type": "gemini_503",
+      "attempt": 1,
+      "max_attempts": 3,
+      "stock_code": "000933",
+      "recorded_at": "2026-08-07T15:02:50+08:00",
+      "delay_seconds": 5.0,
+      "key_index": 0,
+      "key_switched": false,
+      "model": "gemini/gemini-3-flash-preview"
+    },
+    {
+      "action": "retry",
+      "error_type": "gemini_503",
+      "attempt": 2,
+      "max_attempts": 3,
+      "stock_code": "000933",
+      "recorded_at": "2026-08-07T15:02:56+08:00",
+      "delay_seconds": 10.0,
+      "key_index": 0,
+      "key_switched": false,
+      "model": "gemini/gemini-3-flash-preview"
+    },
+    {
+      "action": "exhausted",
+      "error_type": "gemini_503",
+      "attempt": 3,
+      "max_attempts": 3,
+      "stock_code": "000933",
+      "recorded_at": "2026-08-07T15:03:06+08:00",
+      "delay_seconds": 0.0,
+      "key_index": 0,
+      "key_switched": false,
+      "model": "gemini/gemini-3-flash-preview"
+    },
+    {
+      "action": "retry",
+      "error_type": "gemini_503",
+      "attempt": 1,
+      "max_attempts": 3,
+      "stock_code": "000807",
+      "recorded_at": "2026-08-07T15:04:10+08:00",
+      "delay_seconds": 5.0,
+      "key_index": 0,
+      "key_switched": false,
+      "model": "gemini/gemini-3-flash-preview"
+    }
+  ],
+  "deep_analysis_failures": [
+    {
+      "stock_code": "000933",
+      "error_type": "gemini_503",
+      "attempts": 3,
+      "max_attempts": 3
+    }
+  ],
+  "reason_codes": [
+    "deep_analysis_incomplete",
+    "gemini_503"
+  ],
+  "artifact_name": "market-screening-19",
   "fixed_result_entry": {
     "branch": "screening-results",
     "latest_manifest": "latest/manifest.json",
@@ -54,14 +119,17 @@
   "evidence_coverage_average": 38.0,
   "evidence_coverage_minimum": 38.0,
   "result_file_sha256": {
-    "data/market_screening_20260807_1404.json": "7cd3cb95fb8129838e80fc5efe179958184702b27045c880325ebf6821d6987b",
-    "data/screened_codes.txt": "3140e4dd766c4e3d9dabb97777eec7e02031f949d087bca242e79738d4f2c1f2",
-    "reports/market_screening_20260807_1404.md": "e371eb2d9a95a6e01e3a527bdf61ccbb8f839c3ad7db78bbedf1c2f7d1ee31cf",
-    "reports/report_20260807.md": "7ff3440a05cbabdf4b117be97ec106af0ae66417035b9892703f1c20f7db1a39"
+    "data/market_screening_20260807_1501.json": "925968d9901134726183651650aa32fadd741c7fb67da78dc1bc7e0d18479661",
+    "data/screened_codes.txt": "de9fa6ddcc98ddef4e8b6ff80c9de483e9a7bef408cebff59da34ee0e326d93a",
+    "reports/market_screening_20260807_1501.md": "59deb526d1616e839578eb021f18a4fef42d167655c519cf6bda3aa2fe462f65",
+    "reports/report_20260807.md": "14e85461d8f1cd011329ecd0152c941cfde421e67726d84ca152471490b355ea",
+    "logs/llm_retry_events.jsonl": "ec0b35c5ed9795c2ee4a22d5c6e0c66f3569a6d8a0e62431dbad8d889efb1ff5"
   },
   "integrity": {
-    "ok": true,
-    "errors": [],
+    "ok": false,
+    "errors": [
+      "deep_analysis_incomplete"
+    ],
     "screening_json_count": 1
   }
 }
