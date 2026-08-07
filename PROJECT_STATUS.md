@@ -165,8 +165,20 @@
   stopped before execution because this local Python environment lacks existing
   production dependencies such as `markdown2`; GitHub backend-gate remains the
   authoritative full dependency-backed suite.
-- Pending delivery: final diff review, implementation commit, Draft PR, and
-  complete GitHub CI. Do not merge this branch directly into `main`.
+- Draft PR [#9](https://github.com/qiqimimi1002/daily_stock_analysis/pull/9)
+  was opened from `agent/history-coverage-reliability` and remains unmerged.
+  The first normalized PR head was
+  `f728f50f47959414d59d302e82dcdbcbe8ed1ec0`; all eight remote file blob SHAs
+  matched the locally tested commit, and the final diff contained only the
+  expected eight files without line-ending noise.
+- GitHub CI run
+  [#31162832930](https://github.com/qiqimimi1002/daily_stock_analysis/actions/runs/31162832930)
+  passed on that PR head: change detection, AI governance, backend-gate,
+  Docker build, Docker smoke, and Docker import checks succeeded; unrelated
+  desktop and web jobs were correctly skipped.
+- Delivery status: implementation, Run-19 diagnosis, local real-market
+  validation, Draft PR publication, and complete CI are finished. Keep PR #9
+  as Draft for human acceptance; do not merge it directly into `main`.
 
 ## 2026-08-04 screening-result readability work
 
