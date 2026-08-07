@@ -18,6 +18,7 @@ import json
 import logging
 import math
 import re
+import time as time_module
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass
 from datetime import datetime, time, timedelta
@@ -114,6 +115,9 @@ class ScreeningConfig:
     min_five_day_pct: float = -5.0
     max_five_day_pct: float = 12.0
     min_history_rows: int = 20
+    history_max_retries: int = 1
+    history_retry_delay_seconds: float = 0.5
+    history_consistency_tolerance_pct: float = 2.0
 
     def __post_init__(self) -> None:
         if self.top_n < 1:
@@ -130,6 +134,24 @@ class ScreeningConfig:
             raise ValueError("evidence_workers must be at least 1")
         if self.evidence_budget_seconds <= 0:
             raise ValueError("evidence_budget_seconds must be positive")
+        if self.history_max_retries < 0:
+            raise ValueError("history_max_retries cannot be negative")
+        if self.history_retry_delay_seconds < 0:
+            raise ValueError("history_retry_delay_seconds cannot be negative")
+        if self.history_consistency_tolerance_pct <= 0:
+            raise ValueError("history_consistency_tolerance_pct must be positive")
+
+
+@dataclass(frozen=True)
+class HistoryFetchResult:
+    frame: pd.DataFrame
+    metadata: Mapping[str, Any]
+
+
+class HistoryFetchError(RuntimeError):
+    def __init__(self, message: str, diagnostics: Mapping[str, Any]) -> None:
+        super().__init__(message)
+        self.diagnostics = dict(diagnostics)
 
 
 @dataclass(frozen=True)
@@ -185,6 +207,11 @@ class ScreeningResult:
     spot_filtered_count: int
     history_success_count: int
     history_failure_count: int
+    history_success_rate: Optional[float]
+    history_failure_reasons: Mapping[str, Any]
+    history_source_stats: Mapping[str, Any]
+    history_consistency: Mapping[str, Any]
+    history_data_quality: Mapping[str, Any]
     evidence_success_count: int
     evidence_failure_count: int
     candidates: Sequence[ScreeningCandidate]
@@ -202,6 +229,11 @@ class ScreeningResult:
             "spot_filtered_count": self.spot_filtered_count,
             "history_success_count": self.history_success_count,
             "history_failure_count": self.history_failure_count,
+            "history_success_rate": self.history_success_rate,
+            "history_failure_reasons": dict(self.history_failure_reasons),
+            "history_source_stats": dict(self.history_source_stats),
+            "history_consistency": dict(self.history_consistency),
+            "history_data_quality": dict(self.history_data_quality),
             "evidence_success_count": self.evidence_success_count,
             "evidence_failure_count": self.evidence_failure_count,
             "candidates": [candidate.as_dict() for candidate in self.candidates],
@@ -338,6 +370,63 @@ def normalize_history_frame(frame: pd.DataFrame) -> pd.DataFrame:
         .drop_duplicates(subset=["date"], keep="last")
     )
     return normalized.reset_index(drop=True)
+
+
+def classify_history_failure(exc: BaseException) -> str:
+    """Return a stable, non-sensitive history failure category."""
+
+    text = f"{type(exc).__name__}: {exc}".lower()
+    if any(
+        marker in text
+        for marker in (
+            "remotedisconnected",
+            "remote end closed",
+            "connection aborted",
+            "protocolerror",
+            "connection reset",
+        )
+    ):
+        return "remote_disconnect"
+    if any(marker in text for marker in ("timeout", "timed out", "readtimeout", "connecttimeout")):
+        return "timeout"
+    if "数据缺少必要字段" in text or "missing required" in text:
+        return "field_missing"
+    if "insufficient_history" in text or "历史数据不足" in text:
+        return "insufficient_history"
+    if "invalid_stock_code" in text or "代码映射" in text:
+        return "code_mapping_error"
+    if "data_conflict" in text or "跨源收盘价差异" in text:
+        return "data_conflict"
+    if "空表" in text or "日线为空" in text or "empty" in text:
+        return "empty_data"
+    return "provider_error"
+
+
+def _history_quality(success_count: int, total_count: int, conflict_count: int) -> Dict[str, Any]:
+    if total_count <= 0:
+        return {
+            "status": "not_applicable",
+            "confidence_label": "unavailable",
+            "warning": None,
+        }
+    success_rate = success_count / total_count * 100.0
+    if conflict_count > 0 or success_rate < 70.0:
+        status, confidence = "insufficient", "low"
+    elif success_rate < 90.0:
+        status, confidence = "degraded", "medium"
+    else:
+        status, confidence = "ok", "high"
+    warning = None
+    if status != "ok":
+        warning = (
+            f"历史行情覆盖率仅{success_rate:.2f}%，本次筛选置信度为{confidence}；"
+            "缺失或冲突数据不会被猜测补齐，也不会放宽原筛选标准。"
+        )
+    return {
+        "status": status,
+        "confidence_label": confidence,
+        "warning": warning,
+    }
 
 
 def apply_spot_filters(frame: pd.DataFrame, config: ScreeningConfig) -> pd.DataFrame:
@@ -584,9 +673,14 @@ class PublicMarketDataSource:
 
     name = "AKShare/东方财富；失败时使用新浪原始接口或 efinance"
 
-    def __init__(self) -> None:
+    def __init__(self, *, sleep: Callable[[float], None] = time_module.sleep) -> None:
         self._fundamental_manager = None
         self._fundamental_manager_lock = Lock()
+        self._history_cache: Dict[
+            tuple[str, str, str, int, float], HistoryFetchResult
+        ] = {}
+        self._history_cache_lock = Lock()
+        self._sleep = sleep
 
     def _get_fundamental_manager(self):
         if self._fundamental_manager is not None:
@@ -671,44 +765,254 @@ class PublicMarketDataSource:
             pd.concat(frames, ignore_index=True)
         )
 
+    @staticmethod
+    def _history_symbol(code: str) -> str:
+        normalized = normalize_stock_code(code)
+        if not is_main_board_code(normalized):
+            raise ValueError(f"invalid_stock_code: {code}")
+        return f"sh{normalized}" if normalized.startswith("6") else f"sz{normalized}"
+
+    @staticmethod
+    def _fetch_history_akshare_em(code: str, start: str, end: str) -> pd.DataFrame:
+        import akshare as ak
+
+        return ak.stock_zh_a_hist(
+            symbol=code,
+            period="daily",
+            start_date=start,
+            end_date=end,
+            adjust="qfq",
+        )
+
+    @classmethod
+    def _fetch_history_akshare_sina(cls, code: str, start: str, end: str) -> pd.DataFrame:
+        import akshare as ak
+
+        return ak.stock_zh_a_daily(
+            symbol=cls._history_symbol(code),
+            start_date=start,
+            end_date=end,
+            adjust="qfq",
+        )
+
+    @staticmethod
+    def _fetch_history_efinance(code: str, start: str, end: str) -> pd.DataFrame:
+        import efinance as ef
+
+        return ef.stock.get_quote_history(
+            code,
+            beg=start,
+            end=end,
+            klt=101,
+            fqt=1,
+        )
+
+    @staticmethod
+    def _validate_history_frame(frame: pd.DataFrame, min_rows: int) -> pd.DataFrame:
+        normalized = normalize_history_frame(frame)
+        if len(normalized) < min_rows:
+            raise ValueError(f"insufficient_history: rows={len(normalized)}, required={min_rows}")
+        if (normalized["close"] <= 0).any() or (normalized["volume"] < 0).any():
+            raise ValueError("历史数据包含非法价格或成交量")
+        return normalized
+
+    @staticmethod
+    def _compare_history_sources(
+        left: pd.DataFrame,
+        right: pd.DataFrame,
+        *,
+        tolerance_pct: float,
+    ) -> Dict[str, Any]:
+        now = datetime.now(CN_TZ)
+        if time(9, 15) <= now.time().replace(tzinfo=None) < time(15, 5):
+            left = left.loc[left["date"].dt.date < now.date()]
+            right = right.loc[right["date"].dt.date < now.date()]
+        common = left[["date", "close"]].merge(
+            right[["date", "close"]],
+            on="date",
+            suffixes=("_left", "_right"),
+        )
+        if common.empty:
+            return {"status": "no_overlap", "latest_common_date": None, "close_diff_pct": None}
+        latest = common.iloc[-1]
+        left_close = float(latest["close_left"])
+        right_close = float(latest["close_right"])
+        denominator = max(abs(left_close), abs(right_close))
+        diff_pct = abs(left_close - right_close) / denominator * 100.0 if denominator else math.inf
+        if not math.isfinite(diff_pct) or diff_pct > tolerance_pct:
+            raise ValueError(
+                f"data_conflict: 跨源收盘价差异{diff_pct:.4f}%超过{tolerance_pct:.2f}%"
+            )
+        return {
+            "status": "matched",
+            "latest_common_date": pd.Timestamp(latest["date"]).date().isoformat(),
+            "close_diff_pct": round(diff_pct, 6),
+        }
+
+    def fetch_history_with_meta(
+        self,
+        code: str,
+        *,
+        min_rows: int = 20,
+        max_retries: int = 1,
+        retry_delay_seconds: float = 0.5,
+        consistency_tolerance_pct: float = 2.0,
+    ) -> HistoryFetchResult:
+        end_date = datetime.now(CN_TZ).date()
+        start_date = end_date - timedelta(days=120)
+        start = start_date.strftime("%Y%m%d")
+        end = end_date.strftime("%Y%m%d")
+        normalized_code = normalize_stock_code(code)
+        cache_key = (
+            normalized_code,
+            start,
+            end,
+            int(min_rows),
+            float(consistency_tolerance_pct),
+        )
+        with self._history_cache_lock:
+            cached = self._history_cache.get(cache_key)
+        if cached is not None:
+            metadata = {**cached.metadata, "cache_hit": True}
+            return HistoryFetchResult(cached.frame.copy(), metadata)
+
+        providers = (
+            ("akshare_eastmoney", "eastmoney", self._fetch_history_akshare_em),
+            ("akshare_sina", "sina", self._fetch_history_akshare_sina),
+            ("efinance_eastmoney", "eastmoney", self._fetch_history_efinance),
+        )
+        provider_results: List[Dict[str, Any]] = []
+        valid_results: List[tuple[str, str, pd.DataFrame]] = []
+        retries = max(0, int(max_retries))
+        unavailable_families: set[str] = set()
+
+        for provider_name, family, fetcher in providers:
+            successful_families = {item[1] for item in valid_results}
+            if family in successful_families or family in unavailable_families:
+                provider_results.append(
+                    {
+                        "provider": provider_name,
+                        "backend_family": family,
+                        "attempts": 0,
+                        "retries": 0,
+                        "status": "skipped",
+                        "failure_reason": (
+                            "duplicate_backend"
+                            if family in successful_families
+                            else "same_backend_unavailable"
+                        ),
+                        "failure_reasons": {},
+                    }
+                )
+                continue
+            attempts = 0
+            last_reason: Optional[str] = None
+            observed_failures: Dict[str, int] = {}
+            while attempts <= retries:
+                attempts += 1
+                try:
+                    frame = self._validate_history_frame(
+                        fetcher(normalized_code, start, end),
+                        min_rows,
+                    )
+                    valid_results.append((provider_name, family, frame))
+                    provider_results.append(
+                        {
+                            "provider": provider_name,
+                            "backend_family": family,
+                            "attempts": attempts,
+                            "retries": attempts - 1,
+                            "status": "success",
+                            "failure_reason": None,
+                            "failure_reasons": dict(sorted(observed_failures.items())),
+                        }
+                    )
+                    break
+                except Exception as exc:  # pragma: no cover - live provider details vary
+                    last_reason = classify_history_failure(exc)
+                    observed_failures[last_reason] = observed_failures.get(last_reason, 0) + 1
+                    if last_reason not in {"remote_disconnect", "timeout"} or attempts > retries:
+                        provider_results.append(
+                            {
+                                "provider": provider_name,
+                                "backend_family": family,
+                                "attempts": attempts,
+                                "retries": attempts - 1,
+                                "status": "failure",
+                                "failure_reason": last_reason,
+                                "failure_reasons": dict(sorted(observed_failures.items())),
+                            }
+                        )
+                        if last_reason in {"remote_disconnect", "timeout"}:
+                            unavailable_families.add(family)
+                        break
+                    self._sleep(retry_delay_seconds * (2 ** (attempts - 1)))
+
+            families = {family_name for _, family_name, _ in valid_results}
+            if len(families) >= 2:
+                break
+
+        if not valid_results:
+            reasons = [item.get("failure_reason") for item in provider_results if item.get("failure_reason")]
+            failure_reason = reasons[0] if reasons and len(set(reasons)) == 1 else "all_sources_failed"
+            diagnostics = {
+                "failure_reason": failure_reason,
+                "providers": provider_results,
+                "cache_hit": False,
+                "consistency": {"status": "not_checked"},
+            }
+            raise HistoryFetchError(f"历史数据源全部失败: {failure_reason}", diagnostics)
+
+        primary_name, primary_family, primary_frame = valid_results[0]
+        independent = next(
+            (item for item in valid_results[1:] if item[1] != primary_family),
+            None,
+        )
+        if independent is None:
+            consistency = {
+                "status": "single_backend",
+                "compared_sources": [primary_name],
+                "latest_common_date": None,
+                "close_diff_pct": None,
+            }
+        else:
+            try:
+                consistency = {
+                    **self._compare_history_sources(
+                        primary_frame,
+                        independent[2],
+                        tolerance_pct=consistency_tolerance_pct,
+                    ),
+                    "compared_sources": [primary_name, independent[0]],
+                }
+            except ValueError as exc:
+                diagnostics = {
+                    "failure_reason": "data_conflict",
+                    "providers": provider_results,
+                    "cache_hit": False,
+                    "consistency": {
+                        "status": "conflict",
+                        "compared_sources": [primary_name, independent[0]],
+                    },
+                }
+                raise HistoryFetchError(str(exc), diagnostics) from exc
+
+        result = HistoryFetchResult(
+            frame=primary_frame.copy(),
+            metadata={
+                "selected_source": primary_name,
+                "providers": provider_results,
+                "cache_hit": False,
+                "consistency": consistency,
+            },
+        )
+        with self._history_cache_lock:
+            self._history_cache[cache_key] = result
+        return result
+
     def fetch_history(self, code: str) -> pd.DataFrame:
-        end = datetime.now(CN_TZ).date()
-        start = end - timedelta(days=120)
-        errors: List[str] = []
-
-        try:
-            import akshare as ak
-
-            frame = ak.stock_zh_a_hist(
-                symbol=code,
-                period="daily",
-                start_date=start.strftime("%Y%m%d"),
-                end_date=end.strftime("%Y%m%d"),
-                adjust="qfq",
-            )
-            if frame is not None and not frame.empty:
-                return frame
-            errors.append("AKShare 日线为空")
-        except Exception as exc:  # pragma: no cover - live provider
-            errors.append(f"AKShare: {exc}")
-
-        try:
-            import efinance as ef
-
-            frame = ef.stock.get_quote_history(
-                code,
-                beg=start.strftime("%Y%m%d"),
-                end=end.strftime("%Y%m%d"),
-                klt=101,
-                fqt=1,
-            )
-            if frame is not None and not frame.empty:
-                return frame
-            errors.append("efinance 日线为空")
-        except Exception as exc:  # pragma: no cover - live provider
-            errors.append(f"efinance: {exc}")
-
-        raise RuntimeError("；".join(errors))
+        # Compatibility wrapper keeps the original DataFrame return type.
+        return self.fetch_history_with_meta(code).frame
 
     def fetch_evidence(
         self,
@@ -764,7 +1068,16 @@ class MarketScreener:
                 "active_quote_count": len(active_spot),
             }
         filtered = apply_spot_filters(raw_spot, self.config)
-        fetch_history = history_fetcher or self.data_source.fetch_history
+        if history_fetcher is None:
+            fetch_history: Callable[[str], Any] = lambda code: self.data_source.fetch_history_with_meta(
+                code,
+                min_rows=self.config.min_history_rows,
+                max_retries=self.config.history_max_retries,
+                retry_delay_seconds=self.config.history_retry_delay_seconds,
+                consistency_tolerance_pct=self.config.history_consistency_tolerance_pct,
+            )
+        else:
+            fetch_history = history_fetcher
 
         candidate_inputs: List[
             tuple[Mapping[str, Any], Mapping[str, Any], ScreeningCandidate]
@@ -774,6 +1087,54 @@ class MarketScreener:
         evidence_success = 0
         evidence_failures = 0
         intraday_mode = False
+        failure_reason_counts: Dict[str, int] = {}
+        failure_by_code: List[Dict[str, str]] = []
+        source_stats: Dict[str, Dict[str, Any]] = {}
+        consistency_counts: Dict[str, int] = {}
+        history_cache_hits = 0
+
+        def record_history_metadata(metadata: Mapping[str, Any]) -> None:
+            nonlocal history_cache_hits
+            if metadata.get("cache_hit"):
+                history_cache_hits += 1
+            for provider in metadata.get("providers", []):
+                if not isinstance(provider, Mapping):
+                    continue
+                name = str(provider.get("provider") or "unknown")
+                stats = source_stats.setdefault(
+                    name,
+                    {
+                        "attempts": 0,
+                        "successes": 0,
+                        "failures": 0,
+                        "skipped": 0,
+                        "retries": 0,
+                        "failure_reasons": {},
+                    },
+                )
+                stats["attempts"] += int(provider.get("attempts") or 0)
+                stats["retries"] += int(provider.get("retries") or 0)
+                if provider.get("status") == "success":
+                    stats["successes"] += 1
+                elif provider.get("status") == "skipped":
+                    stats["skipped"] += 1
+                else:
+                    stats["failures"] += 1
+                provider_reasons = provider.get("failure_reasons", {})
+                if isinstance(provider_reasons, Mapping):
+                    for reason, count in provider_reasons.items():
+                        normalized_reason = str(reason)
+                        stats["failure_reasons"][normalized_reason] = (
+                            stats["failure_reasons"].get(normalized_reason, 0) + int(count or 0)
+                        )
+            consistency = metadata.get("consistency", {})
+            if isinstance(consistency, Mapping):
+                status = str(consistency.get("status") or "not_checked")
+                consistency_counts[status] = consistency_counts.get(status, 0) + 1
+
+        def record_history_failure(code: str, reason: str) -> None:
+            failure_reason_counts[reason] = failure_reason_counts.get(reason, 0) + 1
+            failure_by_code.append({"stock_code": code, "reason": reason})
 
         rows = [row._asdict() for row in filtered.itertuples(index=False)]
         with ThreadPoolExecutor(max_workers=self.config.history_workers) as executor:
@@ -784,13 +1145,33 @@ class MarketScreener:
             for future in as_completed(futures):
                 row = futures[future]
                 try:
+                    fetched = future.result()
+                    if isinstance(fetched, HistoryFetchResult):
+                        history_frame = fetched.frame
+                        record_history_metadata(fetched.metadata)
+                    else:
+                        history_frame = fetched
+                        record_history_metadata(
+                            {
+                                "providers": [
+                                    {
+                                        "provider": "injected",
+                                        "attempts": 1,
+                                        "retries": 0,
+                                        "status": "success",
+                                    }
+                                ],
+                                "consistency": {"status": "not_checked_injected"},
+                            }
+                        )
                     metrics = calculate_history_metrics(
-                        future.result(),
+                        history_frame,
                         min_rows=self.config.min_history_rows,
                         reference_price=float(row["close"]),
                     )
                     if metrics is None:
                         failures += 1
+                        record_history_failure(str(row["code"]), "insufficient_history")
                         continue
                     intraday_mode = intraday_mode or bool(
                         metrics.get("is_intraday", False)
@@ -799,9 +1180,17 @@ class MarketScreener:
                     candidate = build_candidate(row, metrics, self.config)
                     if candidate is not None:
                         candidate_inputs.append((row, metrics, candidate))
+                except HistoryFetchError as exc:
+                    failures += 1
+                    record_history_metadata(exc.diagnostics)
+                    reason = str(exc.diagnostics.get("failure_reason") or "provider_error")
+                    record_history_failure(str(row["code"]), reason)
+                    logger.warning("历史数据获取或计算失败 %s: %s", row["code"], reason)
                 except Exception as exc:
                     failures += 1
-                    logger.warning("历史数据获取或计算失败 %s: %s", row["code"], exc)
+                    reason = classify_history_failure(exc)
+                    record_history_failure(str(row["code"]), reason)
+                    logger.warning("历史数据获取或计算失败 %s: %s", row["code"], reason)
 
         # Expensive fundamentals and capital-flow requests are limited to the
         # strongest transparent price/volume candidates.
@@ -889,6 +1278,30 @@ class MarketScreener:
             "历史类似信号胜率和5/10/20日表现将在V2.2积累足够样本后展示。",
             "重大公告、监管处罚和异常事项仍由候选股深度分析继续复核。",
         ]
+        history_total = success + failures
+        history_success_rate = (
+            round(success / history_total * 100.0, 2)
+            if history_total
+            else None
+        )
+        history_data_quality = _history_quality(
+            success,
+            history_total,
+            consistency_counts.get("conflict", 0),
+        )
+        if history_data_quality.get("warning"):
+            limitations.append(str(history_data_quality["warning"]))
+        finalized_source_stats: Dict[str, Any] = {}
+        for name, stats in sorted(source_stats.items()):
+            completed = stats["successes"] + stats["failures"]
+            finalized_source_stats[name] = {
+                **stats,
+                "success_rate": (
+                    round(stats["successes"] / completed * 100.0, 2)
+                    if completed
+                    else None
+                ),
+            }
         if intraday_mode:
             limitations.append(
                 "盘中运行时，当日未完成K线不参与日线均线和量能计算；"
@@ -900,6 +1313,22 @@ class MarketScreener:
             spot_filtered_count=len(filtered),
             history_success_count=success,
             history_failure_count=failures,
+            history_success_rate=history_success_rate,
+            history_failure_reasons={
+                "counts": dict(sorted(failure_reason_counts.items())),
+                "by_code": sorted(failure_by_code, key=lambda item: item["stock_code"]),
+            },
+            history_source_stats={
+                **finalized_source_stats,
+                "cache_hits": history_cache_hits,
+            },
+            history_consistency={
+                "status_counts": dict(sorted(consistency_counts.items())),
+                "checked_count": consistency_counts.get("matched", 0),
+                "conflict_count": consistency_counts.get("conflict", 0),
+                "single_backend_count": consistency_counts.get("single_backend", 0),
+            },
+            history_data_quality=history_data_quality,
             evidence_success_count=evidence_success,
             evidence_failure_count=evidence_failures,
             candidates=tuple(ranked),
