@@ -13,10 +13,14 @@ A股自选股智能分析系统 - AI分析层
 import json
 import logging
 import math
+import os
+from datetime import datetime
+from pathlib import Path
 import re
 import time
 from dataclasses import dataclass
 from typing import Optional, Dict, Any, List, Tuple, Callable
+from zoneinfo import ZoneInfo
 
 import litellm
 from json_repair import repair_json
@@ -51,6 +55,11 @@ from src.llm.hermes import (
 )
 from src.llm.generation_params import apply_litellm_generation_params
 from src.llm.errors import call_litellm_with_param_recovery
+from src.llm.retry_policy import (
+    append_retry_event,
+    classify_gemini_error,
+    run_with_gemini_retries,
+)
 from src.llm.backend_registry import (
     LOCAL_CLI_GENERATION_BACKEND_IDS,
     LITELLM_BACKEND_ID,
@@ -2531,7 +2540,16 @@ class GeminiAnalyzer:
             elif len(legacy_model_list) < len(configured_model_list):
                 legacy_model_list = configured_model_list
 
-        if len(legacy_model_list) > 1:
+        controlled_gemini_rotation = litellm_model.startswith("gemini/") and len(keys) > 1
+        if len(legacy_model_list) > 1 and controlled_gemini_rotation:
+            # Do not let Router shuffle Gemini keys on ordinary business errors.
+            # The stock-aware retry policy selects a new key only after an explicit 429.
+            self._legacy_router_model_list = legacy_model_list
+            logger.info(
+                "Analyzer LLM: controlled Gemini key rotation enabled with %d keys",
+                len(keys),
+            )
+        elif len(legacy_model_list) > 1:
             self._legacy_router_model_list = legacy_model_list
             try:
                 self._router = Router(
@@ -2781,7 +2799,7 @@ class GeminiAnalyzer:
             return self._router.completion(**effective_kwargs)
 
         keys = get_api_keys_for_model(model, config)
-        if keys:
+        if keys and "api_key" not in effective_kwargs:
             effective_kwargs["api_key"] = keys[0]
         effective_kwargs.update(extra_litellm_params(model, config))
         return litellm.completion(**effective_kwargs)
@@ -3120,8 +3138,9 @@ class GeminiAnalyzer:
         requested_temperature = generation_config.get('temperature', 0.7)
         requested_timeout = generation_config.get("timeout")
 
-        models_to_try = [config.litellm_model] + (config.litellm_fallback_models or [])
-        models_to_try = [m for m in models_to_try if m]
+        models_to_try = list(dict.fromkeys(
+            m for m in [config.litellm_model, *(config.litellm_fallback_models or [])] if m
+        ))
 
         use_channel_router = self._has_channel_config(config)
 
@@ -3131,6 +3150,7 @@ class GeminiAnalyzer:
         last_usage: Dict[str, Any] = {}
         effective_system_prompt = system_prompt or self.TEXT_SYSTEM_PROMPT
         router_model_names = set(get_configured_llm_models(config.llm_model_list))
+        gemini_key_index = int(generation_config.get("_gemini_api_key_index", 0) or 0)
         for model in models_to_try:
             origins = route_deployment_origins(config.llm_model_list, model)
             model_stream = bool(stream and not origins.has_hermes)
@@ -3188,7 +3208,8 @@ class GeminiAnalyzer:
                     except AttributeError:
                         keys = []
                     if keys:
-                        call_kwargs["api_key"] = keys[0]
+                        selected_index = gemini_key_index if model.startswith("gemini/") else 0
+                        call_kwargs["api_key"] = keys[min(selected_index, len(keys) - 1)]
                     try:
                         call_kwargs.update(extra_litellm_params(model, config))
                     except AttributeError:
@@ -3241,6 +3262,8 @@ class GeminiAnalyzer:
                         )
                     except _LiteLLMStreamError as exc:
                         safe_error = self._sanitize_litellm_exception_text(exc, config=config, model=model)
+                        if model.startswith("gemini/") and classify_gemini_error(RuntimeError(safe_error)) != "non_retryable":
+                            raise RuntimeError(safe_error) from exc
                         if exc.partial_received:
                             logger.warning(
                                 "[LiteLLM] %s stream failed after partial output, retrying non-stream for same model: %s",
@@ -3256,6 +3279,8 @@ class GeminiAnalyzer:
                         last_error = RuntimeError(f"{type(exc).__name__}: {safe_error}")
                     except Exception as exc:
                         safe_error = self._sanitize_litellm_exception_text(exc, config=config, model=model)
+                        if model.startswith("gemini/") and classify_gemini_error(RuntimeError(safe_error)) != "non_retryable":
+                            raise RuntimeError(safe_error) from exc
                         logger.warning(
                             "[LiteLLM] %s stream request failed before first chunk, falling back to non-stream: %s",
                             model,
@@ -3555,18 +3580,61 @@ class GeminiAnalyzer:
             retry_count = 0
             max_retries = config.report_integrity_retry if config.report_integrity_enabled else 0
 
+            def _record_retry_event(event: Dict[str, Any]) -> None:
+                safe_event = {
+                    **event,
+                    "stock_code": code,
+                    "model": model_name,
+                    "recorded_at": datetime.now(ZoneInfo("Asia/Shanghai")).isoformat(timespec="seconds"),
+                }
+                logger.warning("[LLM_RETRY] %s", json.dumps(safe_event, ensure_ascii=False, sort_keys=True))
+                event_path = os.getenv("LLM_RETRY_EVENTS_PATH", "").strip()
+                if event_path:
+                    try:
+                        append_retry_event(Path(event_path), safe_event)
+                    except (OSError, TypeError, ValueError) as event_error:
+                        logger.warning("[LLM_RETRY] event persistence failed: %s", type(event_error).__name__)
+
+            gemini_retry_enabled = (
+                backend_id == LITELLM_BACKEND_ID
+                and str(config.litellm_model or "").startswith("gemini/")
+            )
+            if gemini_retry_enabled:
+                try:
+                    gemini_key_count = len(get_api_keys_for_model(config.litellm_model, config))
+                except AttributeError:
+                    gemini_key_count = 1
+            else:
+                gemini_key_count = 1
+
             while True:
                 start_time = time.time()
                 try:
-                    response_text, model_used, llm_usage = self._call_litellm(
-                        current_prompt,
-                        generation_config,
-                        system_prompt=system_prompt,
-                        stream=True,
-                        stream_progress_callback=stream_progress_callback,
-                        response_validator=self._validate_json_response,
-                        audit_context=legacy_audit_context,
-                    )
+                    def _call_once(key_index: int) -> Tuple[str, str, Dict[str, Any]]:
+                        retry_generation_config = dict(generation_config)
+                        retry_generation_config["_gemini_api_key_index"] = key_index
+                        return self._call_litellm(
+                            current_prompt,
+                            retry_generation_config,
+                            system_prompt=system_prompt,
+                            stream=True,
+                            stream_progress_callback=stream_progress_callback,
+                            response_validator=self._validate_json_response,
+                            audit_context=legacy_audit_context,
+                        )
+
+                    if gemini_retry_enabled:
+                        response_text, model_used, llm_usage = run_with_gemini_retries(
+                            _call_once,
+                            key_count=gemini_key_count,
+                            max_retries=getattr(config, "gemini_max_retries", 2),
+                            base_delay=getattr(config, "gemini_retry_delay", 5.0),
+                            max_delay=getattr(config, "gemini_retry_max_delay", 30.0),
+                            sleep=time.sleep,
+                            on_event=_record_retry_event,
+                        )
+                    else:
+                        response_text, model_used, llm_usage = _call_once(0)
                 except _AllModelsFailedError as exc:
                     if exc.last_response_text is not None:
                         logger.warning(

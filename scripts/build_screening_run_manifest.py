@@ -69,6 +69,37 @@ def _coverage(candidates: Sequence[Mapping[str, Any]]) -> tuple[Optional[float],
     return round(sum(values) / len(values), 2), round(min(values), 2)
 
 
+def _load_retry_events(logs_dir: Path | None) -> list[dict[str, Any]]:
+    if logs_dir is None:
+        return []
+    path = logs_dir / "llm_retry_events.jsonl"
+    if not path.is_file():
+        return []
+    events: list[dict[str, Any]] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(event, dict):
+            allowed = {
+                "action",
+                "attempt",
+                "max_attempts",
+                "error_type",
+                "delay_seconds",
+                "key_index",
+                "key_switched",
+                "stock_code",
+                "model",
+                "recorded_at",
+            }
+            events.append({key: event.get(key) for key in allowed if key in event})
+    return events
+
+
 def build_manifest(
     *,
     repository_root: Path,
@@ -83,6 +114,7 @@ def build_manifest(
     deep_analysis_requested: bool,
     started_at: datetime,
     completed_at: datetime,
+    logs_dir: Path | None = None,
 ) -> dict[str, Any]:
     """Return a final manifest even when the screening output is incomplete."""
     if started_at.tzinfo is None or started_at.utcoffset() is None:
@@ -184,14 +216,40 @@ def build_manifest(
     trade_date = (generated_at or started_at).date().isoformat()
     average_coverage, minimum_coverage = _coverage(candidates)
 
-    result_files = [path for path in [screening_json, codes_path, *screening_reports, *deep_reports] if path]
+    retry_events = _load_retry_events(logs_dir)
+    deep_analysis_failures = [
+        {
+            "stock_code": event.get("stock_code"),
+            "error_type": event.get("error_type"),
+            "attempts": event.get("attempt"),
+            "max_attempts": event.get("max_attempts"),
+        }
+        for event in retry_events
+        if event.get("action") == "exhausted"
+        and event.get("error_type") in {"gemini_429", "gemini_503"}
+    ]
+    reason_codes: list[str] = []
+    if deep_status == "incomplete":
+        reason_codes.append("deep_analysis_incomplete")
+    reason_codes.extend(
+        str(event["error_type"])
+        for event in retry_events
+        if event.get("error_type") in {"gemini_429", "gemini_503"}
+    )
+    retry_event_path = logs_dir / "llm_retry_events.jsonl" if logs_dir else None
+
+    result_files = [
+        path
+        for path in [screening_json, codes_path, *screening_reports, *deep_reports, retry_event_path]
+        if path
+    ]
     file_hashes = {
         path.relative_to(repository_root).as_posix(): _sha256(path)
         for path in result_files
         if path.is_file()
     }
     manifest = {
-        "schema_version": "1.0",
+        "schema_version": "1.1",
         "trade_date": trade_date,
         "workflow_name": workflow_name,
         "run_id": str(run_id),
@@ -221,6 +279,9 @@ def build_manifest(
         "screening_reports": _relative_files(screening_reports, root=repository_root),
         "deep_analysis_reports": _relative_files(deep_reports, root=repository_root),
         "deep_analysis_missing_codes": missing_deep_codes,
+        "llm_retry_events": retry_events,
+        "deep_analysis_failures": deep_analysis_failures,
+        "reason_codes": list(dict.fromkeys(reason_codes)),
         "artifact_name": artifact_name,
         "fixed_result_entry": {
             "branch": "screening-results",
@@ -267,6 +328,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--data-dir", type=Path, default=Path("data"))
     parser.add_argument("--reports-dir", type=Path, default=Path("reports"))
+    parser.add_argument("--logs-dir", type=Path, default=Path("logs"))
     parser.add_argument("--output", type=Path, default=Path("data/screening_run_manifest.json"))
     parser.add_argument("--workflow-name", default="全市场初筛")
     parser.add_argument("--run-id", required=True)
@@ -303,6 +365,7 @@ def main() -> int:
             deep_analysis_requested=_bool(args.deep_analysis_requested),
             started_at=started_at,
             completed_at=completed_at,
+            logs_dir=args.logs_dir.resolve(),
         )
     except (OSError, ValueError, TypeError) as exc:
         print(f"manifest_error: {exc}")
