@@ -56,9 +56,18 @@
   Python files, and `git diff --check` passed. A fixed-time duplicate-run
   simulation returned `should_run=false`, referenced the existing valid run,
   and made zero market-fetch and deep-analysis calls.
-- Delivery status: local implementation and focused regression validation are
-  complete. Create a Draft PR, run the repository's full GitHub CI, and keep
-  the PR unmerged for human acceptance.
+- Draft PR [#10](https://github.com/qiqimimi1002/daily_stock_analysis/pull/10)
+  was opened from `agent/schedule-fallback-idempotency`; the implementation
+  commit is `d50c041d3a05fb4ca7b1f3c939c97d732e31be93`.
+- Full GitHub CI run
+  [#31356692920](https://github.com/qiqimimi1002/daily_stock_analysis/actions/runs/31356692920)
+  passed: change detection, AI governance, backend-gate with the complete
+  offline suite, Docker build, Docker smoke, and Docker import checks all
+  succeeded; unrelated desktop and web jobs were correctly skipped.
+- Delivery status: implementation, local verification, Draft PR publication,
+  and full CI are complete. Keep PR #10 as Draft and unmerged for human
+  acceptance. Draft PR #6 remains unchanged at
+  `50c995dc10765bb0bb822212663b7cd1b4c35120`.
 
 ## 2026-08-04 executable reader and Gemini retry work
 
