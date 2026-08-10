@@ -1,6 +1,6 @@
 # Project Status
 
-> Last updated: 2026-08-07 (Asia/Shanghai)
+> Last updated: 2026-08-10 (Asia/Shanghai)
 >
 > Codex workflow rule: read this file before substantial project work and
 > update it after every completed material task. Complete safe in-scope work
@@ -64,10 +64,47 @@
   passed: change detection, AI governance, backend-gate with the complete
   offline suite, Docker build, Docker smoke, and Docker import checks all
   succeeded; unrelated desktop and web jobs were correctly skipped.
-- Delivery status: implementation, local verification, Draft PR publication,
-  and full CI are complete. Keep PR #10 as Draft and unmerged for human
-  acceptance. Draft PR #6 remains unchanged at
+- Delivery status: PR #10 passed final acceptance, was marked Ready, and was
+  squash-merged into `main` as
+  `440b788d8d922818e4727b0f5a4fe38be6591e7a`. The source branch is retained.
+  Draft PR #6 remains unchanged at
   `50c995dc10765bb0bb822212663b7cd1b4c35120`.
+
+### PR #10 final acceptance and production validation
+
+- Final acceptance fixed one backward-compatibility edge: a schema <= 1.2
+  manifest without `branch` can block a duplicate only when its Actions run
+  still matches the same trade date, branch, run ID, and run number. A manifest
+  that explicitly names another branch remains ineligible.
+- The final PR head was
+  `c42b21a9779d631a38104a6ed1c197f18e8e2d25`. Local verification finished with
+  72 focused guard/manifest/reader/history/V2.1 tests passing, plus Python
+  compilation, critical flake8, YAML parsing, and diff checks.
+- Final CI run
+  [#31358134944](https://github.com/qiqimimi1002/daily_stock_analysis/actions/runs/31358134944)
+  passed. Change detection, AI governance, backend-gate (11m07s), Docker build,
+  Docker smoke, and Docker import checks succeeded; unrelated desktop/web jobs
+  were skipped.
+- First post-merge `main` production validation: run number 20 / ID
+  `31358801924`, 2026-08-10 13:30:21 to 13:37:31 Asia/Shanghai. It completed
+  successfully with five candidates, all three requested deep analyses, 60/60
+  history coverage, `history_data_quality=ok`, and `integrity.ok=true`.
+  Artifact `market-screening-20` has ID `9051702070`; the fixed entry published
+  schema 1.3 and the reader returned Run 20 as `success`.
+- Same-day duplicate validation: manual run number 21 / ID `31359249085`
+  completed in 22 seconds. It executed the pre-dependency guard, recorded
+  `existing_valid_screening_result` referencing Run 20, and skipped Python
+  setup, dependency installation, market screening, candidate loading, deep
+  analysis, manifest rebuilding, and fixed-entry publication. Its guard-only
+  Artifact `market-screening-21` has ID `9051730244`.
+- After Run 21, the reader still resolved the effective result to Run 20 and
+  returned `success` with reason `idempotent_run_skipped`; no duplicate market
+  fetch or deep analysis occurred. The 2026-08-07 fixed entry did not block the
+  first 2026-08-10 run.
+- Remaining acceptance work is operational observation of the 09:40, 09:55,
+  and 10:10 schedule slots for 1-3 trading days. Do not change scoring or merge
+  PR #6 during this observation; the next development phase is historical-data
+  coverage work only after schedule reliability is accepted.
 
 ## 2026-08-04 executable reader and Gemini retry work
 
