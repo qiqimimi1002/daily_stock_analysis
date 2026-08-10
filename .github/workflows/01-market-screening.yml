@@ -2,9 +2,11 @@ name: 全市场初筛
 
 on:
   schedule:
-    # 工作日北京时间 09:40；开盘后再使用成交额和换手率，避免盘前零值。
-    # GitHub 定时任务可能有数分钟延迟。
+    # 工作日北京时间 09:40 正常触发，09:55/10:10 作为调度延迟兜底。
+    # 执行守卫按北京时间日期保证同一天只生产一次有效初筛结果。
     - cron: "40 1 * * 1-5"
+    - cron: "55 1 * * 1-5"
+    - cron: "10 2 * * 1-5"
   workflow_dispatch:
     inputs:
       top_n:
@@ -32,6 +34,7 @@ concurrency:
 
 permissions:
   contents: write
+  actions: read
 
 jobs:
   screen:
@@ -41,26 +44,56 @@ jobs:
       - name: 检出代码
         uses: actions/checkout@v5
 
-      - name: 记录运行开始时间
+      - name: 创建输出目录
+        run: mkdir -p data reports logs
+
+      - name: 检查当天是否需要执行初筛
+        id: execution_guard
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
-        run: echo "SCREENING_RUN_STARTED_AT=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_ENV"
+        run: |
+          python3 scripts/screening_run_guard.py check \
+            --repository "${{ github.repository }}" \
+            --workflow-file "01-market-screening.yml" \
+            --workflow-name "全市场初筛" \
+            --branch "${{ github.ref_name }}" \
+            --run-id "${{ github.run_id }}" \
+            --run-number "${{ github.run_number }}" \
+            --event-name "${{ github.event_name }}" \
+            --event-schedule "${{ github.event.schedule || '' }}" \
+            --output data/screening_execution_guard.json \
+            --log logs/screening_execution_guard.log \
+            --github-output "$GITHUB_OUTPUT" \
+            --summary "$GITHUB_STEP_SUMMARY"
 
       - name: 设置 Python 环境
+        if: steps.execution_guard.outputs.should_run == 'true'
         uses: actions/setup-python@v6
         with:
           python-version: "3.11"
           cache: pip
 
       - name: 安装依赖
+        if: steps.execution_guard.outputs.should_run == 'true'
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: 创建输出目录
-        run: mkdir -p data reports logs
+      - name: 记录实际初筛开始时间
+        if: steps.execution_guard.outputs.should_run == 'true'
+        shell: bash
+        run: |
+          SCREENING_STARTED_AT="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          echo "SCREENING_RUN_STARTED_AT=$SCREENING_STARTED_AT" >> "$GITHUB_ENV"
+          python scripts/screening_run_guard.py mark-started \
+            --context data/screening_execution_guard.json \
+            --started-at "$SCREENING_STARTED_AT" \
+            --log logs/screening_execution_guard.log
 
       - name: 执行沪深主板全市场初筛
         id: screening
+        if: steps.execution_guard.outputs.should_run == 'true'
         env:
           SCREEN_TOP_N: ${{ inputs.top_n || vars.SCREEN_TOP_N || '5' }}
           SCREEN_ANALYSIS_LIMIT: ${{ vars.SCREEN_ANALYSIS_LIMIT || '3' }}
@@ -82,7 +115,9 @@ jobs:
 
       - name: 读取候选代码
         id: selected
-        if: steps.screening.outcome == 'success'
+        if: >-
+          steps.execution_guard.outputs.should_run == 'true' &&
+          steps.screening.outcome == 'success'
         shell: bash
         run: |
           CODES="$(tr -d '\r\n ' < data/screened_codes.txt)"
@@ -92,6 +127,7 @@ jobs:
       - name: 对候选运行 Daily Stock 深度分析
         id: deep_analysis
         if: >-
+          steps.execution_guard.outputs.should_run == 'true' &&
           steps.selected.outputs.codes != '' &&
           (github.event_name == 'schedule' || inputs.run_deep_analysis)
         env:
@@ -127,7 +163,7 @@ jobs:
             $FORCE_ARG
 
       - name: 生成并校验运行清单
-        if: always()
+        if: ${{ always() && steps.execution_guard.outputs.should_run == 'true' }}
         env:
           SCREENING_OUTCOME: ${{ steps.screening.outcome || 'skipped' }}
           DEEP_ANALYSIS_OUTCOME: ${{ steps.deep_analysis.outcome || 'skipped' }}
@@ -137,17 +173,22 @@ jobs:
           python scripts/build_screening_run_manifest.py \
             --run-id "${{ github.run_id }}" \
             --run-number "${{ github.run_number }}" \
+            --branch "${{ github.ref_name }}" \
             --artifact-name "market-screening-${{ github.run_number }}" \
             --screening-outcome "$SCREENING_OUTCOME" \
             --deep-analysis-outcome "$DEEP_ANALYSIS_OUTCOME" \
             --deep-analysis-requested "$DEEP_ANALYSIS_REQUESTED" \
             --started-at "$SCREENING_RUN_STARTED_AT" \
             --completed-at "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
+            --execution-context data/screening_execution_guard.json \
             --summary "$GITHUB_STEP_SUMMARY" \
             --strict
 
       - name: 发布固定结果入口
-        if: always() && hashFiles('data/screening_run_manifest.json') != ''
+        if: >-
+          always() &&
+          steps.execution_guard.outputs.should_run == 'true' &&
+          hashFiles('data/screening_run_manifest.json') != ''
         continue-on-error: true
         shell: bash
         run: |
@@ -203,6 +244,7 @@ jobs:
           path: |
             data/market_screening_*.json
             data/screened_codes.txt
+            data/screening_execution_guard.json
             data/screening_run_manifest.json
             reports/*.md
             logs/*.log

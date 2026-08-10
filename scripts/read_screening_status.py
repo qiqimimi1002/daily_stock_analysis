@@ -219,7 +219,11 @@ class GitHubReader:
             return None
         return payload if isinstance(payload, Mapping) else None
 
-    def read_artifact_manifest(self, run_id: Any) -> tuple[Mapping[str, Any] | None, bool]:
+    def _read_artifact_json(
+        self,
+        run_id: Any,
+        member_names: tuple[str, ...],
+    ) -> tuple[Mapping[str, Any] | None, bool]:
         list_url = f"https://api.github.com/repos/{self.repository}/actions/runs/{run_id}/artifacts"
         try:
             payload = self.json(list_url)
@@ -229,13 +233,51 @@ class GitHubReader:
                 return None, False
             archive = self._request(str(artifact["archive_download_url"]))
             with zipfile.ZipFile(io.BytesIO(archive)) as bundle:
-                member = next((name for name in bundle.namelist() if name.endswith("data/screening_run_manifest.json") or name == "screening_run_manifest.json"), None)
+                member = next(
+                    (
+                        name
+                        for name in bundle.namelist()
+                        if any(name.endswith(candidate) or name == candidate.rsplit("/", 1)[-1] for candidate in member_names)
+                    ),
+                    None,
+                )
                 if member is None:
                     return None, True
                 parsed = json.loads(bundle.read(member))
                 return (parsed if isinstance(parsed, Mapping) else None), True
         except (OSError, ValueError, KeyError, zipfile.BadZipFile, urllib.error.HTTPError):
             return None, False
+
+    def read_artifact_manifest(self, run_id: Any) -> tuple[Mapping[str, Any] | None, bool]:
+        return self._read_artifact_json(run_id, ("data/screening_run_manifest.json",))
+
+    def read_artifact_guard(self, run_id: Any) -> tuple[Mapping[str, Any] | None, bool]:
+        return self._read_artifact_json(run_id, ("data/screening_execution_guard.json",))
+
+
+def _resolve_idempotent_skip(
+    reader: GitHubReader,
+    run: Mapping[str, Any],
+    runs: list[Mapping[str, Any]],
+    trade_date: str,
+) -> tuple[Mapping[str, Any], bool]:
+    """Resolve a completed no-op run to the valid run that caused the skip."""
+    guard, _ = reader.read_artifact_guard(run.get("id"))
+    if not guard or not guard.get("idempotency_skipped"):
+        return run, False
+    existing_id = str(guard.get("existing_run_id") or "")
+    existing_number = str(guard.get("existing_run_number") or "")
+    for candidate in runs:
+        if str(candidate.get("id") or "") != existing_id:
+            continue
+        if str(candidate.get("run_number") or "") != existing_number:
+            continue
+        if candidate.get("head_branch") != run.get("head_branch"):
+            continue
+        if not _run_matches_trade_date(candidate, trade_date):
+            continue
+        return candidate, True
+    return run, False
 
 
 def read_status(
@@ -265,9 +307,10 @@ def read_status(
     status = str(run.get("status") or "").lower()
     if status in QUEUED_STATES or status == "in_progress":
         return classify_screening_status(trade_date=trade_date, run=run)
+    run, skip_resolved = _resolve_idempotent_skip(reader, run, runs, trade_date)
     fixed = reader.read_fixed_manifest()
     artifact, artifact_reachable = reader.read_artifact_manifest(run.get("id"))
-    return classify_screening_status(
+    result = classify_screening_status(
         trade_date=trade_date,
         run=run,
         fixed_manifest=fixed,
@@ -275,6 +318,11 @@ def read_status(
         fixed_entry_reachable=fixed is not None,
         artifact_reachable=artifact_reachable,
     )
+    if skip_resolved:
+        result["reason_codes"] = list(
+            dict.fromkeys([*result.get("reason_codes", []), "idempotent_run_skipped"])
+        )
+    return result
 
 
 def main() -> int:
