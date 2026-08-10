@@ -124,6 +124,22 @@ class ScreeningRunGuardTest(unittest.TestCase):
         self.assertFalse(result["should_run"])
         self.assertEqual(result["skip_reason"], "existing_valid_screening_result")
 
+    def test_legacy_manifest_without_branch_prevents_full_rerun(self) -> None:
+        earlier = run(30, 30, "completed", conclusion="failure")
+        current = run(31, 31, "in_progress", created_at="2026-08-10T02:10:00Z")
+        fixed = manifest(earlier, status="partial_success", errors=["deep_analysis_incomplete"])
+        fixed.pop("branch")
+        result = self._decide(current=current, runs=[current, earlier], fixed=fixed)
+        self.assertFalse(result["should_run"])
+        self.assertEqual(result["skip_reason"], "existing_valid_screening_result")
+
+    def test_manifest_for_other_branch_does_not_block_run(self) -> None:
+        earlier = run(30, 30, "completed", conclusion="failure")
+        fixed = manifest(earlier, status="partial_success", errors=["deep_analysis_incomplete"])
+        fixed["branch"] = "other-branch"
+        result = self._decide(runs=[run(31, 31, "in_progress"), earlier], fixed=fixed)
+        self.assertTrue(result["should_run"])
+
     def test_partial_success_with_invalid_screening_does_not_block_retry(self) -> None:
         earlier = run(30, 30, "completed", conclusion="failure")
         current = run(31, 31, "in_progress", created_at="2026-08-10T02:10:00Z")

@@ -88,7 +88,11 @@ def _manifest_is_valid_screening(
 ) -> bool:
     if manifest.get("trade_date") != trade_date:
         return False
-    if manifest.get("workflow_name") != workflow_name or manifest.get("branch") != branch:
+    if manifest.get("workflow_name") != workflow_name:
+        return False
+    # Schema <= 1.2 omitted branch; the run identity check below still proves it.
+    manifest_branch = manifest.get("branch")
+    if manifest_branch not in (None, "", branch):
         return False
     if manifest.get("status") not in VALID_SCREENING_STATUSES:
         return False
