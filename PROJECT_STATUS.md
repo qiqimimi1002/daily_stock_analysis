@@ -23,6 +23,52 @@
   the screening-result publication change below and was not modified here.
 - Do not use or merge the abandoned branch `v2-1-market-scoring`.
 
+## 2026-08-10 scheduled-trigger reliability work
+
+- Baseline: latest `main` commit
+  `2902ed4f95fe78ddbf70b703ee12454eddc640f4`, including merged PR #9.
+- Implementation branch: `agent/schedule-fallback-idempotency`. This branch is
+  limited to scheduling reliability and does not contain or modify Draft PR #6.
+- The full-market workflow keeps the Beijing 09:40 primary schedule and adds
+  09:55 and 10:10 fallback schedules. Existing workflow concurrency remains in
+  place, but a separate pre-dependency execution guard provides the actual
+  same-day idempotency decision.
+- The guard uses the `Asia/Shanghai` date, current workflow/branch/run identity,
+  same-day Actions states, and the run-matched `screening-results` manifest.
+  Older active runs, earlier successful runs, and valid published screening
+  results all cause a safe exit before dependency installation, market-data
+  collection, or deep analysis.
+- A `partial_success` result blocks a full rerun only when the screening itself
+  succeeded, the screening JSON exists, the referenced Actions run matches,
+  and the only integrity gap is incomplete deep analysis. Invalid or missing
+  screening output remains eligible for a fallback attempt.
+- Scheduled runs record `schedule_primary` or `schedule_fallback`; manual runs
+  record `workflow_dispatch_manual`. The execution record and final manifest
+  include the scheduled slot, actual run creation and screening-start times,
+  both delay measurements, skip status/reason, and the run identity that caused
+  a skip. No token or secret is written to these records.
+- Completed no-op runs upload their execution record. The existing reader's
+  eight state classifications are unchanged; it only resolves a completed
+  idempotent no-op to the original valid run so a later fallback cannot hide a
+  usable earlier result.
+- Local verification: 70 guard/manifest/reader/history-reliability/V2.1 tests
+  passed. Python compilation, workflow YAML parsing, full flake8 on changed
+  Python files, and `git diff --check` passed. A fixed-time duplicate-run
+  simulation returned `should_run=false`, referenced the existing valid run,
+  and made zero market-fetch and deep-analysis calls.
+- Draft PR [#10](https://github.com/qiqimimi1002/daily_stock_analysis/pull/10)
+  was opened from `agent/schedule-fallback-idempotency`; the implementation
+  commit is `d50c041d3a05fb4ca7b1f3c939c97d732e31be93`.
+- Full GitHub CI run
+  [#31356692920](https://github.com/qiqimimi1002/daily_stock_analysis/actions/runs/31356692920)
+  passed: change detection, AI governance, backend-gate with the complete
+  offline suite, Docker build, Docker smoke, and Docker import checks all
+  succeeded; unrelated desktop and web jobs were correctly skipped.
+- Delivery status: implementation, local verification, Draft PR publication,
+  and full CI are complete. Keep PR #10 as Draft and unmerged for human
+  acceptance. Draft PR #6 remains unchanged at
+  `50c995dc10765bb0bb822212663b7cd1b4c35120`.
+
 ## 2026-08-04 executable reader and Gemini retry work
 
 - Baseline: latest `main` commit

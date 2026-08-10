@@ -64,6 +64,7 @@ class ScreeningRunManifestTest(unittest.TestCase):
         screening_outcome: str = "success",
         deep_analysis_outcome: str = "success",
         deep_analysis_requested: bool = True,
+        execution_context: dict | None = None,
     ) -> dict:
         return build_manifest(
             repository_root=self.root,
@@ -79,6 +80,8 @@ class ScreeningRunManifestTest(unittest.TestCase):
             started_at=datetime(2026, 8, 4, 2, 10, tzinfo=timezone.utc),
             completed_at=datetime(2026, 8, 4, 2, 20, tzinfo=timezone.utc),
             logs_dir=self.logs,
+            branch="main",
+            execution_context=execution_context,
         )
 
     def test_success_manifest_has_counts_reports_hashes_and_shanghai_times(self) -> None:
@@ -200,12 +203,40 @@ class ScreeningRunManifestTest(unittest.TestCase):
 
         manifest = self._build(deep_analysis_outcome="skipped")
 
-        self.assertEqual(manifest["schema_version"], "1.2")
+        self.assertEqual(manifest["schema_version"], "1.3")
         self.assertEqual(manifest["history_success_rate"], 31.67)
         self.assertEqual(manifest["history_failure_reasons"]["counts"]["remote_disconnect"], 41)
         self.assertEqual(manifest["history_data_quality"]["status"], "insufficient")
         self.assertIn("history_coverage_insufficient", manifest["reason_codes"])
         self.assertTrue(manifest["integrity"]["ok"])
+
+    def test_trigger_and_idempotency_metadata_are_preserved(self) -> None:
+        self._write_screening(candidate_codes=[], analysis_codes=[])
+        (self.logs / "screening_execution_guard.log").write_text(
+            '{"should_run":true}\n', encoding="utf-8"
+        )
+        context = {
+            "trigger_source": "schedule_fallback",
+            "scheduled_slot": "09:55",
+            "run_created_at": "2026-08-04T09:56:00+08:00",
+            "screening_started_at": "2026-08-04T09:57:30+08:00",
+            "run_creation_delay_minutes": 1.0,
+            "screening_start_delay_minutes": 2.5,
+            "idempotency_skipped": False,
+            "skip_reason": None,
+            "existing_run_id": None,
+            "existing_run_number": None,
+        }
+
+        result = self._build(deep_analysis_outcome="skipped", execution_context=context)
+
+        self.assertEqual(result["branch"], "main")
+        self.assertEqual(result["trigger_source"], "schedule_fallback")
+        self.assertEqual(result["scheduled_slot"], "09:55")
+        self.assertEqual(result["screening_started_at"], "2026-08-04T09:57:30+08:00")
+        self.assertEqual(result["screening_start_delay_minutes"], 2.5)
+        self.assertFalse(result["idempotency_skipped"])
+        self.assertIn("logs/screening_execution_guard.log", result["result_file_sha256"])
 
     def test_screened_codes_mismatch_is_reported(self) -> None:
         self._write_screening(candidate_codes=["600089", "600309"], analysis_codes=["600089"])

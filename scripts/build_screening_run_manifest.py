@@ -115,6 +115,9 @@ def build_manifest(
     started_at: datetime,
     completed_at: datetime,
     logs_dir: Path | None = None,
+    branch: Optional[str] = None,
+    execution_context: Optional[Mapping[str, Any]] = None,
+    execution_context_path: Optional[Path] = None,
 ) -> dict[str, Any]:
     """Return a final manifest even when the screening output is incomplete."""
     if started_at.tzinfo is None or started_at.utcoffset() is None:
@@ -242,10 +245,19 @@ def build_manifest(
         if event.get("error_type") in {"gemini_429", "gemini_503"}
     )
     retry_event_path = logs_dir / "llm_retry_events.jsonl" if logs_dir else None
+    execution_guard_log_path = logs_dir / "screening_execution_guard.log" if logs_dir else None
 
     result_files = [
         path
-        for path in [screening_json, codes_path, *screening_reports, *deep_reports, retry_event_path]
+        for path in [
+            screening_json,
+            codes_path,
+            *screening_reports,
+            *deep_reports,
+            retry_event_path,
+            execution_guard_log_path,
+            execution_context_path,
+        ]
         if path
     ]
     file_hashes = {
@@ -254,14 +266,27 @@ def build_manifest(
         if path.is_file()
     }
     manifest = {
-        "schema_version": "1.2",
+        "schema_version": "1.3",
         "trade_date": trade_date,
         "workflow_name": workflow_name,
+        "branch": branch,
         "run_id": str(run_id),
         "run_number": str(run_number),
         "status": status,
         "started_at": started_at.isoformat(timespec="seconds"),
         "completed_at": completed_at.isoformat(timespec="seconds"),
+        "trigger_source": (execution_context or {}).get("trigger_source"),
+        "scheduled_slot": (execution_context or {}).get("scheduled_slot"),
+        "run_created_at": (execution_context or {}).get("run_created_at"),
+        "screening_started_at": (execution_context or {}).get("screening_started_at"),
+        "run_creation_delay_minutes": (execution_context or {}).get("run_creation_delay_minutes"),
+        "screening_start_delay_minutes": (execution_context or {}).get(
+            "screening_start_delay_minutes"
+        ),
+        "idempotency_skipped": bool((execution_context or {}).get("idempotency_skipped", False)),
+        "idempotency_skip_reason": (execution_context or {}).get("skip_reason"),
+        "idempotency_existing_run_id": (execution_context or {}).get("existing_run_id"),
+        "idempotency_existing_run_number": (execution_context or {}).get("existing_run_number"),
         "screening_generated_at": generated_at.isoformat(timespec="seconds") if generated_at else None,
         "market_data_at": market_data_at.isoformat(timespec="seconds") if market_data_at else None,
         "data_source": source.get("data_source"),
@@ -343,12 +368,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--workflow-name", default="全市场初筛")
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--run-number", required=True)
+    parser.add_argument("--branch")
     parser.add_argument("--artifact-name", required=True)
     parser.add_argument("--screening-outcome", required=True)
     parser.add_argument("--deep-analysis-outcome", default="skipped")
     parser.add_argument("--deep-analysis-requested", default="false")
     parser.add_argument("--started-at", required=True)
     parser.add_argument("--completed-at", required=True)
+    parser.add_argument("--execution-context", type=Path)
     parser.add_argument("--summary", type=Path)
     parser.add_argument("--strict", action="store_true")
     return parser.parse_args()
@@ -362,6 +389,18 @@ def main() -> int:
         completed_at = _parse_datetime(args.completed_at, field="completed_at")
         if completed_at < started_at:
             raise ValueError("completed_at cannot be earlier than started_at")
+        execution_context: Optional[Mapping[str, Any]] = None
+        if args.execution_context:
+            loaded_context = json.loads(args.execution_context.read_text(encoding="utf-8"))
+            if not isinstance(loaded_context, dict):
+                raise ValueError("execution_context must be a JSON object")
+            if str(loaded_context.get("run_id")) != str(args.run_id):
+                raise ValueError("execution_context run_id mismatch")
+            if str(loaded_context.get("run_number")) != str(args.run_number):
+                raise ValueError("execution_context run_number mismatch")
+            if loaded_context.get("idempotency_skipped") or not loaded_context.get("should_run"):
+                raise ValueError("a skipped execution cannot produce a screening manifest")
+            execution_context = loaded_context
         manifest = build_manifest(
             repository_root=repository_root,
             data_dir=args.data_dir.resolve(),
@@ -376,6 +415,9 @@ def main() -> int:
             started_at=started_at,
             completed_at=completed_at,
             logs_dir=args.logs_dir.resolve(),
+            branch=args.branch,
+            execution_context=execution_context,
+            execution_context_path=args.execution_context.resolve() if args.execution_context else None,
         )
     except (OSError, ValueError, TypeError) as exc:
         print(f"manifest_error: {exc}")

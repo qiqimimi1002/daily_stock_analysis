@@ -189,6 +189,37 @@ class ScreeningStatusClassifierTest(unittest.TestCase):
         reader.read_fixed_manifest.assert_not_called()
         reader.read_artifact_manifest.assert_not_called()
 
+    @patch("scripts.read_screening_status.GitHubReader")
+    def test_completed_idempotent_skip_resolves_to_original_result_run(self, reader_type) -> None:
+        original = {**RUN, "id": 30, "run_number": 30}
+        skipped = {
+            **RUN,
+            "id": 31,
+            "run_number": 31,
+            "created_at": "2026-08-04T02:10:00Z",
+        }
+        original_manifest = manifest()
+        original_manifest.update({"run_id": "30", "run_number": "30"})
+        reader = reader_type.return_value
+        reader.json.return_value = {"workflow_runs": [original, skipped]}
+        reader.read_artifact_guard.return_value = (
+            {
+                "idempotency_skipped": True,
+                "existing_run_id": "30",
+                "existing_run_number": "30",
+            },
+            True,
+        )
+        reader.read_fixed_manifest.return_value = original_manifest
+        reader.read_artifact_manifest.return_value = (None, False)
+
+        result = read_status("owner/repo", "workflow.yml", TRADE_DATE)
+
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["run_id"], 30)
+        self.assertIn("idempotent_run_skipped", result["reason_codes"])
+        reader.read_artifact_manifest.assert_called_once_with(30)
+
     def test_artifact_redirect_does_not_forward_github_token_to_blob_host(self) -> None:
         request = urllib.request.Request(
             "https://api.github.com/repos/owner/repo/actions/artifacts/1/zip",
