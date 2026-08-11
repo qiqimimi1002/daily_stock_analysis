@@ -621,3 +621,70 @@
   installation, market fetch, and deep analysis in the latter case.
 - Confirm Cloudflare recorded the 10:00 invocation independently even if the
   GitHub 09:40/09:55/10:10 schedule events were delayed.
+
+# Cloudflare scheduler production rollout (2026-08-11)
+
+## Merge and deployment
+
+- PR #11 was moved from Draft to Ready after its final semantic diff audit and
+  successful CI, then squash-merged into `main` as
+  `c633f1582d1183c4f27272ef9f6988f738ffb910`. The source branch was retained.
+- Final PR-head CI passed on normalized LF content: main CI run `31472203994`
+  passed Change Detection, AI governance, backend-gate, and Docker; external
+  scheduler CI run `31472204028` passed all five Worker tests.
+- The Worker was deployed to Cloudflare account
+  `a52e64dfee6cbace4ae1b3c7820b9189` as
+  `daily-stock-screening-scheduler`, version
+  `6ab2989c-cbc8-4e1d-bed2-9ae10cebcde7`.
+- The production trigger is `0 2 * * MON-FRI` (10:00 Asia/Shanghai). The Worker
+  has `workers_dev = false`, no active HTTP route, and only a scheduled handler.
+- Cloudflare Secret inventory exposes only the binding name `GITHUB_TOKEN`; the
+  value was entered through Wrangler's masked prompt and never written to the
+  repository, command line, logs, manifest, or Artifact.
+- The fine-grained GitHub token was configured by the repository owner for only
+  `qiqimimi1002/daily_stock_analysis`, with `Actions: Read and write` and no
+  `Contents: write`. GitHub accepted the resulting workflow-dispatch request.
+- Cloudflare does not use local GitHub CLI credentials. A separate CLI OAuth
+  login was used only to publish this rollout record and is never copied into
+  the Worker, its secrets, logs, manifest, or Artifacts.
+
+## Same-day safe integration evidence
+
+- Because the real 10:00 Cloudflare Cron time had already passed, the official
+  Wrangler local scheduled endpoint was used as an equivalent handler test. It
+  returned HTTP 200 and logged `github_workflow_dispatch`, `outcome=accepted`,
+  `trigger_source=external_scheduler_cloudflare`, cron `0 2 * * MON-FRI`, and
+  scheduled time `2026-08-11T08:56:26.211Z`. This is not represented as a
+  production Cloudflare Cron Event; the first real event remains due on Aug 12.
+- The handler created GitHub workflow-dispatch Run #26 / ID `31475449822` on
+  `main` commit `c633f1582d1183c4f27272ef9f6988f738ffb910`; it completed success
+  in approximately 18 seconds.
+- Guard Artifact `market-screening-26` / ID `9095027489` recorded:
+  `trade_date=2026-08-11`, `trigger_source=external_scheduler_cloudflare`,
+  `idempotency_skipped=true`, `skip_reason=existing_valid_screening_result`,
+  `existing_run_id=31462135915`, `existing_run_number=23`, and
+  `should_run=false`.
+- Run #26 skipped Python setup, dependency installation, screening start,
+  full-market collection, candidate loading, deep analysis, manifest build, and
+  fixed-result publication. Only checkout, guard evaluation, and the guard
+  Artifact upload ran.
+- The merged reader continued to resolve the original effective Run #23 / ID
+  `31462135915`: status `success`, four candidates, deep analysis `completed`,
+  history success rate 100%, data-quality status `ok`, and both fixed entry and
+  dynamic Artifact available.
+
+## Aug 12 production acceptance gate
+
+- The first real independent Cloudflare Cron Event is expected at 10:00
+  Asia/Shanghai on 2026-08-12. Correlate the Cloudflare event/log timestamp with
+  the resulting GitHub `workflow_dispatch` Run and its guard Artifact.
+- If a native 09:40 run has already produced a valid same-day result, the
+  external Run must skip before Python/dependencies/market/deep analysis and the
+  reader must continue to resolve the native effective Run.
+- If no valid native result exists, the external Run must execute the complete
+  screening pipeline and publish same-day Artifact/fixed-entry results.
+- Acceptance requires `trigger_source=external_scheduler_cloudflare`, the
+  correct same-day trade date, no prior-day substitution, and no duplicate full
+  production. A local scheduled test is insufficient evidence for this gate.
+- PR #6 remains Draft at `50c995dc10765bb0bb822212663b7cd1b4c35120` and was not
+  modified, reviewed, or merged during this rollout.

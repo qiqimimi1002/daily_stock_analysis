@@ -94,6 +94,7 @@ test("keeps the Cloudflare and GitHub schedules unchanged", async () => {
   );
 
   assert.match(wrangler, /crons = \[ "0 2 \* \* MON-FRI" \]/);
+  assert.match(wrangler, /workers_dev = false/);
   assert.match(workflow, /cron: "40 1 \* \* 1-5"/);
   assert.match(workflow, /cron: "55 1 \* \* 1-5"/);
   assert.match(workflow, /cron: "10 2 \* \* 1-5"/);
