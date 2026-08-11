@@ -133,6 +133,38 @@
 - Draft PR #6 remains open and unchanged at
   `50c995dc10765bb0bb822212663b7cd1b4c35120`.
 
+#### Late-arriving final result for the same trade date
+
+- The 11:07 observation above remains valid: no scheduled run existed by that
+  cutoff. The 09:40 `schedule_primary` event eventually created Run 23 / ID
+  `31462135915` at 13:35:12 Asia/Shanghai, 235.20 minutes after its scheduled
+  time. Actual screening began at 13:36:08, for a 236.13-minute start delay.
+- Run 23 completed successfully at 13:42:49. The manifest records 5,541
+  full-market rows, 60/60 successful histories, `history_success_rate=100.0`,
+  and `history_data_quality=ok` with high confidence.
+- Screening produced four candidates (`601991`, `002532`, `601600`, and
+  `000933`). All three requested deep analyses completed, with no missing code,
+  Gemini retry, or deep-analysis failure.
+- Artifact `market-screening-23` (ID `9090309651`) uploaded successfully.
+  Manifest schema 1.3 reports `status=success`, `integrity.ok=true`, and no
+  integrity errors. A direct read of `screening-results/latest/manifest.json`
+  confirmed that the fixed entry now identifies trade date 2026-08-11, Run 23
+  / ID `31462135915`.
+- The same delayed scheduler burst also created Run 24 / ID `31462366828` at
+  13:39:26; it was cancelled while pending under workflow concurrency and ran
+  no job. Run 25 / ID `31462441430`, the 10:10 `schedule_fallback`, was created
+  at 13:40:44 after a 210.73-minute delay. Its pre-dependency guard recorded
+  `existing_valid_screening_result` and referenced Run 23, so Python setup,
+  dependency installation, market fetch, candidate loading, deep analysis,
+  manifest rebuilding, and fixed-entry publication were all skipped.
+- Final day-1 conclusion: the screening, history-data, deep-analysis,
+  publication, integrity, reader fallback, concurrency, and idempotency paths
+  behaved correctly once GitHub delivered the events. The principal remaining
+  risk is severe GitHub scheduler delay: all three planned times had produced
+  no run by 11:07, and the 09:40 primary arrived only at 13:35. Keep the
+  2026-08-12 and 2026-08-13 observation plan unchanged; do not alter the three
+  schedules or add an external scheduler during this acceptance window.
+
 ## 2026-08-04 executable reader and Gemini retry work
 
 - Baseline: latest `main` commit
