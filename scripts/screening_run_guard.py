@@ -28,6 +28,10 @@ SCHEDULE_SLOTS = {
 }
 VALID_SCREENING_STATUSES = {"success", "screening_completed", "partial_success"}
 ALLOWED_PARTIAL_ERRORS = {"deep_analysis_incomplete"}
+WORKFLOW_DISPATCH_SOURCES = {
+    "workflow_dispatch_manual",
+    "external_scheduler_cloudflare",
+}
 
 
 def _parse_datetime(value: str, *, field: str) -> datetime:
@@ -41,9 +45,15 @@ def _parse_datetime(value: str, *, field: str) -> datetime:
     return parsed.astimezone(SHANGHAI_TZ)
 
 
-def trigger_metadata(event_name: str, event_schedule: str) -> tuple[str, Optional[str]]:
+def trigger_metadata(
+    event_name: str,
+    event_schedule: str,
+    dispatch_source: str = "workflow_dispatch_manual",
+) -> tuple[str, Optional[str]]:
     if event_name == "workflow_dispatch":
-        return "workflow_dispatch_manual", None
+        if dispatch_source not in WORKFLOW_DISPATCH_SOURCES:
+            raise ValueError(f"unknown workflow_dispatch source: {dispatch_source}")
+        return dispatch_source, None
     if event_name != "schedule":
         raise ValueError(f"unsupported event_name: {event_name}")
     try:
@@ -126,6 +136,7 @@ def decide_execution(
     now: datetime,
     event_name: str,
     event_schedule: str,
+    dispatch_source: str = "workflow_dispatch_manual",
     workflow_name: str,
     branch: str,
     current_run: Mapping[str, Any],
@@ -137,7 +148,11 @@ def decide_execution(
         raise ValueError("now must include a timezone offset")
     now = now.astimezone(SHANGHAI_TZ)
     trade_date = now.date().isoformat()
-    trigger_source, scheduled_slot = trigger_metadata(event_name, event_schedule)
+    trigger_source, scheduled_slot = trigger_metadata(
+        event_name,
+        event_schedule,
+        dispatch_source,
+    )
     current_id = str(current_run.get("id", ""))
     current_number = str(current_run.get("run_number", ""))
     if not current_id or not current_number:
@@ -385,6 +400,7 @@ def _check(args: argparse.Namespace) -> int:
         now=now,
         event_name=args.event_name,
         event_schedule=args.event_schedule,
+        dispatch_source=args.dispatch_source,
         workflow_name=args.workflow_name,
         branch=args.branch,
         current_run=current,
@@ -425,6 +441,7 @@ def parse_args() -> argparse.Namespace:
     check.add_argument("--run-number", required=True)
     check.add_argument("--event-name", required=True)
     check.add_argument("--event-schedule", default="")
+    check.add_argument("--dispatch-source", default="workflow_dispatch_manual")
     check.add_argument("--token-env", default="GITHUB_TOKEN")
     check.add_argument("--now")
     check.add_argument("--output", type=Path, required=True)

@@ -1,0 +1,28 @@
+name: External scheduler CI
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "external_scheduler/cloudflare/**"
+      - ".github/workflows/01-market-screening.yml"
+      - "scripts/screening_run_guard.py"
+      - "tests/test_screening_run_guard.py"
+      - ".github/workflows/external-scheduler-ci.yml"
+
+jobs:
+  cloudflare-worker-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - name: Test Cloudflare scheduler
+        working-directory: external_scheduler/cloudflare
+        run: npm test
+      - name: Test workflow idempotency guard
+        run: python -m unittest tests.test_screening_run_guard

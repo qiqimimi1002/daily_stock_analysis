@@ -64,6 +64,7 @@ class ScreeningRunGuardTest(unittest.TestCase):
         fixed: dict | None = None,
         event_name: str = "schedule",
         event_schedule: str = "40 1 * * 1-5",
+        dispatch_source: str = "workflow_dispatch_manual",
         now: str = "2026-08-10T09:41:00+08:00",
     ) -> dict:
         current_run = current or run(30, 30, "in_progress")
@@ -71,6 +72,7 @@ class ScreeningRunGuardTest(unittest.TestCase):
             now=datetime.fromisoformat(now),
             event_name=event_name,
             event_schedule=event_schedule,
+            dispatch_source=dispatch_source,
             workflow_name=WORKFLOW_NAME,
             branch=BRANCH,
             current_run=current_run,
@@ -182,6 +184,35 @@ class ScreeningRunGuardTest(unittest.TestCase):
         self.assertEqual(result["trigger_source"], "workflow_dispatch_manual")
         self.assertIsNone(result["scheduled_slot"])
 
+    def test_external_dispatch_cannot_duplicate_same_day_production(self) -> None:
+        earlier = run(30, 30, "completed", conclusion="success")
+        current = run(31, 31, "in_progress", created_at="2026-08-10T02:00:00Z")
+        result = self._decide(
+            current=current,
+            runs=[current, earlier],
+            fixed=manifest(earlier),
+            event_name="workflow_dispatch",
+            dispatch_source="external_scheduler_cloudflare",
+            now="2026-08-10T10:01:00+08:00",
+        )
+        calls = {"market": 0, "deep": 0}
+        if result["should_run"]:
+            calls["market"] += 1
+            calls["deep"] += 1
+        self.assertFalse(result["should_run"])
+        self.assertEqual(result["trigger_source"], "external_scheduler_cloudflare")
+        self.assertEqual(calls, {"market": 0, "deep": 0})
+
+    def test_external_dispatch_runs_when_no_same_day_result_exists(self) -> None:
+        result = self._decide(
+            event_name="workflow_dispatch",
+            dispatch_source="external_scheduler_cloudflare",
+            now="2026-08-10T10:01:00+08:00",
+        )
+        self.assertTrue(result["should_run"])
+        self.assertEqual(result["trigger_source"], "external_scheduler_cloudflare")
+        self.assertIsNone(result["scheduled_slot"])
+
     def test_manifest_identity_mismatch_does_not_block(self) -> None:
         earlier = run(30, 30, "completed", conclusion="failure")
         current = run(31, 31, "in_progress")
@@ -217,6 +248,10 @@ class ScreeningRunGuardTest(unittest.TestCase):
     def test_trigger_metadata_rejects_unknown_schedule(self) -> None:
         with self.assertRaisesRegex(ValueError, "unknown scheduled slot"):
             trigger_metadata("schedule", "0 0 * * *")
+
+    def test_trigger_metadata_rejects_unknown_dispatch_source(self) -> None:
+        with self.assertRaisesRegex(ValueError, "unknown workflow_dispatch source"):
+            trigger_metadata("workflow_dispatch", "", "untrusted_source")
 
 
 if __name__ == "__main__":

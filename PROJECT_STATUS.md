@@ -562,3 +562,62 @@
    retry at 10:40 or 11:00 for `not_started`, `queued`, or `in_progress`.
 4. Keep Draft PR #6 independent until the user starts its acceptance task.
 5. Keep `agent/v2-2-signal-archive` until the user authorizes deletion.
+
+# External scheduler fallback (2026-08-11)
+
+## Design and scope
+
+- Status: implemented on `agent/cloudflare-external-scheduler`; deployment is
+  intentionally pending repository-owner Cloudflare credentials and approval.
+- Cloudflare Workers Cron triggers the existing
+  `.github/workflows/01-market-screening.yml` by `workflow_dispatch` at
+  `02:00 UTC`, which is `10:00 Asia/Shanghai` on weekdays.
+- The Worker contains no market-data, scoring, screening, reporting, or deep
+  analysis logic. PR #10's pre-dependency guard remains the sole authority for
+  same-day run/skip decisions.
+- External invocations set
+  `trigger_source=external_scheduler_cloudflare`; ordinary manual dispatches
+  remain `workflow_dispatch_manual`. The execution context and manifest can
+  therefore identify which path created the effective run without changing the
+  reader state model.
+- Existing GitHub schedules at 09:40, 09:55, and 10:10 Beijing time are
+  unchanged. V2.1 scoring/filtering, reports, research, and PR #6 are unchanged.
+
+## Security and deployment
+
+- Use a fine-grained GitHub personal access token restricted to
+  `qiqimimi1002/daily_stock_analysis` with repository permission
+  `Actions: Read and write`; do not grant Contents write.
+- Store the token only as the Cloudflare Worker secret `GITHUB_TOKEN` using
+  `wrangler secret put`. It is absent from source, Wrangler variables, test
+  output, Worker logs, workflow inputs, manifests, and Artifacts.
+- Deploy from `external_scheduler/cloudflare` with `npx wrangler deploy` only
+  after configuring the secret. Creating or merging the PR does not deploy it.
+
+## Verification evidence
+
+- Cloudflare Worker tests: 5 passed, including dispatch payload, HTTP failure,
+  missing-secret handling, scheduled-log redaction, and preservation of all
+  four configured cron slots.
+- Screening guard unit tests: 19 passed, including the two external-trigger
+  paths: an existing same-day valid result performs zero market/deep-analysis
+  work, while no same-day result allows the normal production path.
+- Focused production-chain regression: 75 passed across guard, manifest,
+  reader, history reliability, scoring, and screener suites.
+- Python compilation, YAML parsing, critical flake8 checks, and
+  `git diff --check`: passed.
+
+## Risks and production acceptance
+
+- Cloudflare Cron is independent of GitHub's schedule delivery, but dispatch
+  still depends on the GitHub API and GitHub Actions runner availability.
+- The weekday cron does not know mainland-China exchange holidays; with
+  `force_run=false`, the existing production workflow remains responsible for
+  trading-day handling.
+- Token expiry/rotation and Cloudflare Cron propagation must be monitored.
+- After deployment, validate one day with no existing result
+  (`should_run=true`) and one day with an existing valid result
+  (`idempotency_skipped=true`). Confirm the external run skips dependency
+  installation, market fetch, and deep analysis in the latter case.
+- Confirm Cloudflare recorded the 10:00 invocation independently even if the
+  GitHub 09:40/09:55/10:10 schedule events were delayed.

@@ -1,0 +1,13 @@
+name = "daily-stock-screening-scheduler"
+main = "src/index.js"
+compatibility_date = "2026-08-11"
+
+[vars]
+GITHUB_OWNER = "qiqimimi1002"
+GITHUB_REPO = "daily_stock_analysis"
+GITHUB_WORKFLOW = "01-market-screening.yml"
+GITHUB_REF = "main"
+
+[triggers]
+# Cloudflare cron uses UTC. 02:00 UTC is 10:00 Asia/Shanghai.
+crons = [ "0 2 * * MON-FRI" ]
