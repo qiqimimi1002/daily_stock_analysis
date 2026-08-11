@@ -1,6 +1,6 @@
 # Project Status
 
-> Last updated: 2026-08-10 (Asia/Shanghai)
+> Last updated: 2026-08-11 (Asia/Shanghai)
 >
 > Codex workflow rule: read this file before substantial project work and
 > update it after every completed material task. Complete safe in-scope work
@@ -105,6 +105,33 @@
   and 10:10 schedule slots for 1-3 trading days. Do not change scoring or merge
   PR #6 during this observation; the next development phase is historical-data
   coverage work only after schedule reliability is accepted.
+
+### PR #10 operational observation — 2026-08-11 (day 1/3)
+
+- At 11:07 Asia/Shanghai, the Actions API contained no 2026-08-11 run for any
+  of the 09:40 primary, 09:55 fallback, or 10:10 fallback slots. There was no
+  run ID, Artifact, current-day candidate list, or deep-analysis result.
+- The reader returned `not_started` with `no_run_for_trade_date`. It rejected
+  `screening-results/latest/manifest.json` because that fixed entry still
+  belongs to 2026-08-10 Run 20; no previous-day result was presented as the
+  current trade day's result.
+- No duplicate production occurred on 2026-08-11 because no run had been
+  created by the observation time. Therefore there is no current-day effective
+  run, candidate count, deep-analysis status, history coverage, or integrity
+  result to accept.
+- The most recent scheduled run was 2026-08-10 Run 22 / ID `31360573968`.
+  Its guard Artifact identifies the 09:40 primary slot, created at 14:03:16
+  Asia/Shanghai after a 263.27-minute scheduler delay. It safely skipped with
+  `existing_valid_screening_result`, referencing Run 20, before dependencies,
+  market fetch, or deep analysis.
+- Observation conclusion: idempotency and stale-result rejection continue to
+  work, but GitHub's shared scheduler did not provide a usable 09:40/09:55/10:10
+  trigger by 11:07. This is a P1 external scheduling reliability risk, not a
+  V2.1 scoring or guard correctness failure. Do not change scope during the
+  remaining observations; if the pattern repeats, the next reliability action
+  is an independent external `workflow_dispatch` scheduler.
+- Draft PR #6 remains open and unchanged at
+  `50c995dc10765bb0bb822212663b7cd1b4c35120`.
 
 ## 2026-08-04 executable reader and Gemini retry work
 
