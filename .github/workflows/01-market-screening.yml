@@ -9,6 +9,14 @@ on:
     - cron: "10 2 * * 1-5"
   workflow_dispatch:
     inputs:
+      trigger_source:
+        description: "触发来源（外部调度器使用专用值）"
+        required: true
+        default: "workflow_dispatch_manual"
+        type: choice
+        options:
+          - "workflow_dispatch_manual"
+          - "external_scheduler_cloudflare"
       top_n:
         description: "初筛候选数量"
         required: true
@@ -62,6 +70,7 @@ jobs:
             --run-number "${{ github.run_number }}" \
             --event-name "${{ github.event_name }}" \
             --event-schedule "${{ github.event.schedule || '' }}" \
+            --dispatch-source "${{ inputs.trigger_source || 'workflow_dispatch_manual' }}" \
             --output data/screening_execution_guard.json \
             --log logs/screening_execution_guard.log \
             --github-output "$GITHUB_OUTPUT" \
