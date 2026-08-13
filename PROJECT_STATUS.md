@@ -695,9 +695,10 @@
 
 - Baseline: latest `main` commit
   `7cd28bbb811ef0f75e04ed2dd5a6cd915682c1ef`.
-- Development branch: `agent/cloudflare-scheduler-1005-fallback`. This change
-  extends the existing `external_scheduler/cloudflare` Worker; it does not
-  create a second Worker or duplicate any screening logic.
+- Development branch: `agent/cloudflare-scheduler-1005-fallback`, commit
+  `61a9ae0a77bc5822a45d511cc16e0ca0a355ade8`, published as Draft PR #13.
+  This change extends the existing `external_scheduler/cloudflare` Worker; it
+  does not create a second Worker or duplicate any screening logic.
 - The existing weekday 10:00 Asia/Shanghai trigger remains unchanged. A second
   weekday trigger at 10:05 was added using Cloudflare UTC crons
   `0 2 * * MON-FRI` and `5 2 * * MON-FRI`.
@@ -743,6 +744,10 @@
   because `CLAUDE.md` is materialized instead of a symlink. This is an existing
   local checkout limitation; pull-request CI on Linux remains the authoritative
   full check.
+- Draft PR #13 CI completed successfully: External scheduler CI Run
+  `31670322778` passed, and full CI Run `31670322784` passed all applicable
+  jobs. Desktop and Web jobs were skipped because this branch has no matching
+  changes.
 - Local mocked scheduled-event verification is complete. A real manual
   dispatch/guard Run and the first actual Cloudflare 10:00/10:05 Cron evidence
   remain production acceptance gates; they must not be represented as complete
