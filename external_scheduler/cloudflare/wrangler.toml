@@ -10,5 +10,9 @@ GITHUB_WORKFLOW = "01-market-screening.yml"
 GITHUB_REF = "main"
 
 [triggers]
-# Cloudflare cron uses UTC. 02:00 UTC is 10:00 Asia/Shanghai.
-crons = [ "0 2 * * MON-FRI" ]
+# Cloudflare cron uses UTC. 02:00/02:05 UTC are 10:00/10:05 Asia/Shanghai.
+crons = [ "0 2 * * MON-FRI", "5 2 * * MON-FRI" ]
+
+[observability]
+enabled = true
+head_sampling_rate = 1

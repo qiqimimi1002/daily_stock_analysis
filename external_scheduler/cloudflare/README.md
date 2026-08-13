@@ -1,6 +1,6 @@
 # Cloudflare external screening scheduler
 
-This Worker provides an independent 10:00 Asia/Shanghai fallback for the
+This Worker provides independent 10:00 and 10:05 Asia/Shanghai fallbacks for the
 existing `.github/workflows/01-market-screening.yml` workflow. It only sends a
 GitHub `workflow_dispatch` request. It does not contain market-data, scoring,
 screening, reporting, or deep-analysis logic.
@@ -14,8 +14,12 @@ screening, reporting, or deep-analysis logic.
   dispatches; the workflow guard decides whether to run or exit before
   dependencies and production steps.
 
-The configured cron is `0 2 * * MON-FRI`. Cloudflare evaluates cron in UTC, so
-this is 10:00 Asia/Shanghai on weekdays.
+The configured crons are `0 2 * * MON-FRI` and `5 2 * * MON-FRI`.
+Cloudflare evaluates cron in UTC, so these are 10:00 and 10:05
+Asia/Shanghai on weekdays. Both invocations send the same dispatch request.
+If the first invocation already produced a valid current-day run, PR #10's
+existing execution guard makes the second run exit before dependency
+installation, market-data collection, or deep analysis.
 
 ## GitHub token
 
@@ -51,19 +55,27 @@ npx wrangler deploy
 Cron changes can take several minutes to propagate. Do not remove the existing
 09:40, 09:55, or 10:10 GitHub schedules.
 
+The Worker emits structured logs for each invocation. Successful events record
+`scheduled_time`, `cron`, `trigger_source`, and `github_http_status`. Failed
+events additionally record a sanitized `error_type`; they never include the
+token, authorization header, or GitHub response body. Persistent Workers Logs
+are enabled so a real Cron event can be audited after it runs.
+
 ## Safe production verification
 
-1. Deploy the Worker and confirm the 10:00 Cron Trigger in Cloudflare.
+1. Deploy the Worker and confirm the 10:00 and 10:05 Cron Triggers in Cloudflare.
 2. On a day with no current screening result, verify a GitHub Actions run is
    created with event `workflow_dispatch` and the execution guard records
    `trigger_source=external_scheduler_cloudflare` and `should_run=true`.
 3. On a day where GitHub cron already produced a valid screening result, verify
    the external run records `idempotency_skipped=true`, references the earlier
    run ID/number, and skips Python setup, market fetch, and deep analysis.
-4. Confirm Cloudflare Cron Events show the 10:00 invocation even when GitHub's
-   own schedule events are delayed. This proves the trigger came from an
+4. Confirm Cloudflare Cron Events show both invocations even when GitHub's own
+   schedule events are delayed. This proves the triggers came from an
    independent scheduler.
-5. Confirm the final manifest or guard-only Artifact contains no token value.
+5. Confirm the 10:05 run exits at the existing execution guard when the 10:00
+   run has already produced a valid current-day result.
+6. Confirm the final manifest or guard-only Artifact contains no token value.
 
 Deployment is intentionally manual because it requires the repository owner's
 Cloudflare account and GitHub fine-grained token. Creating this code or its PR

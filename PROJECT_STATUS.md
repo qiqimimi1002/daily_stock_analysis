@@ -1,6 +1,6 @@
 # Project Status
 
-> Last updated: 2026-08-11 (Asia/Shanghai)
+> Last updated: 2026-08-13 (Asia/Shanghai)
 >
 > Codex workflow rule: read this file before substantial project work and
 > update it after every completed material task. Complete safe in-scope work
@@ -688,3 +688,69 @@
   production. A local scheduled test is insufficient evidence for this gate.
 - PR #6 remains Draft at `50c995dc10765bb0bb822212663b7cd1b4c35120` and was not
   modified, reviewed, or merged during this rollout.
+
+# Cloudflare 10:05 second fallback (2026-08-13)
+
+## Scope and design
+
+- Baseline: latest `main` commit
+  `7cd28bbb811ef0f75e04ed2dd5a6cd915682c1ef`.
+- Development branch: `agent/cloudflare-scheduler-1005-fallback`, commit
+  `61a9ae0a77bc5822a45d511cc16e0ca0a355ade8`, published as Draft PR #13.
+  This change extends the existing `external_scheduler/cloudflare` Worker; it
+  does not create a second Worker or duplicate any screening logic.
+- The existing weekday 10:00 Asia/Shanghai trigger remains unchanged. A second
+  weekday trigger at 10:05 was added using Cloudflare UTC crons
+  `0 2 * * MON-FRI` and `5 2 * * MON-FRI`.
+- Both times send the existing GitHub workflow-dispatch payload:
+  `trigger_source=external_scheduler_cloudflare`, `top_n=5`,
+  `run_deep_analysis=true`, and `force_run=false`.
+- PR #10's pre-dependency same-day guard remains the only idempotency
+  authority. The Worker intentionally performs no result lookup or duplicate
+  decision. If 10:00 already produced a valid current-day result, the 10:05
+  GitHub Run must exit at the existing guard before Python setup, dependency
+  installation, market fetch, candidate loading, or deep analysis.
+- The GitHub-native 09:40, 09:55, and 10:10 schedules are unchanged. V2.1
+  scoring/filtering, the reader, formal reports, research modules, and Draft
+  PR #6 are outside this branch and unchanged.
+
+## Security and observability
+
+- `GITHUB_TOKEN` remains a Cloudflare Secret. No token value, Authorization
+  header, GitHub response body, workflow input, manifest field, or Artifact is
+  added by this change.
+- The required fine-grained token remains restricted to
+  `qiqimimi1002/daily_stock_analysis` with `Actions: write` and metadata read;
+  no `Contents: write` permission is required.
+- Persistent Worker observability is enabled. Success logs contain the
+  scheduled time, cron, external trigger source, and GitHub HTTP status.
+  Failure logs contain only a sanitized error type and optional HTTP status;
+  configuration, network, GitHub HTTP, and unexpected Worker errors are
+  distinguished without logging raw exception text or response content.
+
+## Local verification
+
+- Worker syntax check passed; all 8 Worker tests passed. Coverage includes the
+  exact dispatch payload, both 10:00/10:05 scheduled handlers, 403 handling,
+  network-failure redaction, missing-secret rejection, structured logs, and
+  preservation of the three existing GitHub schedules.
+- The original idempotency guard suite passed all 19 tests. The affected guard,
+  manifest, reader, V2.1 scoring, and market-screener regression selection
+  passed all 67 tests.
+- Wrangler 4.120.1 `deploy --dry-run` parsed the updated config and bundled the
+  Worker successfully without deploying. Workflow YAML parsing and
+  `git diff --check` passed.
+- The Windows checkout cannot pass the repository's AI-assets symlink check
+  because `CLAUDE.md` is materialized instead of a symlink. This is an existing
+  local checkout limitation; pull-request CI on Linux remains the authoritative
+  full check.
+- Draft PR #13 CI completed successfully: External scheduler CI Run
+  `31670322778` passed, and full CI Run `31670322784` passed all applicable
+  jobs. Desktop and Web jobs were skipped because this branch has no matching
+  changes.
+- Local mocked scheduled-event verification is complete. A real manual
+  dispatch/guard Run and the first actual Cloudflare 10:00/10:05 Cron evidence
+  remain production acceptance gates; they must not be represented as complete
+  until their GitHub Run and Cloudflare event logs are available.
+- Draft PR #6 remains unchanged at
+  `50c995dc10765bb0bb822212663b7cd1b4c35120`.

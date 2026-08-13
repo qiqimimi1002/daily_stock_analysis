@@ -36,27 +36,126 @@ test("dispatches the existing workflow with the external source", async () => {
     },
   });
   assert.equal(result.trigger_source, "external_scheduler_cloudflare");
+  assert.equal(result.github_http_status, 204);
   assert.equal(JSON.stringify(result).includes(TOKEN), false);
 });
 
-test("failure messages and results never expose the token", async () => {
+test("HTTP failures expose only the status and sanitized error type", async () => {
+  let responseBodyRead = false;
   await assert.rejects(
-    dispatchWorkflow(ENV, async () => ({ ok: false, status: 403 })),
+    dispatchWorkflow(ENV, async () => ({
+      ok: false,
+      status: 403,
+      text: async () => {
+        responseBodyRead = true;
+        return `response containing ${TOKEN}`;
+      },
+    })),
     (error) => {
       assert.match(error.message, /HTTP 403/);
+      assert.equal(error.errorType, "github_http_error");
+      assert.equal(error.httpStatus, 403);
+      assert.equal(error.message.includes(TOKEN), false);
+      return true;
+    },
+  );
+  assert.equal(responseBodyRead, false);
+});
+
+test("network failures discard sensitive underlying error text", async () => {
+  await assert.rejects(
+    dispatchWorkflow(ENV, async () => {
+      throw new Error(`network failure with ${TOKEN}`);
+    }),
+    (error) => {
+      assert.equal(error.errorType, "github_network_error");
+      assert.equal(error.httpStatus, null);
       assert.equal(error.message.includes(TOKEN), false);
       return true;
     },
   );
 });
 
-test("scheduled logs never expose the token", async () => {
+test("both scheduled fallbacks log accepted dispatches without secrets", async () => {
   const originalFetch = globalThis.fetch;
   const originalLog = console.log;
-  const logLines = [];
+  const logEntries = [];
   const pending = [];
   globalThis.fetch = async () => ({ ok: true, status: 204 });
-  console.log = (value) => logLines.push(String(value));
+  console.log = (value) => logEntries.push(value);
+
+  try {
+    for (const [cron, minute] of [
+      ["0 2 * * MON-FRI", 0],
+      ["5 2 * * MON-FRI", 5],
+    ]) {
+      await worker.scheduled(
+        { cron, scheduledTime: Date.UTC(2026, 7, 12, 2, minute) },
+        ENV,
+        { waitUntil: (promise) => pending.push(promise) },
+      );
+    }
+    await Promise.all(pending);
+  } finally {
+    globalThis.fetch = originalFetch;
+    console.log = originalLog;
+  }
+
+  assert.equal(logEntries.length, 2);
+  assert.deepEqual(
+    logEntries.map((entry) => entry.cron),
+    ["0 2 * * MON-FRI", "5 2 * * MON-FRI"],
+  );
+  for (const entry of logEntries) {
+    assert.equal(entry.outcome, "accepted");
+    assert.equal(entry.github_http_status, 204);
+    assert.equal(entry.trigger_source, "external_scheduler_cloudflare");
+    assert.equal(JSON.stringify(entry).includes(TOKEN), false);
+  }
+});
+
+test("scheduled failure logs are structured and sanitized", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalError = console.error;
+  const errorEntries = [];
+  const pending = [];
+  globalThis.fetch = async () => {
+    throw new Error(`network failure with ${TOKEN}`);
+  };
+  console.error = (value) => errorEntries.push(value);
+
+  try {
+    await worker.scheduled(
+      { cron: "5 2 * * MON-FRI", scheduledTime: Date.UTC(2026, 7, 12, 2, 5) },
+      ENV,
+      { waitUntil: (promise) => pending.push(promise) },
+    );
+    await assert.rejects(pending[0], /GitHub workflow dispatch request failed/);
+  } finally {
+    globalThis.fetch = originalFetch;
+    console.error = originalError;
+  }
+
+  assert.equal(errorEntries.length, 1);
+  assert.deepEqual(errorEntries[0], {
+    event: "github_workflow_dispatch",
+    outcome: "failed",
+    error_type: "github_network_error",
+    github_http_status: null,
+    trigger_source: "external_scheduler_cloudflare",
+    cron: "5 2 * * MON-FRI",
+    scheduled_time: "2026-08-12T02:05:00.000Z",
+  });
+  assert.equal(JSON.stringify(errorEntries[0]).includes(TOKEN), false);
+});
+
+test("scheduled HTTP failure logs include the GitHub status", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalError = console.error;
+  const errorEntries = [];
+  const pending = [];
+  globalThis.fetch = async () => ({ ok: false, status: 403 });
+  console.error = (value) => errorEntries.push(value);
 
   try {
     await worker.scheduled(
@@ -64,15 +163,17 @@ test("scheduled logs never expose the token", async () => {
       ENV,
       { waitUntil: (promise) => pending.push(promise) },
     );
-    await Promise.all(pending);
+    await assert.rejects(pending[0], /HTTP 403/);
   } finally {
     globalThis.fetch = originalFetch;
-    console.log = originalLog;
+    console.error = originalError;
   }
 
-  assert.equal(logLines.length, 1);
-  assert.equal(logLines.join("\n").includes(TOKEN), false);
-  assert.match(logLines[0], /external_scheduler_cloudflare/);
+  assert.equal(errorEntries.length, 1);
+  assert.equal(errorEntries[0].error_type, "github_http_error");
+  assert.equal(errorEntries[0].github_http_status, 403);
+  assert.equal(errorEntries[0].trigger_source, "external_scheduler_cloudflare");
+  assert.equal(JSON.stringify(errorEntries[0]).includes(TOKEN), false);
 });
 
 test("requires the token without logging or embedding a fallback", async () => {
@@ -84,7 +185,7 @@ test("requires the token without logging or embedding a fallback", async () => {
   );
 });
 
-test("keeps the Cloudflare and GitHub schedules unchanged", async () => {
+test("adds only the two Cloudflare fallbacks and preserves GitHub schedules", async () => {
   const workerRoot = new URL("../", import.meta.url);
   const repositoryRoot = new URL("../../../", import.meta.url);
   const wrangler = await readFile(new URL("wrangler.toml", workerRoot), "utf8");
@@ -93,8 +194,12 @@ test("keeps the Cloudflare and GitHub schedules unchanged", async () => {
     "utf8",
   );
 
-  assert.match(wrangler, /crons = \[ "0 2 \* \* MON-FRI" \]/);
+  assert.match(
+    wrangler,
+    /crons = \[ "0 2 \* \* MON-FRI", "5 2 \* \* MON-FRI" \]/,
+  );
   assert.match(wrangler, /workers_dev = false/);
+  assert.match(wrangler, /\[observability\][\s\S]*enabled = true/);
   assert.match(workflow, /cron: "40 1 \* \* 1-5"/);
   assert.match(workflow, /cron: "55 1 \* \* 1-5"/);
   assert.match(workflow, /cron: "10 2 \* \* 1-5"/);
