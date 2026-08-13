@@ -754,3 +754,41 @@
   until their GitHub Run and Cloudflare event logs are available.
 - Draft PR #6 remains unchanged at
   `50c995dc10765bb0bb822212663b7cd1b4c35120`.
+
+## PR #13 final merge and production deployment (2026-08-13)
+
+- Final manual acceptance found no P0/P1/P2 blocker. The final PR head
+  `b3ed6702fccf4672cbea6736c77d13bbd5b3304a` changed only the five approved
+  files: this status document and the existing Cloudflare Worker's README,
+  source, tests, and Wrangler configuration.
+- Latest PR-head CI was fully successful: main CI Run `31671857756` passed all
+  applicable checks, and External scheduler CI Run `31671857785` passed all
+  eight Worker tests plus all 19 existing idempotency-guard tests. Unrelated
+  desktop and web jobs were correctly skipped.
+- PR #13 was moved from Draft to Ready and squash-merged into `main` as
+  `eff7f51209a3571381778523ad526ab72e16077c`. The source branch was retained
+  for traceability.
+- The existing Worker `daily-stock-screening-scheduler` was updated in place in
+  Cloudflare account `a52e64dfee6cbace4ae1b3c7820b9189`; no second Worker or
+  HTTP route was created. The active deployment is version
+  `5a8b9298-62b9-4fb9-a35d-30dec63d621d` at 100% traffic.
+- Deployment installed exactly two weekday Cron Triggers: `0 2 * * MON-FRI`
+  and `5 2 * * MON-FRI`, corresponding to 10:00 and 10:05 Asia/Shanghai.
+  Wrangler's post-deployment inventory still exposes only the Secret binding
+  name `GITHUB_TOKEN`; its value was neither read nor rewritten during this
+  deployment.
+- Both Cron events use the existing dispatch payload and PR #10's
+  pre-dependency same-day guard remains the sole duplicate-production
+  authority. No V2.1 scoring/filter, reader, report, research, or production
+  workflow logic changed.
+- Real Cloudflare Cron evidence remains pending for the next business day. The
+  10:00 and 10:05 events must be correlated with separate GitHub
+  `workflow_dispatch` Runs, structured Worker logs, and guard Artifacts. A
+  local/manual simulation must not be substituted for these production events.
+- Acceptance rule: if 10:00 starts the valid full screening, the 10:05 Run must
+  stop before Python setup, dependency installation, market fetch, candidate
+  loading, and deep analysis. If 10:00 dispatch fails, 10:05 must be able to
+  start the full workflow. By 10:20 the reader must resolve the current-day
+  effective Run; the manifest, Artifact, and logs must contain no token value.
+- Draft PR #6 remains open, Draft, unmerged, and unchanged at
+  `50c995dc10765bb0bb822212663b7cd1b4c35120`.
