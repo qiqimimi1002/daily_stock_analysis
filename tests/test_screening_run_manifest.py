@@ -35,6 +35,37 @@ class ScreeningRunManifestTest(unittest.TestCase):
         coverages: list[float] | None = None,
     ) -> None:
         coverage_values = coverages or [75.0] * len(candidate_codes)
+        candidate_rows = []
+        for index, code in enumerate(candidate_codes):
+            price = 10.0 + index
+            prev_close = 10.0
+            candidate_rows.append(
+                {
+                    "stock_code": code,
+                    "stock_name": f"测试{index}",
+                    "score_coverage_pct": coverage_values[index],
+                    "latest_price": price,
+                    "prev_close": prev_close,
+                    "daily_pct": round((price - prev_close) / prev_close * 100.0, 2),
+                }
+            )
+        market_snapshot = {
+            "schema_version": "1.0",
+            "market_data_at": "2026-08-04T10:18:00+08:00",
+            "data_source": "synthetic-test-source",
+            "price_adjustment": "none_realtime_spot",
+            "prev_close_adjustment": "provider_exchange_reference",
+            "price_change_formula": "(price - prev_close) / prev_close * 100",
+            "quotes": {
+                code: {
+                    "code": code,
+                    "price": candidate_rows[candidate_codes.index(code)]["latest_price"],
+                    "prev_close": candidate_rows[candidate_codes.index(code)]["prev_close"],
+                    "change_pct": candidate_rows[candidate_codes.index(code)]["daily_pct"],
+                }
+                for code in analysis_codes
+            },
+        }
         payload = {
             "generated_at": "2026-08-04T10:18:30+08:00",
             "market_data_at": "2026-08-04T10:18:00+08:00",
@@ -46,16 +77,17 @@ class ScreeningRunManifestTest(unittest.TestCase):
             "history_failure_count": 5,
             "evidence_success_count": 4,
             "evidence_failure_count": 1,
-            "candidates": [
-                {"stock_code": code, "stock_name": f"测试{index}", "score_coverage_pct": coverage_values[index]}
-                for index, code in enumerate(candidate_codes)
-            ],
+            "candidates": candidate_rows,
             "analysis_codes": analysis_codes,
+            "market_snapshot": market_snapshot,
         }
         (self.data / "market_screening_20260804_1018.json").write_text(
             json.dumps(payload, ensure_ascii=False), encoding="utf-8"
         )
         (self.data / "screened_codes.txt").write_text(",".join(analysis_codes), encoding="utf-8")
+        (self.data / "market_snapshot.json").write_text(
+            json.dumps(market_snapshot, ensure_ascii=False), encoding="utf-8"
+        )
         (self.reports / "market_screening_20260804_1018.md").write_text("测试初筛报告", encoding="utf-8")
 
     def _build(
@@ -102,10 +134,25 @@ class ScreeningRunManifestTest(unittest.TestCase):
         self.assertEqual(manifest["started_at"], "2026-08-04T10:10:00+08:00")
         self.assertEqual(manifest["screening_generated_at"], "2026-08-04T10:18:30+08:00")
         self.assertEqual(manifest["market_data_at"], "2026-08-04T10:18:00+08:00")
+        self.assertEqual(manifest["market_snapshot"], "data/market_snapshot.json")
         self.assertEqual(manifest["data_source"], "synthetic-test-source")
         self.assertEqual(manifest["model_version"], "V2.1-test")
         self.assertEqual(manifest["fixed_result_entry"]["branch"], "screening-results")
         self.assertIn("reports/report_20260804.md", manifest["result_file_sha256"])
+
+    def test_market_snapshot_must_match_screening_candidate_quote(self) -> None:
+        self._write_screening(candidate_codes=["600089"], analysis_codes=["600089"])
+        (self.reports / "report_20260804.md").write_text("600089", encoding="utf-8")
+        snapshot_path = self.data / "market_snapshot.json"
+        snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
+        snapshot["quotes"]["600089"]["change_pct"] = -1.62
+        snapshot_path.write_text(json.dumps(snapshot), encoding="utf-8")
+
+        manifest = self._build()
+
+        self.assertFalse(manifest["integrity"]["ok"])
+        self.assertIn("market_snapshot_screening_mismatch", manifest["integrity"]["errors"])
+        self.assertIn("market_snapshot_quote_mismatch:600089", manifest["integrity"]["errors"])
 
     def test_zero_candidates_is_success_without_deep_analysis(self) -> None:
         self._write_screening(candidate_codes=[], analysis_codes=[])

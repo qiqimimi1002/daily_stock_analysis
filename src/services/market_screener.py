@@ -29,6 +29,11 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 
+from data_provider.market_snapshot import (
+    MARKET_SNAPSHOT_SCHEMA_VERSION,
+    PRICE_CHANGE_FORMULA,
+    calculate_change_pct,
+)
 from src.services.market_scoring import (
     V21ScoreCard,
     build_v21_scorecard,
@@ -44,6 +49,11 @@ _SPOT_ALIASES: Mapping[str, Sequence[str]] = {
     "code": ("代码", "股票代码", "code", "股票编号"),
     "name": ("名称", "股票名称", "name"),
     "close": ("最新价", "最新", "close", "最新价格", "最新报价"),
+    "prev_close": ("昨收", "昨日收盘", "pre_close", "prev_close", "lastClose"),
+    "open": ("今开", "开盘", "open"),
+    "high": ("最高", "high"),
+    "low": ("最低", "low"),
+    "amplitude": ("振幅", "amplitude"),
     "pct_change": ("涨跌幅", "涨跌幅(%)", "pct_change", "change_percent"),
     "volume": ("成交量", "volume"),
     "amount": ("成交额", "amount", "成交金额"),
@@ -71,6 +81,10 @@ _SINA_RAW_SPOT_ALIASES: Mapping[str, Sequence[str]] = {
     "code": ("code", "symbol"),
     "name": ("name",),
     "close": ("trade",),
+    "prev_close": ("settlement",),
+    "open": ("open",),
+    "high": ("high",),
+    "low": ("low",),
     "pct_change": ("changepercent",),
     "volume": ("volume",),
     "amount": ("amount",),
@@ -165,6 +179,7 @@ class ScreeningCandidate:
     confidence_label: str
     score_breakdown: Mapping[str, Any]
     latest_price: float
+    prev_close: float
     daily_pct: float
     five_day_pct: float
     amount_yi: float
@@ -203,6 +218,7 @@ class ScreeningCandidate:
 @dataclass(frozen=True)
 class ScreeningResult:
     generated_at: str
+    market_data_at: str
     universe_count: int
     spot_filtered_count: int
     history_success_count: int
@@ -221,10 +237,12 @@ class ScreeningResult:
     limitations: Sequence[str]
     model_version: str
     market_environment: Mapping[str, Any]
+    market_snapshot: Mapping[str, Any]
 
     def as_dict(self) -> Dict[str, Any]:
         return {
             "generated_at": self.generated_at,
+            "market_data_at": self.market_data_at,
             "universe_count": self.universe_count,
             "spot_filtered_count": self.spot_filtered_count,
             "history_success_count": self.history_success_count,
@@ -243,6 +261,7 @@ class ScreeningResult:
             "limitations": list(self.limitations),
             "model_version": self.model_version,
             "market_environment": dict(self.market_environment),
+            "market_snapshot": dict(self.market_snapshot),
         }
 
 
@@ -311,6 +330,11 @@ def normalize_spot_frame(frame: pd.DataFrame) -> pd.DataFrame:
     normalized["name"] = normalized["name"].astype(str).str.strip()
     for column in (
         "close",
+        "prev_close",
+        "open",
+        "high",
+        "low",
+        "amplitude",
         "pct_change",
         "volume",
         "amount",
@@ -321,6 +345,24 @@ def normalize_spot_frame(frame: pd.DataFrame) -> pd.DataFrame:
     ):
         if column in normalized.columns:
             normalized[column] = pd.to_numeric(normalized[column], errors="coerce")
+    normalized["provider_pct_change"] = normalized["pct_change"]
+    if "prev_close" not in normalized.columns:
+        normalized["prev_close"] = math.nan
+    normalized["prev_close_basis"] = "provider_exchange_reference"
+    missing_prev_close = normalized["prev_close"].isna() | (normalized["prev_close"] <= 0)
+    derivable = missing_prev_close & (normalized["pct_change"] > -100) & (normalized["close"] > 0)
+    normalized.loc[derivable, "prev_close"] = (
+        normalized.loc[derivable, "close"]
+        / (1.0 + normalized.loc[derivable, "pct_change"] / 100.0)
+    )
+    normalized.loc[derivable, "prev_close_basis"] = "derived_from_provider_pct_change"
+    canonical_change = (
+        (normalized["close"] - normalized["prev_close"])
+        / normalized["prev_close"]
+        * 100.0
+    )
+    valid_basis = normalized["prev_close"].notna() & (normalized["prev_close"] > 0)
+    normalized.loc[valid_basis, "pct_change"] = canonical_change.loc[valid_basis]
     for column in ("volume_ratio", "pe_ratio", "pb_ratio"):
         if column not in normalized.columns:
             normalized[column] = math.nan
@@ -338,11 +380,14 @@ def normalize_sina_raw_spot_frame(frame: pd.DataFrame) -> pd.DataFrame:
         _SINA_RAW_SPOT_ALIASES,
         required=("code", "name", "close", "pct_change", "volume", "amount", "turnover"),
     )
-    return normalized[
-        [
+    columns = [
             "code",
             "name",
             "close",
+            "prev_close",
+            "open",
+            "high",
+            "low",
             "pct_change",
             "volume",
             "amount",
@@ -350,7 +395,7 @@ def normalize_sina_raw_spot_frame(frame: pd.DataFrame) -> pd.DataFrame:
             "pe_ratio",
             "pb_ratio",
         ]
-    ].copy()
+    return normalized[[column for column in columns if column in normalized.columns]].copy()
 
 
 def normalize_history_frame(frame: pd.DataFrame) -> pd.DataFrame:
@@ -636,6 +681,7 @@ def build_candidate(
             for key, component in scorecard.components.items()
         },
         latest_price=round(float(spot_row["close"]), 2),
+        prev_close=round(float(spot_row["prev_close"]), 4),
         daily_pct=round(daily_pct, 2),
         five_day_pct=round(five_day_pct, 2),
         amount_yi=round(amount_yi, 2),
@@ -666,6 +712,61 @@ def build_candidate(
         trigger_conditions=tuple(scorecard.trigger_conditions),
         abandon_conditions=tuple(scorecard.abandon_conditions),
     )
+
+
+def build_market_snapshot(
+    spot: pd.DataFrame,
+    *,
+    analysis_codes: Sequence[str],
+    market_data_at: str,
+    data_source: str,
+) -> Dict[str, Any]:
+    """Build the run-scoped quote artifact consumed by deep analysis."""
+    indexed = spot.drop_duplicates(subset=["code"], keep="last").set_index("code")
+    quotes: Dict[str, Any] = {}
+    for code in analysis_codes:
+        if code not in indexed.index:
+            raise ValueError(f"market snapshot missing analysis code: {code}")
+        row = indexed.loc[code]
+        price = float(row["close"])
+        prev_close = float(row["prev_close"])
+        change_pct = calculate_change_pct(price, prev_close)
+        if change_pct is None:
+            raise ValueError(f"market snapshot has invalid price basis: {code}")
+        high = _optional_number(row.get("high"))
+        low = _optional_number(row.get("low"))
+        amplitude = _optional_number(row.get("amplitude"))
+        if amplitude is None and high is not None and low is not None:
+            amplitude = (high - low) / prev_close * 100.0
+        quotes[code] = {
+            "code": code,
+            "name": str(row.get("name") or ""),
+            "price": round(price, 4),
+            "prev_close": round(prev_close, 4),
+            "change_pct": round(change_pct, 2),
+            "provider_change_pct": _optional_number(row.get("provider_pct_change")),
+            "change_amount": round(price - prev_close, 4),
+            "open": _optional_number(row.get("open")),
+            "high": high,
+            "low": low,
+            "volume": _optional_number(row.get("volume")),
+            "amount": _optional_number(row.get("amount")),
+            "volume_ratio": _optional_number(row.get("volume_ratio")),
+            "turnover_rate": _optional_number(row.get("turnover")),
+            "amplitude": round(amplitude, 4) if amplitude is not None else None,
+            "pe_ratio": _optional_number(row.get("pe_ratio")),
+            "pb_ratio": _optional_number(row.get("pb_ratio")),
+            "prev_close_basis": str(row.get("prev_close_basis") or "unknown"),
+        }
+    return {
+        "schema_version": MARKET_SNAPSHOT_SCHEMA_VERSION,
+        "market_data_at": market_data_at,
+        "data_source": data_source,
+        "price_adjustment": "none_realtime_spot",
+        "prev_close_adjustment": "provider_exchange_reference",
+        "price_change_formula": PRICE_CHANGE_FORMULA,
+        "quotes": quotes,
+    }
 
 
 class PublicMarketDataSource:
@@ -699,7 +800,7 @@ class PublicMarketDataSource:
 
             frame = ak.stock_zh_a_spot_em()
             if frame is not None and not frame.empty:
-                return frame
+                return self._mark_spot_snapshot(frame, "akshare_eastmoney")
             errors.append("AKShare 返回空表")
         except Exception as exc:  # pragma: no cover - live provider
             errors.append(f"AKShare: {exc}")
@@ -710,7 +811,7 @@ class PublicMarketDataSource:
         try:
             frame = self._fetch_sina_spot_with_turnover()
             if not frame.empty:
-                return frame
+                return self._mark_spot_snapshot(frame, "sina")
             errors.append("新浪原始接口返回空表")
         except Exception as exc:  # pragma: no cover - live provider
             errors.append(f"新浪原始接口: {exc}")
@@ -720,12 +821,18 @@ class PublicMarketDataSource:
 
             frame = ef.stock.get_realtime_quotes()
             if frame is not None and not frame.empty:
-                return frame
+                return self._mark_spot_snapshot(frame, "efinance_eastmoney")
             errors.append("efinance 返回空表")
         except Exception as exc:  # pragma: no cover - live provider
             errors.append(f"efinance: {exc}")
 
         raise RuntimeError("全市场实时行情获取失败；" + "；".join(errors))
+
+    @staticmethod
+    def _mark_spot_snapshot(frame: pd.DataFrame, source: str) -> pd.DataFrame:
+        frame.attrs["market_data_source"] = source
+        frame.attrs["market_data_at"] = datetime.now(CN_TZ).isoformat(timespec="seconds")
+        return frame
 
     @staticmethod
     def _fetch_sina_spot_with_turnover() -> pd.DataFrame:
@@ -1045,6 +1152,14 @@ class MarketScreener:
         evidence_fetcher: Optional[Callable[[str], Mapping[str, Any]]] = None,
     ) -> ScreeningResult:
         raw_spot = spot_frame if spot_frame is not None else self.data_source.fetch_spot()
+        market_data_at = str(
+            raw_spot.attrs.get("market_data_at")
+            or datetime.now(CN_TZ).isoformat(timespec="seconds")
+        )
+        market_data_source = str(
+            raw_spot.attrs.get("market_data_source")
+            or ("injected" if spot_frame is not None else self.data_source.name)
+        )
         universe_count = len(raw_spot)
         normalized_spot = normalize_spot_frame(raw_spot)
         active_spot = _active_spot_rows(normalized_spot)
@@ -1270,6 +1385,12 @@ class MarketScreener:
             reverse=True,
         )[:observation_limit]
         analysis_codes = [item.code for item in ranked[: self.config.analysis_limit]]
+        market_snapshot = build_market_snapshot(
+            normalized_spot,
+            analysis_codes=analysis_codes,
+            market_data_at=market_data_at,
+            data_source=market_data_source,
+        )
         limitations: List[str] = [
             "V2.1综合评分覆盖基本面、资金面、技术面和估值；行业催化评分将在后续阶段补充。",
             "证据覆盖率单独展示；缺失数据不会按正面信号计分，也不会被表述为无风险。",
@@ -1309,6 +1430,7 @@ class MarketScreener:
             )
         return ScreeningResult(
             generated_at=datetime.now(CN_TZ).isoformat(timespec="seconds"),
+            market_data_at=market_data_at,
             universe_count=universe_count,
             spot_filtered_count=len(filtered),
             history_success_count=success,
@@ -1334,10 +1456,11 @@ class MarketScreener:
             candidates=tuple(ranked),
             analysis_codes=tuple(analysis_codes),
             config=self.config,
-            data_source=self.data_source.name,
+            data_source=market_data_source,
             limitations=tuple(limitations),
             model_version="V2.1",
             market_environment=market_environment,
+            market_snapshot=market_snapshot,
         )
 
 
@@ -1502,6 +1625,7 @@ def save_result(
     report_path: Path,
     json_path: Path,
     codes_path: Path,
+    snapshot_path: Optional[Path] = None,
 ) -> None:
     report_path.parent.mkdir(parents=True, exist_ok=True)
     json_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1517,3 +1641,14 @@ def save_result(
         encoding="utf-8",
     )
     codes_path.write_text(",".join(result.analysis_codes), encoding="utf-8")
+    if snapshot_path is not None:
+        snapshot_path.parent.mkdir(parents=True, exist_ok=True)
+        snapshot_path.write_text(
+            json.dumps(
+                _strict_json_value(result.market_snapshot),
+                ensure_ascii=False,
+                indent=2,
+                allow_nan=False,
+            ),
+            encoding="utf-8",
+        )

@@ -103,6 +103,7 @@ class RealtimeSource(Enum):
     SINA = "sina"                   # 新浪直连
     STOOQ = "stooq"                 # Stooq 美股兜底
     LONGBRIDGE = "longbridge"       # 长桥（美股/港股兜底）
+    MARKET_SNAPSHOT = "market_snapshot"  # 同一 screening Run 的统一市场快照
     FALLBACK = "fallback"           # 降级兜底
 
 
@@ -130,6 +131,8 @@ class UnifiedRealtimeQuote:
     currency: Optional[str] = None               # 报价币种（JPY/KRW/TWD/USD/HKD/CNY 等）
     data_quality: Optional[str] = None           # ok/partial/unavailable
     missing_fields: Optional[list[str]] = None   # provider 缺失的关键字段
+    upstream_source: Optional[str] = None         # Run 快照的原始数据源
+    price_change_formula: Optional[str] = None    # 一致性校验的涨跌幅公式
     
     # === 核心价格数据（几乎所有源都有）===
     price: Optional[float] = None           # 最新价
@@ -171,6 +174,7 @@ class UnifiedRealtimeQuote:
         optional_fields = [
             'fetched_at', 'provider_timestamp', 'is_stale', 'stale_seconds',
             'fallback_from', 'market', 'currency', 'data_quality', 'missing_fields',
+            'upstream_source', 'price_change_formula',
             'price', 'change_pct', 'change_amount', 'volume', 'amount',
             'volume_ratio', 'turnover_rate', 'amplitude',
             'open_price', 'high', 'low', 'pre_close',

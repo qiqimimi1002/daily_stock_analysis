@@ -1,6 +1,6 @@
 # Project Status
 
-> Last updated: 2026-08-13 (Asia/Shanghai)
+> Last updated: 2026-08-14 (Asia/Shanghai)
 >
 > Codex workflow rule: read this file before substantial project work and
 > update it after every completed material task. Complete safe in-scope work
@@ -22,6 +22,56 @@
   `agent/v2-2-outcomes`; its current CI checks pass. This work is separate from
   the screening-result publication change below and was not modified here.
 - Do not use or merge the abandoned branch `v2-1-market-scoring`.
+
+## P1 same-run market quote consistency (2026-08-14)
+
+- Baseline: `main` commit `009446c04d92127e890a87cb1c8fe6d6e50fdaa5`.
+  Implementation branch: `agent/market-snapshot-consistency`; Draft PR creation
+  is pending final local review and publication.
+- Root cause: the full-market screener fetched one market-wide spot frame
+  (today's Run #34 used AKShare/Eastmoney), while the subsequent Daily Stock
+  stage independently fetched each candidate again using
+  `REALTIME_SOURCE_PRIORITY` (Run #34 used Tencent first). The two providers
+  returned similar current prices but different previous-close bases. The
+  screener also trusted the provider percentage field and did not populate its
+  already-reserved `market_data_at`; deep-report arithmetic used its separately
+  fetched quote/history context. Screening history is qfq and remains used only
+  for V2.1 history/MA evidence; it is not the same input as the intraday change
+  calculation.
+- Fix: the screener now preserves the exact upstream spot source and capture
+  time, keeps price and provider/exchange previous close, and computes
+  `change_pct` only as `(price - prev_close) / prev_close * 100`. It writes a
+  candidate-only `data/market_snapshot.json`; the same workflow sets
+  `MARKET_SNAPSHOT_PATH` for deep analysis, where the snapshot is authoritative
+  and another realtime provider is not silently queried. Reports prefer the
+  snapshot previous close and retain `market_data_at`, the formula, and the
+  upstream source. The manifest hashes and validates the snapshot against the
+  screening JSON and candidate values before publication.
+- Scope stayed limited to quote consistency, artifact traceability, report
+  quote display, tests, and documentation. V2.1 weights/rules, Cloudflare and
+  GitHub schedule definitions, the idempotency guard, research/V2.2, and Draft
+  PR #6 were not modified.
+- Run #34 replay evidence (2026-08-14): screening/deep values were
+  `600522` 33.47/+1.73% versus 33.66/+0.33%, `600487`
+  58.20/+1.66% versus 58.34/-1.62%, and `002185` 17.91/+0.17% versus
+  17.87/-2.35%. The screening bases inferred from the saved price/percentage
+  are 32.9008, 57.2497, and 17.8796, while the old deep report used 33.55,
+  59.30, and 18.30. Replaying those candidates through the new contract makes
+  deep analysis reuse the screening price, previous close, percentage, source,
+  and timestamp exactly. This is deterministic replay evidence, not a new
+  production Actions run.
+- Verification: 33 focused screener/snapshot/scoring/manifest tests passed;
+  151 quote-pipeline/report/notification/fallback tests passed; 60 focused
+  V2.1, screener, history-reliability, guard, manifest, and snapshot tests
+  passed. Changed-file compilation, workflow YAML parsing, critical flake8
+  (`0`), and `git diff --check` passed. The Windows full offline run selected
+  5,097 tests: 5,017 passed, 77 unrelated environment/platform tests failed,
+  3 skipped, and 4 deselected. Failures were concentrated in Bash/Docker/macOS,
+  Codex process-group/CLI protocol, SQLite concurrency, and other Windows
+  baseline paths; authoritative Linux PR CI remains pending.
+- Remaining acceptance: create the Draft PR, confirm Linux CI, then run one
+  real same-day screening/deep-analysis workflow and verify the published
+  snapshot, manifest `market_data_at`, and all three deep report quote rows.
 
 ## 2026-08-10 scheduled-trigger reliability work
 

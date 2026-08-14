@@ -964,6 +964,7 @@ class StockAnalysisPipeline:
             enhanced['realtime'] = {
                 'name': getattr(realtime_quote, 'name', ''),
                 'price': getattr(realtime_quote, 'price', None),
+                'pre_close': getattr(realtime_quote, 'pre_close', None),
                 'change_pct': getattr(realtime_quote, 'change_pct', None),
                 'volume_ratio': volume_ratio,
                 'volume_ratio_desc': self._describe_volume_ratio(volume_ratio) if volume_ratio else '无数据',
@@ -979,6 +980,8 @@ class StockAnalysisPipeline:
                 'is_stale': getattr(realtime_quote, 'is_stale', None),
                 'stale_seconds': getattr(realtime_quote, 'stale_seconds', None),
                 'fallback_from': getattr(realtime_quote, 'fallback_from', None),
+                'upstream_source': getattr(realtime_quote, 'upstream_source', None),
+                'price_change_formula': getattr(realtime_quote, 'price_change_formula', None),
             }
             # 移除 None 值以减少上下文大小
             enhanced['realtime'] = {k: v for k, v in enhanced['realtime'].items() if v is not None}

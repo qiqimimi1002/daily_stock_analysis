@@ -15,6 +15,7 @@
 """
 
 import logging
+import os
 import random
 import time
 from threading import BoundedSemaphore, RLock, Thread
@@ -1745,6 +1746,36 @@ class DataFetcherManager:
         raw_stock_code = (stock_code or "").strip()
         # Normalize code (strip SH/SZ prefix etc.)
         stock_code = normalize_stock_code(stock_code)
+
+        # A full-market screening run can pin all downstream analysis to the
+        # exact quote snapshot that selected its candidates. Once configured,
+        # the snapshot is authoritative: do not silently re-fetch another
+        # provider with a different previous-close basis.
+        from .market_snapshot import (
+            MARKET_SNAPSHOT_ENV,
+            MarketSnapshotError,
+            load_market_snapshot_quote,
+        )
+
+        market_snapshot_path = os.getenv(MARKET_SNAPSHOT_ENV, "").strip()
+        if market_snapshot_path:
+            try:
+                quote = load_market_snapshot_quote(market_snapshot_path, stock_code)
+            except MarketSnapshotError as exc:
+                logger.error(
+                    "[market_snapshot] code=%s path=%s status=invalid error=%s",
+                    stock_code,
+                    market_snapshot_path,
+                    exc,
+                )
+                return None
+            logger.info(
+                "[market_snapshot] code=%s market_data_at=%s upstream_source=%s status=reused",
+                stock_code,
+                quote.provider_timestamp,
+                quote.upstream_source,
+            )
+            return quote
 
         from .akshare_fetcher import _is_us_code
         from .us_index_mapping import is_us_index_code

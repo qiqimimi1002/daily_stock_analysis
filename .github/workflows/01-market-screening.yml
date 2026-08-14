@@ -160,6 +160,7 @@ jobs:
           MAX_WORKERS: "1"
           ENABLE_CHIP_DISTRIBUTION: "false"
           REALTIME_SOURCE_PRIORITY: ${{ vars.REALTIME_SOURCE_PRIORITY || 'tencent,akshare_sina,efinance,akshare_em' }}
+          MARKET_SNAPSHOT_PATH: data/market_snapshot.json
         shell: bash
         run: |
           FORCE_ARG=""
@@ -215,6 +216,9 @@ jobs:
           if [ -f data/screened_codes.txt ]; then
             cp data/screened_codes.txt "$PAYLOAD_DIR/latest/screened_codes.txt"
           fi
+          if [ -f data/market_snapshot.json ]; then
+            cp data/market_snapshot.json "$PAYLOAD_DIR/latest/market_snapshot.json"
+          fi
           if compgen -G 'reports/*.md' > /dev/null; then
             cp reports/*.md "$PAYLOAD_DIR/latest/reports/"
           fi
@@ -252,6 +256,7 @@ jobs:
           name: market-screening-${{ github.run_number }}
           path: |
             data/market_screening_*.json
+            data/market_snapshot.json
             data/screened_codes.txt
             data/screening_execution_guard.json
             data/screening_run_manifest.json
