@@ -793,7 +793,6 @@
 - Draft PR #6 remains open, Draft, unmerged, and unchanged at
   `50c995dc10765bb0bb822212663b7cd1b4c35120`.
 
-
 ## Cloudflare dual-Cron production acceptance (2026-08-14): PASSED
 
 - This was a read-only production acceptance before the status-only update. No
