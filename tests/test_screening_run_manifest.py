@@ -3,11 +3,17 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import json
 from pathlib import Path
+import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
-from scripts.build_screening_run_manifest import build_manifest, write_summary
+from scripts.build_screening_run_manifest import (
+    build_manifest,
+    main as build_manifest_main,
+    write_summary,
+)
 
 
 SHANGHAI_TZ = ZoneInfo("Asia/Shanghai")
@@ -153,6 +159,103 @@ class ScreeningRunManifestTest(unittest.TestCase):
         self.assertFalse(manifest["integrity"]["ok"])
         self.assertIn("market_snapshot_screening_mismatch", manifest["integrity"]["errors"])
         self.assertIn("market_snapshot_quote_mismatch:600089", manifest["integrity"]["errors"])
+
+    def test_missing_market_snapshot_is_an_explicit_manifest_failure(self) -> None:
+        self._write_screening(candidate_codes=["600089"], analysis_codes=["600089"])
+        (self.data / "market_snapshot.json").unlink()
+
+        manifest = self._build(deep_analysis_outcome="failure")
+
+        self.assertFalse(manifest["integrity"]["ok"])
+        self.assertIn("market_snapshot_missing", manifest["integrity"]["errors"])
+        self.assertIn("market_snapshot_missing", manifest["reason_codes"])
+
+    def test_missing_candidate_quote_is_an_explicit_manifest_failure(self) -> None:
+        self._write_screening(candidate_codes=["600089"], analysis_codes=["600089"])
+        snapshot_path = self.data / "market_snapshot.json"
+        snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
+        snapshot["quotes"] = {}
+        snapshot_path.write_text(json.dumps(snapshot), encoding="utf-8")
+
+        manifest = self._build(deep_analysis_outcome="failure")
+
+        self.assertFalse(manifest["integrity"]["ok"])
+        self.assertIn("market_snapshot_codes_mismatch", manifest["integrity"]["errors"])
+        self.assertIn("market_snapshot_codes_mismatch", manifest["reason_codes"])
+
+    def test_invalid_snapshot_number_is_an_explicit_manifest_failure(self) -> None:
+        self._write_screening(candidate_codes=["600089"], analysis_codes=["600089"])
+        snapshot_path = self.data / "market_snapshot.json"
+        snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
+        snapshot["quotes"]["600089"]["price"] = "invalid"
+        snapshot_path.write_text(json.dumps(snapshot), encoding="utf-8")
+
+        manifest = self._build(deep_analysis_outcome="failure")
+
+        self.assertFalse(manifest["integrity"]["ok"])
+        error = "market_snapshot_quote_mismatch:600089"
+        self.assertIn(error, manifest["integrity"]["errors"])
+        self.assertIn(error, manifest["reason_codes"])
+
+    def test_snapshot_preflight_report_is_hashed_and_exposed(self) -> None:
+        self._write_screening(candidate_codes=["600089"], analysis_codes=["600089"])
+        error_report = self.reports / "market_snapshot_error.md"
+        error_report.write_text("行情快照校验失败", encoding="utf-8")
+
+        manifest = self._build(deep_analysis_outcome="failure")
+
+        self.assertFalse(manifest["integrity"]["ok"])
+        self.assertIn("market_snapshot_preflight_failed", manifest["integrity"]["errors"])
+        self.assertEqual(
+            manifest["market_snapshot_error_report"],
+            "reports/market_snapshot_error.md",
+        )
+        self.assertIn(
+            "reports/market_snapshot_error.md",
+            manifest["result_file_sha256"],
+        )
+
+    def test_strict_manifest_command_returns_nonzero_for_snapshot_failure(self) -> None:
+        self._write_screening(candidate_codes=["600089"], analysis_codes=["600089"])
+        (self.data / "market_snapshot.json").unlink()
+        output = self.data / "screening_run_manifest.json"
+        argv = [
+            "build_screening_run_manifest.py",
+            "--data-dir",
+            str(self.data),
+            "--reports-dir",
+            str(self.reports),
+            "--logs-dir",
+            str(self.logs),
+            "--output",
+            str(output),
+            "--run-id",
+            "123456",
+            "--run-number",
+            "14",
+            "--artifact-name",
+            "market-screening-14",
+            "--screening-outcome",
+            "success",
+            "--deep-analysis-outcome",
+            "failure",
+            "--deep-analysis-requested",
+            "true",
+            "--started-at",
+            "2026-08-04T02:10:00Z",
+            "--completed-at",
+            "2026-08-04T02:20:00Z",
+            "--strict",
+        ]
+
+        with patch.object(sys, "argv", argv), patch(
+            "scripts.build_screening_run_manifest.Path.cwd",
+            return_value=self.root.resolve(),
+        ):
+            self.assertEqual(build_manifest_main(), 3)
+
+        manifest = json.loads(output.read_text(encoding="utf-8"))
+        self.assertIn("market_snapshot_missing", manifest["integrity"]["errors"])
 
     def test_zero_candidates_is_success_without_deep_analysis(self) -> None:
         self._write_screening(candidate_codes=[], analysis_codes=[])

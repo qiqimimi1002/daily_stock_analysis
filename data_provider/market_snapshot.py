@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import json
 import math
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Mapping, Optional
+from typing import Any, Iterable, Mapping, Optional
 
 from .realtime_types import RealtimeSource, UnifiedRealtimeQuote
 
@@ -50,6 +51,14 @@ def load_market_snapshot_quote(path: Path | str, stock_code: str) -> UnifiedReal
     quotes = payload.get("quotes")
     if not market_data_at or not upstream_source or not isinstance(quotes, Mapping):
         raise MarketSnapshotError("market snapshot metadata is incomplete")
+    try:
+        parsed_market_data_at = datetime.fromisoformat(
+            market_data_at.replace("Z", "+00:00")
+        )
+    except ValueError as exc:
+        raise MarketSnapshotError("market snapshot market_data_at is invalid") from exc
+    if parsed_market_data_at.tzinfo is None or parsed_market_data_at.utcoffset() is None:
+        raise MarketSnapshotError("market snapshot market_data_at must include timezone")
 
     code = str(stock_code or "").strip()
     raw_quote = quotes.get(code)
@@ -91,6 +100,20 @@ def load_market_snapshot_quote(path: Path | str, stock_code: str) -> UnifiedReal
         upstream_source=upstream_source,
         price_change_formula=PRICE_CHANGE_FORMULA,
     )
+
+
+def validate_market_snapshot(
+    path: Path | str,
+    stock_codes: Iterable[str],
+) -> dict[str, UnifiedRealtimeQuote]:
+    """Validate every selected code before starting same-run deep analysis."""
+    quotes: dict[str, UnifiedRealtimeQuote] = {}
+    for raw_code in stock_codes:
+        code = str(raw_code or "").strip()
+        if not code or code in quotes:
+            raise MarketSnapshotError("market snapshot selected codes are invalid")
+        quotes[code] = load_market_snapshot_quote(path, code)
+    return quotes
 
 
 def _required_float(values: Mapping[str, Any], field: str, *, positive: bool = False) -> float:

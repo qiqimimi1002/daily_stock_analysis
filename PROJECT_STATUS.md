@@ -1,6 +1,6 @@
 # Project Status
 
-> Last updated: 2026-08-14 (Asia/Shanghai)
+> Last updated: 2026-08-15 (Asia/Shanghai)
 >
 > Codex workflow rule: read this file before substantial project work and
 > update it after every completed material task. Complete safe in-scope work
@@ -26,8 +26,8 @@
 ## P1 same-run market quote consistency (2026-08-14)
 
 - Baseline: `main` commit `009446c04d92127e890a87cb1c8fe6d6e50fdaa5`.
-  Implementation branch: `agent/market-snapshot-consistency`; implementation
-  commit `d046d6f`; Draft PR [#14](https://github.com/qiqimimi1002/daily_stock_analysis/pull/14).
+  Implementation branch: `agent/market-snapshot-consistency`; initial
+  implementation commit `d046d6f`; PR [#14](https://github.com/qiqimimi1002/daily_stock_analysis/pull/14).
 - Root cause: the full-market screener fetched one market-wide spot frame
   (today's Run #34 used AKShare/Eastmoney), while the subsequent Daily Stock
   stage independently fetched each candidate again using
@@ -47,6 +47,15 @@
   snapshot previous close and retain `market_data_at`, the formula, and the
   upstream source. The manifest hashes and validates the snapshot against the
   screening JSON and candidate values before publication.
+- Merge-acceptance review found and closed one fail-closed gap: a configured
+  invalid snapshot previously returned `None`, allowing the generic pipeline
+  to continue with historical close. Deep analysis now runs a snapshot
+  preflight before `main.py`; missing files, missing candidates, invalid
+  numeric/time metadata, or inconsistent percentages return nonzero, write
+  `reports/market_snapshot_error.md`, and are exposed through manifest
+  `integrity.errors`, `reason_codes`, and file hashes. Runtime snapshot errors
+  are re-raised and cannot call another provider, use historical close, or
+  reach the LLM.
 - Scope stayed limited to quote consistency, artifact traceability, report
   quote display, tests, and documentation. V2.1 weights/rules, Cloudflare and
   GitHub schedule definitions, the idempotency guard, research/V2.2, and Draft
@@ -60,18 +69,28 @@
   deep analysis reuse the screening price, previous close, percentage, source,
   and timestamp exactly. This is deterministic replay evidence, not a new
   production Actions run.
-- Verification: 33 focused screener/snapshot/scoring/manifest tests passed;
-  151 quote-pipeline/report/notification/fallback tests passed; 60 focused
-  V2.1, screener, history-reliability, guard, manifest, and snapshot tests
-  passed. Changed-file compilation, workflow YAML parsing, critical flake8
-  (`0`), and `git diff --check` passed. The Windows full offline run selected
-  5,097 tests: 5,017 passed, 77 unrelated environment/platform tests failed,
-  3 skipped, and 4 deselected. Failures were concentrated in Bash/Docker/macOS,
-  Codex process-group/CLI protocol, SQLite concurrency, and other Windows
-  baseline paths; authoritative Linux PR CI remains pending.
-- Remaining acceptance: confirm Linux PR CI, then run one real same-day
-  screening/deep-analysis workflow and verify the published
-  snapshot, manifest `market_data_at`, and all three deep report quote rows.
+- CI on pre-acceptance head `26caffb` passed: main CI Run `31795853951`
+  completed `ai-governance`, `backend-gate` (full offline suite), and
+  `docker-build`; unrelated desktop/Web jobs skipped. External scheduler CI
+  Run `31795853998` also passed without a production dispatch.
+- Windows baseline comparison used the same Python 3.12.9 / pytest 9.1.1
+  environment and exact command `python -m pytest -m "not network" -q`.
+  PR head `26caffb` returned 77 failures and `main@009446c` returned 78; all 77
+  PR failure nodeids were present on main (`only PR=0`). After the fail-closed
+  acceptance patch, the working tree returned 76 failures; all 76 were still
+  a subset of main (`only PR=0`). Main-only observations were the AKShare
+  timeout test and, on the final comparison, one local-CLI process-group test.
+  Thus none of the reported 77 failures was introduced by PR #14.
+- Acceptance verification: 27 focused snapshot/manifest failure-contract
+  tests and 113 affected screener, V2.1 scoring, realtime fallback, pipeline,
+  history, guard, and workflow tests passed. Compilation, critical flake8,
+  workflow YAML parsing, and `git diff --check` passed. The commit containing
+  this acceptance update must pass all required PR CI before #14 is marked
+  Ready.
+- Post-merge production acceptance is intentionally deferred to the next
+  trading day's real 10:00 Cron. Do not manually run today's production
+  screening. After merge, verify the published snapshot, manifest
+  `market_data_at`, and all three deep-report quote rows on that natural Run.
 
 ## 2026-08-10 scheduled-trigger reliability work
 

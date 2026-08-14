@@ -28,6 +28,7 @@ from src.config import FUNDAMENTAL_STAGE_TIMEOUT_SECONDS_DEFAULT, get_config, Co
 from src.storage import get_db
 from data_provider import DataFetcherManager
 from data_provider.base import is_bse_code, normalize_stock_code
+from data_provider.market_snapshot import MarketSnapshotError
 from data_provider.realtime_types import ChipDistribution
 from src.analyzer import (
     GeminiAnalyzer,
@@ -500,6 +501,13 @@ class StockAnalysisPipeline:
                         logger.warning(f"{stock_name}({code}) 所有实时行情数据源均不可用，已降级为历史收盘价继续分析")
                 else:
                     logger.info(f"{stock_name}({code}) 实时行情已禁用，使用历史收盘价继续分析")
+            except MarketSnapshotError:
+                logger.exception(
+                    "%s(%s) 同 Run 行情快照无效，禁止降级到历史收盘价",
+                    stock_name,
+                    code,
+                )
+                raise
             except Exception as e:
                 logger.warning(f"{stock_name}({code}) 实时行情链路异常，已降级为历史收盘价继续分析: {e}")
 
@@ -908,6 +916,8 @@ class StockAnalysisPipeline:
 
             return result
 
+        except MarketSnapshotError:
+            raise
         except Exception as e:
             logger.error(f"{stock_name}({code}) 分析失败: {e}")
             logger.exception(f"{stock_name}({code}) 详细错误信息:")

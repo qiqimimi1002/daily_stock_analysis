@@ -163,6 +163,11 @@ jobs:
           MARKET_SNAPSHOT_PATH: data/market_snapshot.json
         shell: bash
         run: |
+          python scripts/validate_market_snapshot.py \
+            --snapshot "$MARKET_SNAPSHOT_PATH" \
+            --codes "${{ steps.selected.outputs.codes }}" \
+            --error-report reports/market_snapshot_error.md
+
           FORCE_ARG=""
           if [ "${{ inputs.force_run }}" = "true" ]; then
             FORCE_ARG="--force-run"

@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - [新功能] 新增V2.2第一阶段不可变信号归档，可将既有V2.1观察名单保存为JSON、Parquet及带哈希的manifest，不计算未来收益或绩效。
 
 - [改进] 全市场初筛增加可校验运行清单、固定结果分支和读取状态区分，发布失败不阻断原筛选流程。
-- [修复] 全市场初筛与同一 Run 的 Daily Stock 深度分析复用统一行情快照、昨收基准和涨跌幅公式，并记录 market_data_at 与原始行情源。
+- [修复] 全市场初筛与同一 Run 的 Daily Stock 深度分析复用统一行情快照、昨收基准和涨跌幅公式，记录 market_data_at 与原始行情源，并在快照异常时显式失败且生成可追溯错误报告。
 
 ## [3.28.0] - 2026-07-26
 

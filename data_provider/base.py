@@ -1768,7 +1768,7 @@ class DataFetcherManager:
                     market_snapshot_path,
                     exc,
                 )
-                return None
+                raise
             logger.info(
                 "[market_snapshot] code=%s market_data_at=%s upstream_source=%s status=reused",
                 stock_code,

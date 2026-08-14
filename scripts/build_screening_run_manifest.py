@@ -132,6 +132,7 @@ def build_manifest(
     screening_json = json_files[-1] if json_files else None
     codes_path = data_dir / "screened_codes.txt"
     snapshot_path = data_dir / "market_snapshot.json"
+    snapshot_error_report = reports_dir / "market_snapshot_error.md"
     screening_reports = sorted(reports_dir.glob("market_screening_*.md"))
     deep_reports = sorted(reports_dir.glob("report_*.md"))
     errors: list[str] = []
@@ -191,6 +192,8 @@ def build_manifest(
             errors.append(f"market_snapshot_invalid:{exc}")
     elif analysis_codes:
         errors.append("market_snapshot_missing")
+    if snapshot_error_report.is_file():
+        errors.append("market_snapshot_preflight_failed")
 
     embedded_snapshot = source.get("market_snapshot", {})
     if analysis_codes and market_snapshot != embedded_snapshot:
@@ -305,6 +308,9 @@ def build_manifest(
         for event in retry_events
         if event.get("error_type") in {"gemini_429", "gemini_503"}
     )
+    reason_codes.extend(
+        error for error in errors if error.startswith("market_snapshot")
+    )
     retry_event_path = logs_dir / "llm_retry_events.jsonl" if logs_dir else None
     execution_guard_log_path = logs_dir / "screening_execution_guard.log" if logs_dir else None
 
@@ -313,6 +319,7 @@ def build_manifest(
         for path in [
             screening_json,
             snapshot_path,
+            snapshot_error_report,
             codes_path,
             *screening_reports,
             *deep_reports,
@@ -352,6 +359,11 @@ def build_manifest(
         "screening_generated_at": generated_at.isoformat(timespec="seconds") if generated_at else None,
         "market_data_at": market_data_at.isoformat(timespec="seconds") if market_data_at else None,
         "market_snapshot": snapshot_path.relative_to(repository_root).as_posix() if snapshot_path.is_file() else None,
+        "market_snapshot_error_report": (
+            snapshot_error_report.relative_to(repository_root).as_posix()
+            if snapshot_error_report.is_file()
+            else None
+        ),
         "data_source": source.get("data_source"),
         "model_version": source.get("model_version"),
         "screening_outcome": screening_outcome,
