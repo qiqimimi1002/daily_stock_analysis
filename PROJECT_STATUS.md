@@ -792,3 +792,65 @@
   effective Run; the manifest, Artifact, and logs must contain no token value.
 - Draft PR #6 remains open, Draft, unmerged, and unchanged at
   `50c995dc10765bb0bb822212663b7cd1b4c35120`.
+
+
+## Cloudflare dual-Cron production acceptance (2026-08-14): PASSED
+
+- This was a read-only production acceptance before the status-only update. No
+  production code, Worker configuration, Cron, Secret, V2.1 scoring, reader,
+  idempotency guard, research code, formal report, or PR #6 was changed or
+  manually triggered during validation.
+- The existing Cloudflare Worker `daily-stock-screening-scheduler` produced
+  two real weekday scheduled invocations on active script version
+  `6ad6a5bf-d9a8-4835-9589-f1df197ea520`:
+  - 10:00 slot: `scheduled_time=2026-08-14T02:00:52.000Z`,
+    Cron `0 2 * * MON-FRI`; the structured production log at
+    10:00:53.722 Asia/Shanghai recorded
+    `trigger_source=external_scheduler_cloudflare`,
+    `github_http_status=200`, and `outcome=accepted`.
+  - 10:05 slot: `scheduled_time=2026-08-14T02:05:14.000Z`,
+    Cron `5 2 * * MON-FRI`; the scheduled event at
+    10:05:15.930 Asia/Shanghai completed with `outcome=ok`, and its
+    structured log recorded `github_http_status=200` and
+    `outcome=accepted`.
+  Cloudflare observability showed four successful event/log records and zero
+  errors for this validation window. The GitHub Runs below independently prove
+  that both accepted dispatches created Actions Runs.
+- The 10:00 dispatch created Run #34 / ID `31762409073` at
+  10:00:53 Asia/Shanghai. Its guard recorded `should_run=true` and
+  `idempotency_skipped=false`; Python setup, dependency installation, market
+  fetch, screening, candidate loading, deep analysis, manifest generation,
+  Artifact upload, and fixed-entry publication all executed successfully.
+- The 10:05 dispatch created Run #35 / ID `31762646303` at
+  10:05:15 Asia/Shanghai. After concurrency released it, the guard completed at
+  10:08:48 with `should_run=false`,
+  `idempotency_skipped=true`,
+  `skip_reason=existing_valid_screening_result`, and references to Run #34.
+  Python setup, dependency installation, market fetch, screening, candidate
+  loading, deep analysis, manifest generation, and publication were all
+  skipped. Therefore exactly one Run performed production work.
+- Run #34 uploaded `market-screening-34` (Artifact ID `9205218119`).
+  Its current-day fixed manifest records 5,542 market rows, 60/60 successful
+  history series (`history_success_rate=100`,
+  `history_data_quality=ok/high`), four candidates
+  (`600522`, `600487`, `002185`, `600176`), three completed deep
+  analyses, `status=success`, and `integrity.ok=true`.
+  Run #35 uploaded only the 912-byte guard Artifact
+  `market-screening-35` (Artifact ID `9205221204`).
+- With authenticated Actions-Artifact access, the reader resolves the skipped
+  Run #35 back to effective Run #34 and returns `status=success`,
+  `candidate_count=4`, `history_success_rate=100`,
+  `deep_analysis_status=completed`, and `fixed_entry_valid=true`.
+  No previous-day result was accepted as the current-day result.
+- Sensitive-value scans found no GitHub PAT, bearer Authorization value, or
+  token plaintext in either Artifact. Worker structured logs contained only
+  the scheduled time, Cron, trigger source, HTTP status, repository/workflow
+  metadata, and sanitized outcome; GitHub job logs exposed only masked
+  credentials.
+- **Final verdict: PASSED.** Both independent real Cron slots created the
+  expected dispatch Runs, the 10:00 Run produced the valid current-day result,
+  and the 10:05 Run stopped before all expensive production steps. The external
+  startup fallback problem is therefore recorded as formally resolved as of
+  this production acceptance.
+- Draft PR #6 remains open, Draft, unmerged, and unchanged at
+  `50c995dc10765bb0bb822212663b7cd1b4c35120`.
