@@ -26,8 +26,8 @@
 ## P1 same-run market quote consistency (2026-08-14)
 
 - Baseline: `main` commit `009446c04d92127e890a87cb1c8fe6d6e50fdaa5`.
-  Implementation branch: `agent/market-snapshot-consistency`; Draft PR creation
-  is pending final local review and publication.
+  Implementation branch: `agent/market-snapshot-consistency`; implementation
+  commit `d046d6f`; Draft PR [#14](https://github.com/qiqimimi1002/daily_stock_analysis/pull/14).
 - Root cause: the full-market screener fetched one market-wide spot frame
   (today's Run #34 used AKShare/Eastmoney), while the subsequent Daily Stock
   stage independently fetched each candidate again using
@@ -69,8 +69,8 @@
   3 skipped, and 4 deselected. Failures were concentrated in Bash/Docker/macOS,
   Codex process-group/CLI protocol, SQLite concurrency, and other Windows
   baseline paths; authoritative Linux PR CI remains pending.
-- Remaining acceptance: create the Draft PR, confirm Linux CI, then run one
-  real same-day screening/deep-analysis workflow and verify the published
+- Remaining acceptance: confirm Linux PR CI, then run one real same-day
+  screening/deep-analysis workflow and verify the published
   snapshot, manifest `market_data_at`, and all three deep report quote rows.
 
 ## 2026-08-10 scheduled-trigger reliability work
