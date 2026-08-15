@@ -28,6 +28,7 @@ from src.config import FUNDAMENTAL_STAGE_TIMEOUT_SECONDS_DEFAULT, get_config, Co
 from src.storage import get_db
 from data_provider import DataFetcherManager
 from data_provider.base import is_bse_code, normalize_stock_code
+from data_provider.market_snapshot import MarketSnapshotError
 from data_provider.realtime_types import ChipDistribution
 from src.analyzer import (
     GeminiAnalyzer,
@@ -500,6 +501,13 @@ class StockAnalysisPipeline:
                         logger.warning(f"{stock_name}({code}) 所有实时行情数据源均不可用，已降级为历史收盘价继续分析")
                 else:
                     logger.info(f"{stock_name}({code}) 实时行情已禁用，使用历史收盘价继续分析")
+            except MarketSnapshotError:
+                logger.exception(
+                    "%s(%s) 同 Run 行情快照无效，禁止降级到历史收盘价",
+                    stock_name,
+                    code,
+                )
+                raise
             except Exception as e:
                 logger.warning(f"{stock_name}({code}) 实时行情链路异常，已降级为历史收盘价继续分析: {e}")
 
@@ -908,6 +916,8 @@ class StockAnalysisPipeline:
 
             return result
 
+        except MarketSnapshotError:
+            raise
         except Exception as e:
             logger.error(f"{stock_name}({code}) 分析失败: {e}")
             logger.exception(f"{stock_name}({code}) 详细错误信息:")
@@ -964,6 +974,7 @@ class StockAnalysisPipeline:
             enhanced['realtime'] = {
                 'name': getattr(realtime_quote, 'name', ''),
                 'price': getattr(realtime_quote, 'price', None),
+                'pre_close': getattr(realtime_quote, 'pre_close', None),
                 'change_pct': getattr(realtime_quote, 'change_pct', None),
                 'volume_ratio': volume_ratio,
                 'volume_ratio_desc': self._describe_volume_ratio(volume_ratio) if volume_ratio else '无数据',
@@ -979,6 +990,8 @@ class StockAnalysisPipeline:
                 'is_stale': getattr(realtime_quote, 'is_stale', None),
                 'stale_seconds': getattr(realtime_quote, 'stale_seconds', None),
                 'fallback_from': getattr(realtime_quote, 'fallback_from', None),
+                'upstream_source': getattr(realtime_quote, 'upstream_source', None),
+                'price_change_formula': getattr(realtime_quote, 'price_change_formula', None),
             }
             # 移除 None 值以减少上下文大小
             enhanced['realtime'] = {k: v for k, v in enhanced['realtime'].items() if v is not None}

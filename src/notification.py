@@ -2127,18 +2127,33 @@ class NotificationService(
     _SOURCE_DISPLAY_NAMES = {
         "tencent": {"zh": "腾讯财经", "en": "Tencent Finance"},
         "akshare_em": {"zh": "东方财富", "en": "Eastmoney"},
+        "akshare_eastmoney": {"zh": "东方财富", "en": "Eastmoney"},
         "akshare_sina": {"zh": "新浪财经", "en": "Sina Finance"},
         "akshare_qq": {"zh": "腾讯财经", "en": "Tencent Finance"},
         "efinance": {"zh": "东方财富(efinance)", "en": "Eastmoney (efinance)"},
+        "efinance_eastmoney": {"zh": "东方财富(efinance)", "en": "Eastmoney (efinance)"},
         "tushare": {"zh": "Tushare Pro", "en": "Tushare Pro"},
         "sina": {"zh": "新浪财经", "en": "Sina Finance"},
         "stooq": {"zh": "Stooq", "en": "Stooq"},
         "longbridge": {"zh": "长桥", "en": "Longbridge"},
+        "market_snapshot": {"zh": "同 Run 市场快照", "en": "Same-run market snapshot"},
         "fallback": {"zh": "降级兜底", "en": "Fallback"},
     }
 
     def _get_source_display_name(self, source: Any, language: Optional[str]) -> str:
         raw_source = str(source or "N/A")
+        if raw_source.startswith("market_snapshot:"):
+            upstream = raw_source.split(":", 1)[1]
+            upstream_mapping = self._SOURCE_DISPLAY_NAMES.get(upstream)
+            upstream_name = (
+                upstream_mapping[normalize_report_language(language)]
+                if upstream_mapping
+                else upstream
+            )
+            prefix = self._SOURCE_DISPLAY_NAMES["market_snapshot"][
+                normalize_report_language(language)
+            ]
+            return f"{prefix} ({upstream_name})"
         mapping = self._SOURCE_DISPLAY_NAMES.get(raw_source)
         if not mapping:
             return raw_source

@@ -4295,7 +4295,7 @@ class GeminiAnalyzer:
         realtime = context.get('realtime', {}) or {}
         yesterday = context.get('yesterday', {}) or {}
 
-        prev_close = yesterday.get('close')
+        prev_close = realtime.get('pre_close') or yesterday.get('close')
         close = today.get('close')
         high = today.get('high')
         low = today.get('low')
@@ -4328,11 +4328,17 @@ class GeminiAnalyzer:
         }
 
         if realtime:
+            source = getattr(realtime.get('source'), 'value', realtime.get('source', 'N/A'))
+            upstream_source = realtime.get('upstream_source')
+            if source == 'market_snapshot' and upstream_source:
+                source = f"market_snapshot:{upstream_source}"
             snapshot.update({
                 "price": self._format_price(realtime.get('price')),
                 "volume_ratio": realtime.get('volume_ratio', 'N/A'),
                 "turnover_rate": self._format_percent(realtime.get('turnover_rate')),
-                "source": getattr(realtime.get('source'), 'value', realtime.get('source', 'N/A')),
+                "source": source,
+                "market_data_at": realtime.get('provider_timestamp'),
+                "price_change_formula": realtime.get('price_change_formula'),
             })
 
         return snapshot

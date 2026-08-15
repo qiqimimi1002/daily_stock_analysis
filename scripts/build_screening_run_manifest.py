@@ -131,6 +131,8 @@ def build_manifest(
     json_files = sorted(data_dir.glob("market_screening_*.json"))
     screening_json = json_files[-1] if json_files else None
     codes_path = data_dir / "screened_codes.txt"
+    snapshot_path = data_dir / "market_snapshot.json"
+    snapshot_error_report = reports_dir / "market_snapshot_error.md"
     screening_reports = sorted(reports_dir.glob("market_screening_*.md"))
     deep_reports = sorted(reports_dir.glob("report_*.md"))
     errors: list[str] = []
@@ -178,6 +180,68 @@ def build_manifest(
         errors.append("screened_codes_missing")
     if file_codes != analysis_codes:
         errors.append("screened_codes_mismatch")
+
+    market_snapshot: dict[str, Any] = {}
+    if snapshot_path.is_file():
+        try:
+            loaded_snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
+            if not isinstance(loaded_snapshot, dict):
+                raise ValueError("root must be an object")
+            market_snapshot = loaded_snapshot
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
+            errors.append(f"market_snapshot_invalid:{exc}")
+    elif analysis_codes:
+        errors.append("market_snapshot_missing")
+    if snapshot_error_report.is_file():
+        errors.append("market_snapshot_preflight_failed")
+
+    embedded_snapshot = source.get("market_snapshot", {})
+    if analysis_codes and market_snapshot != embedded_snapshot:
+        errors.append("market_snapshot_screening_mismatch")
+    if analysis_codes and (
+        market_snapshot.get("market_data_at") != source.get("market_data_at")
+        or market_snapshot.get("price_change_formula")
+        != "(price - prev_close) / prev_close * 100"
+    ):
+        errors.append("market_snapshot_metadata_mismatch")
+    snapshot_quotes = market_snapshot.get("quotes", {}) if market_snapshot else {}
+    if analysis_codes and (
+        not isinstance(snapshot_quotes, Mapping)
+        or list(snapshot_quotes.keys()) != analysis_codes
+    ):
+        errors.append("market_snapshot_codes_mismatch")
+    candidate_by_code = {
+        code: candidate
+        for code, candidate in zip(normalized_candidate_codes, candidates)
+    }
+    if isinstance(snapshot_quotes, Mapping):
+        for code in analysis_codes:
+            quote = snapshot_quotes.get(code)
+            candidate = candidate_by_code.get(code)
+            if not isinstance(quote, Mapping) or not isinstance(candidate, Mapping):
+                continue
+            comparisons = (
+                (quote.get("price"), candidate.get("latest_price")),
+                (quote.get("prev_close"), candidate.get("prev_close")),
+                (quote.get("change_pct"), candidate.get("daily_pct")),
+            )
+            try:
+                consistent = all(
+                    math.isclose(float(left), float(right), abs_tol=0.011)
+                    for left, right in comparisons
+                )
+                price = float(quote.get("price"))
+                prev_close = float(quote.get("prev_close"))
+                calculated_pct = (price - prev_close) / prev_close * 100.0
+                consistent = consistent and math.isclose(
+                    calculated_pct,
+                    float(quote.get("change_pct")),
+                    abs_tol=0.011,
+                )
+            except (TypeError, ValueError, ZeroDivisionError):
+                consistent = False
+            if not consistent:
+                errors.append(f"market_snapshot_quote_mismatch:{code}")
 
     deep_text = "\n".join(path.read_text(encoding="utf-8", errors="replace") for path in deep_reports)
     missing_deep_codes = [code for code in analysis_codes if code not in deep_text]
@@ -244,6 +308,9 @@ def build_manifest(
         for event in retry_events
         if event.get("error_type") in {"gemini_429", "gemini_503"}
     )
+    reason_codes.extend(
+        error for error in errors if error.startswith("market_snapshot")
+    )
     retry_event_path = logs_dir / "llm_retry_events.jsonl" if logs_dir else None
     execution_guard_log_path = logs_dir / "screening_execution_guard.log" if logs_dir else None
 
@@ -251,6 +318,8 @@ def build_manifest(
         path
         for path in [
             screening_json,
+            snapshot_path,
+            snapshot_error_report,
             codes_path,
             *screening_reports,
             *deep_reports,
@@ -289,6 +358,12 @@ def build_manifest(
         "idempotency_existing_run_number": (execution_context or {}).get("existing_run_number"),
         "screening_generated_at": generated_at.isoformat(timespec="seconds") if generated_at else None,
         "market_data_at": market_data_at.isoformat(timespec="seconds") if market_data_at else None,
+        "market_snapshot": snapshot_path.relative_to(repository_root).as_posix() if snapshot_path.is_file() else None,
+        "market_snapshot_error_report": (
+            snapshot_error_report.relative_to(repository_root).as_posix()
+            if snapshot_error_report.is_file()
+            else None
+        ),
         "data_source": source.get("data_source"),
         "model_version": source.get("model_version"),
         "screening_outcome": screening_outcome,
@@ -323,6 +398,7 @@ def build_manifest(
             "latest_manifest": "latest/manifest.json",
             "latest_screening_json": "latest/market_screening.json",
             "latest_screened_codes": "latest/screened_codes.txt",
+            "latest_market_snapshot": "latest/market_snapshot.json",
             "latest_reports": "latest/reports/",
             "history_prefix": f"history/{trade_date}/",
         },
