@@ -93,6 +93,12 @@ def _canonical_json_bytes(value: Any) -> bytes:
     ).encode("utf-8")
 
 
+def canonical_json_bytes(value: Any) -> bytes:
+    """Public stable-JSON primitive shared by offline research contracts."""
+
+    return _canonical_json_bytes(value)
+
+
 def _strict_json_bytes(value: Any, *, pretty: bool = True) -> bytes:
     return (
         json.dumps(
