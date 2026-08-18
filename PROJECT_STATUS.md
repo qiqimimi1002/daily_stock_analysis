@@ -1,6 +1,6 @@
 # Project Status
 
-> Last updated: 2026-08-15 (Asia/Shanghai)
+> Last updated: 2026-08-18 (Asia/Shanghai)
 >
 > Codex workflow rule: read this file before substantial project work and
 > update it after every completed material task. Complete safe in-scope work
@@ -17,11 +17,51 @@
   was marked Ready and squash-merged into `main` on 2026-08-03.
 - Phase-1 squash commit:
   `41d64f6ea504129bb93b78cb97694b0a553b43d8`.
-- V2.2 phase 2 is under review in Draft PR
+- The original V2.2 phase-2 experiment remains read-only in Draft PR
   [#6](https://github.com/qiqimimi1002/daily_stock_analysis/pull/6), branch
-  `agent/v2-2-outcomes`; its current CI checks pass. This work is separate from
-  the screening-result publication change below and was not modified here.
+  `agent/v2-2-outcomes`. It was not modified, closed, or merged.
 - Do not use or merge the abandoned branch `v2-1-market-scoring`.
+
+## V2.2 per-signal outcome engine v2 (2026-08-18)
+
+- Baseline: latest `main` commit
+  `de5c2757cd6ba6d4aaa4266583416f807baf13df`. Development branch:
+  `agent/v2-2-outcomes-v2`; a separate Draft PR is pending publication.
+- Scope is offline research only. It reads verified immutable phase-1 signal
+  archives and writes independent JSON, Parquet, and manifest outcomes for
+  1/3/5/10/20 exchange sessions. No V2.1 score, workflow, scheduler,
+  Cloudflare, reader, deep analysis, or formal report file was changed.
+- The calculation contract accepts only `raw_unadjusted` OHLC, starts on the
+  next exchange session, never extends suspension/missing windows, enforces the
+  Shanghai 15:00 close boundary, records configurable cost scenarios
+  (30 bps default), MFE/MAE, ordered-close maximum drawdown, execution-risk
+  flags, corporate-action/conflict states, and time-safe CSI 300 excess return.
+- Deterministic validation: isolated research environment 53/53 unit tests
+  passed with real Parquet writes; targeted V2.1/research regression 68 passed
+  (3 dependency-gated tests skipped in the production Python); `py_compile`
+  and full targeted `flake8` passed.
+- The repository-wide non-network suite was started locally but its unrelated
+  Windows-only Codex backend gate produced the known
+  `platform_unsupported` mismatch (14 failures in
+  `test_agent_backend_status_service.py`). No adjacent production code was
+  changed to mask that environment-specific result; Linux PR CI remains the
+  authoritative full-suite check.
+- `scripts/check_ai_assets.py` cannot pass in this Windows clone because Git
+  materialized `CLAUDE.md` as a regular file instead of the repository's
+  `AGENTS.md` symlink. The branch does not modify either file; Linux PR CI
+  must verify the canonical symlink checkout.
+- Read-only real-signal replay used Run ID `30781220470`, artifact
+  `market-screening-12`, file
+  `data/market_screening_20260803_1115.json`. The temporary phase-1 archive
+  contained five verified signals with content hash
+  `8215c9d831bc8935f683dd99530039342c4aa0162e1e44866e8ce43031b01ef0`;
+  repeated outcome execution returned `exists` and did not change the signal
+  files.
+- Real outcome-price acceptance remains blocked: AKShare's raw/unadjusted
+  Eastmoney request ended with `RemoteDisconnected`. A clearly labelled
+  no-market-data replay verified loading and produced 25 `pending` records,
+  but is not claimed as real price-performance evidence. The PR must remain
+  Draft until a compliant real raw-price artifact is available.
 
 ## P1 same-run market quote consistency (2026-08-14)
 
