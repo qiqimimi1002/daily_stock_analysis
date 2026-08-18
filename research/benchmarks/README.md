@@ -54,16 +54,33 @@ Use `BenchmarkSignal.create(...)`. Every signal contains:
 signal_id, model_id, model_name, model_version, model_family, variant,
 stock_code, stock_name, signal_date, market_data_at, reference_price,
 rank, score, raw_metric, selection_reason, source_data_as_of,
-parameters, calculation_version
+fetched_at, parameters, calculation_version, snapshot_content_sha256
 ```
 
 `score` is nullable. Models are not required to manufacture a 0–100 score;
 their native measurement belongs in `raw_metric`.
 
-`signal_id` is UUIDv5 over the fields that define the research observation:
-model ID, stock code, signal date, snapshot time, reference price, rank, score,
-raw metric, data cutoff, calculation version and canonical parameters. Display
-name and human-readable selection reason do not affect identity.
+`signal_id` identifies one **logical stock-selection signal**, not one exact
+calculation snapshot. It is UUIDv5 over only:
+
+```text
+model_id + stock_code + signal_date
+```
+
+`model_id` already freezes model family, version, variant, calculation version
+and canonical parameters. Therefore changing the model, parameters, stock or
+signal date changes `signal_id`, while a rerun with a slightly different
+capture time, price, metric, score or rank does not create another statistical
+sample.
+
+Every signal also stores `snapshot_content_sha256`. It hashes the complete
+canonical calculation snapshot, including model-generation time, market/data
+times, optional fetch-completion time, reference price, rank, score, raw
+metric, reason and display metadata. Reruns can therefore share one logical
+`signal_id` while retaining distinct auditable snapshot hashes. Batch
+serialization rejects duplicate logical IDs so a rerun cannot be counted twice
+inside one comparison batch. Immutable archive batch IDs and file/content
+hashes remain the separate batch-level audit mechanism.
 
 `serialize_signal_batch()` writes canonical strict JSON and sorts signals by
 rank, stock code and signal ID. NaN, Infinity, naive timestamps, non-positive
@@ -77,12 +94,23 @@ The contract requires:
 
 ```text
 signal_date == market_data_at date
-market_data_at <= source_data_as_of <= generated_at
+source_data_as_of <= market_data_at <= generated_at
 ```
 
-Consequently, data dated after model generation cannot enter a signal. Future
-models must additionally enforce their own field-level point-in-time rules;
-this framework does not query or repair source data.
+`market_data_at` is the market decision snapshot represented by the signal.
+`source_data_as_of` is the latest content time of data actually used by the
+selection calculation, so it may not be later than that decision snapshot.
+`generated_at` is only the time the model result finished; it never authorizes
+using later data.
+
+`fetched_at` is an optional acquisition/download/serialization completion
+timestamp. It is audit metadata only and may be later than `market_data_at`;
+it is deliberately excluded from both the no-lookahead authorization rule and
+logical `signal_id`. Its value is nevertheless covered by
+`snapshot_content_sha256`. All four values, when present, must be timezone-aware
+and are normalized to `Asia/Shanghai`. Future models must additionally enforce
+their field-level point-in-time rules; this framework does not query or repair
+source data.
 
 ## Shared V2.1 universe adapter
 

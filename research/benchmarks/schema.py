@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, datetime
+import hashlib
 import math
 import re
 from typing import Any, Dict, Mapping, Optional, Sequence
@@ -17,7 +18,7 @@ from research.archive import (
 
 
 SHANGHAI_TZ = ZoneInfo("Asia/Shanghai")
-BENCHMARK_SCHEMA_VERSION = "1.0"
+BENCHMARK_SCHEMA_VERSION = "1.1"
 MODEL_ID_NAMESPACE = uuid.UUID("2a5a9f2c-d106-54ee-83f1-f5704b0a7e4c")
 SIGNAL_ID_NAMESPACE = uuid.UUID("76b018e1-7caf-59c6-951f-54e5395a5c32")
 _STOCK_CODE_RE = re.compile(r"^[0-9]{6}$")
@@ -226,28 +227,16 @@ def _signal_identity_payload(
     model_id: str,
     stock_code: str,
     signal_date: date,
-    market_data_at: datetime,
-    reference_price: float,
-    rank: int,
-    score: Optional[float],
-    raw_metric: Any,
-    source_data_as_of: datetime,
-    parameters: Mapping[str, Any],
-    calculation_version: str,
 ) -> Dict[str, Any]:
     return {
-        "calculation_version": calculation_version,
-        "market_data_at": market_data_at.isoformat(timespec="seconds"),
         "model_id": model_id,
-        "parameters": _strict_json_value(parameters, field="parameters"),
-        "rank": rank,
-        "raw_metric": _strict_json_value(raw_metric, field="raw_metric"),
-        "reference_price": reference_price,
-        "score": score,
         "signal_date": signal_date.isoformat(),
-        "source_data_as_of": source_data_as_of.isoformat(timespec="seconds"),
         "stock_code": stock_code,
     }
+
+
+def _snapshot_content_sha256(payload: Mapping[str, Any]) -> str:
+    return hashlib.sha256(canonical_json_bytes(payload)).hexdigest()
 
 
 @dataclass(frozen=True, init=False)
@@ -270,8 +259,10 @@ class BenchmarkSignal:
     raw_metric: Any
     selection_reason: str
     source_data_as_of: datetime
+    fetched_at: Optional[datetime]
     parameters: Mapping[str, Any]
     calculation_version: str
+    snapshot_content_sha256: str
 
     @classmethod
     def create(
@@ -287,6 +278,7 @@ class BenchmarkSignal:
         raw_metric: Any,
         selection_reason: str,
         source_data_as_of: datetime | str,
+        fetched_at: datetime | str | None = None,
         stock_name: Optional[str] = None,
     ) -> "BenchmarkSignal":
         local_market_time = _aware_shanghai_datetime(
@@ -295,18 +287,19 @@ class BenchmarkSignal:
         local_source_time = _aware_shanghai_datetime(
             source_data_as_of, field="source_data_as_of"
         )
+        local_fetched_time = (
+            _aware_shanghai_datetime(fetched_at, field="fetched_at")
+            if fetched_at is not None
+            else None
+        )
         local_signal_date = _signal_date(signal_date)
         if local_market_time.date() != local_signal_date:
             raise BenchmarkValidationError(
                 "signal_date must match market_data_at in Asia/Shanghai"
             )
-        if local_source_time < local_market_time:
+        if local_source_time > local_market_time:
             raise BenchmarkValidationError(
-                "source_data_as_of cannot be earlier than market_data_at"
-            )
-        if local_source_time > model.generated_at:
-            raise BenchmarkValidationError(
-                "source_data_as_of cannot be later than generated_at"
+                "source_data_as_of cannot be later than market_data_at"
             )
         if local_market_time > model.generated_at:
             raise BenchmarkValidationError(
@@ -331,19 +324,30 @@ class BenchmarkSignal:
             model_id=model.model_id,
             stock_code=normalized_code,
             signal_date=local_signal_date,
-            market_data_at=local_market_time,
-            reference_price=normalized_price,
-            rank=rank,
-            score=normalized_score,
-            raw_metric=normalized_metric,
-            source_data_as_of=local_source_time,
-            parameters=normalized_parameters,
-            calculation_version=model.calculation_version,
         )
+        signal_id = _uuid5(SIGNAL_ID_NAMESPACE, payload)
+        snapshot_payload = {
+            "fetched_at": (
+                local_fetched_time.isoformat(timespec="seconds")
+                if local_fetched_time is not None
+                else None
+            ),
+            "market_data_at": local_market_time.isoformat(timespec="seconds"),
+            "model": model.to_dict(),
+            "rank": rank,
+            "raw_metric": normalized_metric,
+            "reference_price": normalized_price,
+            "score": normalized_score,
+            "selection_reason": normalized_reason,
+            "signal_id": signal_id,
+            "source_data_as_of": local_source_time.isoformat(timespec="seconds"),
+            "stock_code": normalized_code,
+            "stock_name": _optional_text(stock_name),
+        }
         return _frozen_instance(
             cls,
             {
-                "signal_id": _uuid5(SIGNAL_ID_NAMESPACE, payload),
+                "signal_id": signal_id,
                 "model_id": model.model_id,
                 "model_name": model.model_name,
                 "model_version": model.model_version,
@@ -359,8 +363,12 @@ class BenchmarkSignal:
                 "raw_metric": normalized_metric,
                 "selection_reason": normalized_reason,
                 "source_data_as_of": local_source_time,
+                "fetched_at": local_fetched_time,
                 "parameters": normalized_parameters,
                 "calculation_version": model.calculation_version,
+                "snapshot_content_sha256": _snapshot_content_sha256(
+                    snapshot_payload
+                ),
             },
         )
 
@@ -382,8 +390,14 @@ class BenchmarkSignal:
             "raw_metric": _strict_json_value(self.raw_metric, field="raw_metric"),
             "selection_reason": self.selection_reason,
             "source_data_as_of": self.source_data_as_of.isoformat(timespec="seconds"),
+            "fetched_at": (
+                self.fetched_at.isoformat(timespec="seconds")
+                if self.fetched_at is not None
+                else None
+            ),
             "parameters": _strict_json_value(self.parameters, field="parameters"),
             "calculation_version": self.calculation_version,
+            "snapshot_content_sha256": self.snapshot_content_sha256,
         }
 
     def to_outcome_signal_core(self) -> Dict[str, Any]:
@@ -409,6 +423,11 @@ def serialize_signal_batch(
             raise BenchmarkValidationError(
                 "all signals in a batch must reference the supplied model_id"
             )
+    signal_ids = [signal.signal_id for signal in signals]
+    if len(set(signal_ids)) != len(signal_ids):
+        raise BenchmarkValidationError(
+            "a batch cannot contain duplicate logical signal_id values"
+        )
     ordered = sorted(
         signals,
         key=lambda item: (item.rank, item.stock_code, item.signal_id),

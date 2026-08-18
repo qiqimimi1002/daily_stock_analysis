@@ -41,7 +41,8 @@ def _signal(model: BenchmarkModelIdentity | None = None, **overrides) -> Benchma
         "score": None,
         "raw_metric": {"value": 0.125, "window": 20},
         "selection_reason": "synthetic contract fixture",
-        "source_data_as_of": "2026-08-18T10:00:30+08:00",
+        "source_data_as_of": "2026-08-18T09:59:30+08:00",
+        "fetched_at": "2026-08-18T10:00:30+08:00",
     }
     values.update(overrides)
     return BenchmarkSignal.create(**values)
@@ -57,10 +58,10 @@ class BenchmarkIdentityTests(unittest.TestCase):
         self.assertEqual(first.model_id, second.model_id)
 
     def test_critical_parameter_changes_model_id(self) -> None:
-        self.assertNotEqual(
-            _model(parameters={"lookback_days": 20}).model_id,
-            _model(parameters={"lookback_days": 60}).model_id,
-        )
+        first = _model(parameters={"lookback_days": 20})
+        second = _model(parameters={"lookback_days": 60})
+        self.assertNotEqual(first.model_id, second.model_id)
+        self.assertNotEqual(_signal(first).signal_id, _signal(second).signal_id)
 
     def test_model_version_changes_model_and_signal_ids(self) -> None:
         first = _model(model_version="1.0.0")
@@ -93,15 +94,62 @@ class BenchmarkIdentityTests(unittest.TestCase):
         )
 
     def test_same_signal_inputs_produce_same_signal_id(self) -> None:
-        self.assertEqual(_signal().signal_id, _signal().signal_id)
+        first = _signal()
+        second = _signal()
+        self.assertEqual(first.signal_id, second.signal_id)
+        self.assertEqual(
+            first.snapshot_content_sha256,
+            second.snapshot_content_sha256,
+        )
+        self.assertRegex(first.snapshot_content_sha256, r"^[0-9a-f]{64}$")
 
-    def test_signal_identity_changes_for_stock_or_snapshot(self) -> None:
+    def test_signal_identity_changes_for_stock_or_signal_date(self) -> None:
         baseline = _signal().signal_id
         self.assertNotEqual(baseline, _signal(stock_code="000100").signal_id)
         self.assertNotEqual(
             baseline,
-            _signal(reference_price=12.35).signal_id,
+            _signal(
+                signal_date="2026-08-19",
+                market_data_at="2026-08-19T10:00:00+08:00",
+                source_data_as_of="2026-08-19T09:59:30+08:00",
+                fetched_at="2026-08-19T10:00:30+08:00",
+                model=_model(generated_at="2026-08-19T10:01:00+08:00"),
+            ).signal_id,
         )
+
+    def test_generated_at_does_not_change_logical_signal_id(self) -> None:
+        first = _signal(_model(generated_at="2026-08-18T10:01:00+08:00"))
+        second = _signal(_model(generated_at="2026-08-18T10:02:00+08:00"))
+        self.assertEqual(first.signal_id, second.signal_id)
+        self.assertNotEqual(
+            first.snapshot_content_sha256,
+            second.snapshot_content_sha256,
+        )
+
+    def test_fetched_at_does_not_change_logical_signal_id(self) -> None:
+        first = _signal(fetched_at="2026-08-18T10:00:10+08:00")
+        second = _signal(fetched_at="2026-08-18T10:00:40+08:00")
+        self.assertEqual(first.signal_id, second.signal_id)
+        self.assertNotEqual(
+            first.snapshot_content_sha256,
+            second.snapshot_content_sha256,
+        )
+
+    def test_exact_snapshot_changes_remain_auditable(self) -> None:
+        baseline = _signal()
+        for changed in (
+            _signal(reference_price=12.35),
+            _signal(rank=2),
+            _signal(score=88.0),
+            _signal(raw_metric={"value": 0.126, "window": 20}),
+            _signal(source_data_as_of="2026-08-18T09:59:20+08:00"),
+        ):
+            with self.subTest(snapshot=changed.to_dict()):
+                self.assertEqual(baseline.signal_id, changed.signal_id)
+                self.assertNotEqual(
+                    baseline.snapshot_content_sha256,
+                    changed.snapshot_content_sha256,
+                )
 
 
 class BenchmarkSignalContractTests(unittest.TestCase):
@@ -110,11 +158,13 @@ class BenchmarkSignalContractTests(unittest.TestCase):
         signal = _signal(
             model,
             market_data_at="2026-08-18T02:00:00+00:00",
-            source_data_as_of="2026-08-18T02:00:30Z",
+            source_data_as_of="2026-08-18T01:59:30Z",
+            fetched_at="2026-08-18T02:00:30Z",
         )
         self.assertEqual(model.generated_at.tzinfo, CN_TZ)
         self.assertEqual(signal.market_data_at.isoformat(), "2026-08-18T10:00:00+08:00")
-        self.assertEqual(signal.source_data_as_of.isoformat(), "2026-08-18T10:00:30+08:00")
+        self.assertEqual(signal.source_data_as_of.isoformat(), "2026-08-18T09:59:30+08:00")
+        self.assertEqual(signal.fetched_at.isoformat(), "2026-08-18T10:00:30+08:00")
 
     def test_naive_timestamp_is_rejected(self) -> None:
         with self.assertRaisesRegex(BenchmarkValidationError, "timezone"):
@@ -124,13 +174,14 @@ class BenchmarkSignalContractTests(unittest.TestCase):
         with self.assertRaisesRegex(BenchmarkValidationError, "market_data_at"):
             _signal(market_data_at="2026-08-18T10:02:00+08:00")
 
-    def test_source_data_after_generation_is_rejected(self) -> None:
-        with self.assertRaisesRegex(BenchmarkValidationError, "source_data_as_of"):
-            _signal(source_data_as_of="2026-08-18T10:02:00+08:00")
+    def test_source_data_after_market_snapshot_is_rejected(self) -> None:
+        with self.assertRaisesRegex(BenchmarkValidationError, "later"):
+            _signal(source_data_as_of="2026-08-18T10:00:01+08:00")
 
-    def test_source_data_before_market_snapshot_is_rejected(self) -> None:
-        with self.assertRaisesRegex(BenchmarkValidationError, "earlier"):
-            _signal(source_data_as_of="2026-08-18T09:59:59+08:00")
+    def test_fetched_at_after_market_snapshot_is_audit_only(self) -> None:
+        signal = _signal(fetched_at="2026-08-18T10:00:45+08:00")
+        self.assertLessEqual(signal.source_data_as_of, signal.market_data_at)
+        self.assertGreater(signal.fetched_at, signal.market_data_at)
 
     def test_signal_date_must_match_market_date(self) -> None:
         with self.assertRaisesRegex(BenchmarkValidationError, "signal_date"):
@@ -181,6 +232,14 @@ class BenchmarkSignalContractTests(unittest.TestCase):
         payload = json.loads(serialize_signal_batch(model, []))
         self.assertEqual(payload["signals"], [])
         self.assertEqual(payload["model"]["model_id"], model.model_id)
+
+    def test_duplicate_logical_signal_in_batch_is_rejected(self) -> None:
+        model = _model()
+        first = _signal(model, reference_price=12.34)
+        rerun = _signal(model, reference_price=12.35)
+        self.assertEqual(first.signal_id, rerun.signal_id)
+        with self.assertRaisesRegex(BenchmarkValidationError, "duplicate"):
+            serialize_signal_batch(model, [first, rerun])
 
     def test_outcome_adapter_exposes_only_frozen_core_fields(self) -> None:
         core = _signal().to_outcome_signal_core()

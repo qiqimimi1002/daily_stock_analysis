@@ -25,4 +25,8 @@ class BenchmarkModel(ABC):
         market_data_at: datetime,
         source_data_as_of: datetime,
     ) -> Sequence[BenchmarkSignal]:
-        """Generate deterministic signals from data available at the cutoff."""
+        """Generate signals using content no later than the market snapshot.
+
+        Acquisition completion belongs in ``BenchmarkSignal.fetched_at`` and
+        does not extend ``source_data_as_of``.
+        """

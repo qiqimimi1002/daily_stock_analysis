@@ -32,17 +32,24 @@
 - Scope is offline contract infrastructure only. No Low Volatility, Momentum,
   Value/Profitability or other real model is implemented. No outcome, win-rate,
   model voting, optimization or trading calculation is present.
-- Added `research/benchmarks/` with deterministic UUIDv5 model/signal identity,
-  strict stable JSON, nullable score/native `raw_metric`, Asia/Shanghai
-  point-in-time validation, a five-field future-outcome handoff, and an abstract
-  model interface. The existing research archive's canonical JSON primitive is
-  now exposed and reused without changing its V2.1 archive identity or files.
+- Added `research/benchmarks/` with deterministic UUIDv5 model/logical-signal
+  identity, strict stable JSON, nullable score/native `raw_metric`,
+  Asia/Shanghai point-in-time validation, a five-field future-outcome handoff,
+  and an abstract model interface. Phase 1.1 freezes
+  `source_data_as_of <= market_data_at <= generated_at`; optional `fetched_at`
+  is acquisition audit metadata and never authorizes later data.
+- A logical signal ID now depends only on model identity, stock code and signal
+  date, preventing reruns from becoming duplicate outcome samples. Exact price,
+  rank, metric, score and timestamp differences remain auditable through each
+  record's canonical `snapshot_content_sha256`; duplicate logical IDs are
+  rejected within a serialized batch. The existing immutable archive batch ID
+  and file/content hashes remain unchanged.
 - The offline universe adapter calls V2.1 `apply_spot_filters()` as its sole
   hard-filter truth and only adds explicit eligibility states for history
   sufficiency, suspension, unavailable data and invalid data. It performs no
   network request and does not change production V2.1 configuration or output.
-- Verification on Python 3.12.9: 73 focused benchmark/archive/V2.1 tests
-  collected, 72 passed and the existing optional PyArrow test skipped because
+- Verification on Python 3.12.9: 77 focused benchmark/archive/V2.1 tests
+  collected, 76 passed and the existing optional PyArrow test skipped because
   the isolated dependency is absent. Changed Python files passed `py_compile`,
   full changed-file flake8 and critical flake8; `git diff --check` passed.
 - Production workflow, Cloudflare, reader, deep analysis, formal reports and
