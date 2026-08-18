@@ -27,7 +27,8 @@
 
 - Baseline: latest `main` commit
   `de5c2757cd6ba6d4aaa4266583416f807baf13df`. Development branch:
-  `agent/benchmark-model-framework-phase1`; Draft PR pending publication.
+  `agent/benchmark-model-framework-phase1`; Draft PR
+  [#16](https://github.com/qiqimimi1002/daily_stock_analysis/pull/16).
 - Scope is offline contract infrastructure only. No Low Volatility, Momentum,
   Value/Profitability or other real model is implemented. No outcome, win-rate,
   model voting, optimization or trading calculation is present.
