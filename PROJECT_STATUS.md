@@ -51,6 +51,11 @@
   materialized `CLAUDE.md` as a regular file instead of the repository's
   `AGENTS.md` symlink. The branch does not modify either file; Linux PR CI
   must verify the canonical symlink checkout.
+- Draft PR #15 GitHub CI Run
+  [32105148118](https://github.com/qiqimimi1002/daily_stock_analysis/actions/runs/32105148118)
+  passed: change detection, AI governance, backend gate (5m38s), and Docker
+  build/smoke/import (4m01s). Unrelated desktop and Web jobs were correctly
+  skipped by path detection.
 - Read-only real-signal replay used Run ID `30781220470`, artifact
   `market-screening-12`, file
   `data/market_screening_20260803_1115.json`. The temporary phase-1 archive
