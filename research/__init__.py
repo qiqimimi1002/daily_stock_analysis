@@ -7,6 +7,7 @@ from research.archive import (
     SignalValidationError,
     archive_signals,
     build_signal_id,
+    canonical_json_bytes,
     load_source_artifact,
 )
 
@@ -17,5 +18,6 @@ __all__ = [
     "SignalValidationError",
     "archive_signals",
     "build_signal_id",
+    "canonical_json_bytes",
     "load_source_artifact",
 ]

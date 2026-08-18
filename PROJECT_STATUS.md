@@ -1,6 +1,6 @@
 # Project Status
 
-> Last updated: 2026-08-15 (Asia/Shanghai)
+> Last updated: 2026-08-18 (Asia/Shanghai)
 >
 > Codex workflow rule: read this file before substantial project work and
 > update it after every completed material task. Complete safe in-scope work
@@ -22,6 +22,40 @@
   `agent/v2-2-outcomes`; its current CI checks pass. This work is separate from
   the screening-result publication change below and was not modified here.
 - Do not use or merge the abandoned branch `v2-1-market-scoring`.
+
+## Public benchmark comparison framework Phase 1 (2026-08-18)
+
+- Baseline: latest `main` commit
+  `de5c2757cd6ba6d4aaa4266583416f807baf13df`. Development branch:
+  `agent/benchmark-model-framework-phase1`; Draft PR
+  [#16](https://github.com/qiqimimi1002/daily_stock_analysis/pull/16).
+- Scope is offline contract infrastructure only. No Low Volatility, Momentum,
+  Value/Profitability or other real model is implemented. No outcome, win-rate,
+  model voting, optimization or trading calculation is present.
+- Added `research/benchmarks/` with deterministic UUIDv5 model/logical-signal
+  identity, strict stable JSON, nullable score/native `raw_metric`,
+  Asia/Shanghai point-in-time validation, a five-field future-outcome handoff,
+  and an abstract model interface. Phase 1.1 freezes
+  `source_data_as_of <= market_data_at <= generated_at`; optional `fetched_at`
+  is acquisition audit metadata and never authorizes later data.
+- A logical signal ID now depends only on model identity, stock code and signal
+  date, preventing reruns from becoming duplicate outcome samples. Exact price,
+  rank, metric, score and timestamp differences remain auditable through each
+  record's canonical `snapshot_content_sha256`; duplicate logical IDs are
+  rejected within a serialized batch. The existing immutable archive batch ID
+  and file/content hashes remain unchanged.
+- The offline universe adapter calls V2.1 `apply_spot_filters()` as its sole
+  hard-filter truth and only adds explicit eligibility states for history
+  sufficiency, suspension, unavailable data and invalid data. It performs no
+  network request and does not change production V2.1 configuration or output.
+- Verification on Python 3.12.9: 78 focused benchmark/archive/V2.1 tests
+  collected, 77 passed and the existing optional PyArrow test skipped because
+  the isolated dependency is absent. Changed Python files passed `py_compile`,
+  full changed-file flake8 and critical flake8; `git diff --check` passed.
+- Production workflow, Cloudflare, reader, deep analysis, formal reports and
+  notifications are untouched. Draft PR #6 and Draft PR #15 branches are not
+  modified or imported. Phase 2 must not start before this contract is
+  accepted.
 
 ## P1 same-run market quote consistency (2026-08-14)
 
