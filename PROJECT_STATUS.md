@@ -48,8 +48,8 @@
   hard-filter truth and only adds explicit eligibility states for history
   sufficiency, suspension, unavailable data and invalid data. It performs no
   network request and does not change production V2.1 configuration or output.
-- Verification on Python 3.12.9: 77 focused benchmark/archive/V2.1 tests
-  collected, 76 passed and the existing optional PyArrow test skipped because
+- Verification on Python 3.12.9: 78 focused benchmark/archive/V2.1 tests
+  collected, 77 passed and the existing optional PyArrow test skipped because
   the isolated dependency is absent. Changed Python files passed `py_compile`,
   full changed-file flake8 and critical flake8; `git diff --check` passed.
 - Production workflow, Cloudflare, reader, deep analysis, formal reports and

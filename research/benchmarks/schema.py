@@ -260,6 +260,7 @@ class BenchmarkSignal:
     selection_reason: str
     source_data_as_of: datetime
     fetched_at: Optional[datetime]
+    generated_at: datetime
     parameters: Mapping[str, Any]
     calculation_version: str
     snapshot_content_sha256: str
@@ -327,22 +328,30 @@ class BenchmarkSignal:
         )
         signal_id = _uuid5(SIGNAL_ID_NAMESPACE, payload)
         snapshot_payload = {
+            "calculation_version": model.calculation_version,
             "fetched_at": (
                 local_fetched_time.isoformat(timespec="seconds")
                 if local_fetched_time is not None
                 else None
             ),
+            "generated_at": model.generated_at.isoformat(timespec="seconds"),
             "market_data_at": local_market_time.isoformat(timespec="seconds"),
-            "model": model.to_dict(),
+            "model_family": model.model_family,
+            "model_id": model.model_id,
+            "model_name": model.model_name,
+            "model_version": model.model_version,
+            "parameters": normalized_parameters,
             "rank": rank,
             "raw_metric": normalized_metric,
             "reference_price": normalized_price,
             "score": normalized_score,
             "selection_reason": normalized_reason,
             "signal_id": signal_id,
+            "signal_date": local_signal_date.isoformat(),
             "source_data_as_of": local_source_time.isoformat(timespec="seconds"),
             "stock_code": normalized_code,
             "stock_name": _optional_text(stock_name),
+            "variant": model.variant,
         }
         return _frozen_instance(
             cls,
@@ -364,6 +373,7 @@ class BenchmarkSignal:
                 "selection_reason": normalized_reason,
                 "source_data_as_of": local_source_time,
                 "fetched_at": local_fetched_time,
+                "generated_at": model.generated_at,
                 "parameters": normalized_parameters,
                 "calculation_version": model.calculation_version,
                 "snapshot_content_sha256": _snapshot_content_sha256(
@@ -395,6 +405,7 @@ class BenchmarkSignal:
                 if self.fetched_at is not None
                 else None
             ),
+            "generated_at": self.generated_at.isoformat(timespec="seconds"),
             "parameters": _strict_json_value(self.parameters, field="parameters"),
             "calculation_version": self.calculation_version,
             "snapshot_content_sha256": self.snapshot_content_sha256,
@@ -422,6 +433,10 @@ def serialize_signal_batch(
         if signal.model_id != model.model_id:
             raise BenchmarkValidationError(
                 "all signals in a batch must reference the supplied model_id"
+            )
+        if signal.generated_at != model.generated_at:
+            raise BenchmarkValidationError(
+                "all signals in a batch must share the supplied model generated_at"
             )
     signal_ids = [signal.signal_id for signal in signals]
     if len(set(signal_ids)) != len(signal_ids):

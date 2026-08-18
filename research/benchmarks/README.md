@@ -54,7 +54,8 @@ Use `BenchmarkSignal.create(...)`. Every signal contains:
 signal_id, model_id, model_name, model_version, model_family, variant,
 stock_code, stock_name, signal_date, market_data_at, reference_price,
 rank, score, raw_metric, selection_reason, source_data_as_of,
-fetched_at, parameters, calculation_version, snapshot_content_sha256
+fetched_at, generated_at, parameters, calculation_version,
+snapshot_content_sha256
 ```
 
 `score` is nullable. Models are not required to manufacture a 0–100 score;
@@ -73,11 +74,12 @@ signal date changes `signal_id`, while a rerun with a slightly different
 capture time, price, metric, score or rank does not create another statistical
 sample.
 
-Every signal also stores `snapshot_content_sha256`. It hashes the complete
-canonical calculation snapshot, including model-generation time, market/data
-times, optional fetch-completion time, reference price, rank, score, raw
-metric, reason and display metadata. Reruns can therefore share one logical
-`signal_id` while retaining distinct auditable snapshot hashes. Batch
+Every signal also stores `snapshot_content_sha256`. It is the SHA-256 of the
+signal's canonical strict-JSON record with only the hash field omitted, so it
+is independently reproducible. The covered record includes model-generation
+time, market/data times, optional fetch-completion time, reference price, rank,
+score, raw metric, reason and display metadata. Reruns can therefore share one
+logical `signal_id` while retaining distinct auditable snapshot hashes. Batch
 serialization rejects duplicate logical IDs so a rerun cannot be counted twice
 inside one comparison batch. Immutable archive batch IDs and file/content
 hashes remain the separate batch-level audit mechanism.
@@ -100,8 +102,9 @@ source_data_as_of <= market_data_at <= generated_at
 `market_data_at` is the market decision snapshot represented by the signal.
 `source_data_as_of` is the latest content time of data actually used by the
 selection calculation, so it may not be later than that decision snapshot.
-`generated_at` is only the time the model result finished; it never authorizes
-using later data.
+`generated_at` is the time the model result finished; it is copied from the
+batch model identity into every signal for self-contained audit and never
+authorizes using later data.
 
 `fetched_at` is an optional acquisition/download/serialization completion
 timestamp. It is audit metadata only and may be later than `market_data_at`;

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import unittest
 from zoneinfo import ZoneInfo
@@ -8,6 +9,7 @@ from research.benchmarks.schema import (
     BenchmarkModelIdentity,
     BenchmarkSignal,
     BenchmarkValidationError,
+    canonical_json_bytes,
     serialize_signal_batch,
 )
 
@@ -102,6 +104,15 @@ class BenchmarkIdentityTests(unittest.TestCase):
             second.snapshot_content_sha256,
         )
         self.assertRegex(first.snapshot_content_sha256, r"^[0-9a-f]{64}$")
+
+    def test_snapshot_hash_is_reproducible_from_serialized_signal(self) -> None:
+        signal = _signal()
+        payload = signal.to_dict()
+        expected = payload.pop("snapshot_content_sha256")
+        self.assertEqual(
+            hashlib.sha256(canonical_json_bytes(payload)).hexdigest(),
+            expected,
+        )
 
     def test_signal_identity_changes_for_stock_or_signal_date(self) -> None:
         baseline = _signal().signal_id
