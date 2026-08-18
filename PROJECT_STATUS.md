@@ -51,10 +51,10 @@
   materialized `CLAUDE.md` as a regular file instead of the repository's
   `AGENTS.md` symlink. The branch does not modify either file; Linux PR CI
   must verify the canonical symlink checkout.
-- Draft PR #15 GitHub CI Run
-  [32105148118](https://github.com/qiqimimi1002/daily_stock_analysis/actions/runs/32105148118)
-  passed: change detection, AI governance, backend gate (5m38s), and Docker
-  build/smoke/import (4m01s). Unrelated desktop and Web jobs were correctly
+- Draft PR #15 latest GitHub CI Run
+  [32105633013](https://github.com/qiqimimi1002/daily_stock_analysis/actions/runs/32105633013)
+  passed: change detection, AI governance, backend gate (5m57s), and Docker
+  build/smoke/import (1m15s). Unrelated desktop and Web jobs were correctly
   skipped by path detection.
 - Read-only real-signal replay used Run ID `30781220470`, artifact
   `market-screening-12`, file
@@ -63,11 +63,42 @@
   `8215c9d831bc8935f683dd99530039342c4aa0162e1e44866e8ce43031b01ef0`;
   repeated outcome execution returned `exists` and did not change the signal
   files.
-- Real outcome-price acceptance remains blocked: AKShare's raw/unadjusted
-  Eastmoney request ended with `RemoteDisconnected`. A clearly labelled
-  no-market-data replay verified loading and produced 25 `pending` records,
-  but is not claimed as real price-performance evidence. The PR must remain
-  Draft until a compliant real raw-price artifact is available.
+- Real raw-price replay is now partially accepted. AKShare/Eastmoney still
+  ended with `RemoteDisconnected`, so the local-only price artifact used
+  AKShare 1.18.83 Sina `adjust=''` raw daily bars, cross-checked every OHLC row
+  against Baostock 0.9.3 `adjustflag=3` raw bars. Both libraries declare
+  permissive MIT/BSD licenses. CSI 300 used AKShare raw index daily bars; its
+  reference snapshot is the signal-day 09:30 opening level, which predates the
+  11:15 signal snapshot and never substitutes the signal-day close. Baostock
+  dividend data provided the corporate-action check.
+- The real artifact covered 2026-08-03 through 2026-08-17 with 11 exchange
+  sessions and 11 rows for each of five stocks plus CSI 300. Cross-source OHLC
+  conflicts, missing sessions, suspensions, corporate actions, and target
+  limit-close flags were all zero for this batch. The fetch occurred at
+  2026-08-18 14:41 Asia/Shanghai, so the still-unformed 2026-08-18 close was
+  not present or consumed.
+- Outcome execution created 25 rows: 20 `complete` results for the 1/3/5/10
+  horizons and five correctly `pending` 20-day results. A second identical run
+  returned `exists` with the same directory, IDs, and content hash
+  `b2af12a1904185b7982fa5b8e334bc003d78268d38b18888e7de06775fe8cad9`.
+  Independent hand calculation checked all 20 mature stock/horizon cases and
+  found zero differences in gross/net return, high/low and dates, MFE, MAE,
+  ordered-close drawdown, CSI 300 return, or excess return. JSON and Parquet
+  contained the same 25 outcome IDs.
+- Audit hashes: price file
+  `dc2e5c0603cb23894a28aff4f3ca69d25f557e57c42ebc5b066a089806a86b68`,
+  outcome JSON
+  `ed3333e93a86ccd89ea30c1575db1d986626a3d4631e92f5890441041a4bb71d`,
+  outcome Parquet
+  `9dd01816111e29bec6d50927875c8d162ea2a4d02d64c18839718ab8ee741ac9`,
+  and immutable input signal JSON
+  `9208ec734c673a1db82369a33d2c2d7e06570f5b21ae85e12ca233b003e4cc97`.
+- Full 20-session production-data acceptance remains time-blocked, not
+  data-source-blocked. GitHub Actions confirms the earliest real full-market
+  screening Run was 2026-07-29, so no archived full-market signal has yet
+  accumulated 20 subsequent exchange sessions as of 2026-08-18. PR #15 must
+  remain Draft until a real signal naturally reaches that horizon and is
+  replayed; no synthetic price was used to claim acceptance.
 
 ## P1 same-run market quote consistency (2026-08-14)
 
