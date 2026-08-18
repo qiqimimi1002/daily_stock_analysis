@@ -16,6 +16,14 @@ from research.archive import (
     archive_signals,
     load_source_artifact,
 )
+from research.outcomes import (
+    DEFAULT_CALCULATION_VERSION,
+    DEFAULT_ROUND_TRIP_COST_BPS,
+    OutcomeConflictError,
+    OutcomeValidationError,
+    calculate_outcomes,
+    load_price_artifact,
+)
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -63,30 +71,56 @@ def _parser() -> argparse.ArgumentParser:
         "--source-artifact",
         help="stable artifact label stored in every signal; defaults to the input file name",
     )
+    outcomes = commands.add_parser(
+        "calculate-outcomes",
+        help="calculate immutable forward outcomes from phase-1 signal archives",
+    )
+    outcomes.add_argument("--signals", required=True, type=Path)
+    outcomes.add_argument("--prices", required=True, type=Path)
+    outcomes.add_argument("--output", type=Path, default=Path("research/data/outcomes"))
+    outcomes.add_argument("--as-of", required=True, help="Asia/Shanghai evaluation cutoff with timezone")
+    outcomes.add_argument("--calculation-version", default=DEFAULT_CALCULATION_VERSION)
+    outcomes.add_argument(
+        "--round-trip-cost-bps",
+        type=float,
+        default=DEFAULT_ROUND_TRIP_COST_BPS,
+        help="round-trip cost scenario in bps; estimate only (default: 30)",
+    )
     return parser
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     args = _parser().parse_args(argv)
-    if args.command != "archive-signals":
-        raise AssertionError(f"unsupported command: {args.command}")
-
     try:
-        loaded = load_source_artifact(args.input)
-        result = archive_signals(
-            loaded.source,
-            output_root=args.output,
-            source_file_sha256=loaded.source_file_sha256,
-            market_data_at=args.market_data_at,
-            market_data_at_source=args.market_data_at_source,
-            market_data_at_precision=args.market_data_at_precision,
-            batch_id=args.batch_id,
-            source_artifact=args.source_artifact or args.input.name,
-        )
-    except SignalValidationError as exc:
+        if args.command == "archive-signals":
+            loaded = load_source_artifact(args.input)
+            result = archive_signals(
+                loaded.source,
+                output_root=args.output,
+                source_file_sha256=loaded.source_file_sha256,
+                market_data_at=args.market_data_at,
+                market_data_at_source=args.market_data_at_source,
+                market_data_at_precision=args.market_data_at_precision,
+                batch_id=args.batch_id,
+                source_artifact=args.source_artifact or args.input.name,
+            )
+        elif args.command == "calculate-outcomes":
+            loaded_prices = load_price_artifact(args.prices)
+            result = calculate_outcomes(
+                args.signals,
+                loaded_prices.source,
+                price_file_sha256=loaded_prices.source_file_sha256,
+                output_root=args.output,
+                as_of=args.as_of,
+                calculation_version=args.calculation_version,
+                round_trip_cost_bps=args.round_trip_cost_bps,
+            )
+        else:
+            raise AssertionError(f"unsupported command: {args.command}")
+    except (SignalValidationError, OutcomeValidationError) as exc:
         print(f"validation_error: {exc}", file=sys.stderr)
         return 2
-    except ArchiveConflictError as exc:
+    except (ArchiveConflictError, OutcomeConflictError) as exc:
         print(f"archive_conflict: {exc}", file=sys.stderr)
         return 3
     except RuntimeError as exc:

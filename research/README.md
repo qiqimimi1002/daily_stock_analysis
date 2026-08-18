@@ -1,8 +1,9 @@
-# V2.2 Research: immutable signal archive
+# V2.2 Research
 
-This first V2.2 stage records the V2.1 observation list exactly as it existed
-when the signal was generated. It does not recalculate candidates and does not
-calculate forward returns, drawdowns, win rates, or trading points.
+Phase 1 records the V2.1 observation list exactly as it existed when the signal
+was generated. Phase 2 reads those immutable records and stores per-signal
+1/3/5/10/20-trading-day price outcomes without calculating aggregate win rates
+or trading points. See [OUTCOMES.md](OUTCOMES.md) for phase-2 details.
 
 ## Input contract
 
@@ -64,6 +65,20 @@ python -m research.cli archive-signals \
 
 The example under `research/examples/` is synthetic test data and is not an
 investment recommendation.
+
+Calculate outcomes manually:
+
+```bash
+python -m research.cli calculate-outcomes \
+  --signals research/data/signals/YYYY/MM/DD/batch-... \
+  --prices local/raw_unadjusted_prices.json \
+  --output research/data/outcomes \
+  --as-of 2026-08-18T16:00:00+08:00 \
+  --round-trip-cost-bps 30
+```
+
+The command accepts only `raw_unadjusted` prices, is not connected to a
+production workflow, and never writes the phase-1 archive.
 
 ## Stable identity and immutability
 
@@ -147,7 +162,7 @@ fail validation. No missing evidence is guessed or imputed.
 
 ## Explicitly out of scope
 
-- forward 1/3/5/10/20-day returns;
-- maximum rise, drawdown, win rate, or performance statistics;
+- aggregate or grouped win rates and factor optimization;
+- adjusted-price or fill simulation;
 - Alphalens, VectorBT, QuantStats, or order execution;
 - V2.1 scoring, 10:00 workflow, 10:30 review, or formal report changes.
