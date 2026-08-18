@@ -102,6 +102,30 @@ The manifest records signal JSON/Parquet/manifest hashes, price byte/content
 hashes, source/basis/coverage, parameters, cost note, calculation timestamp and
 version, outcome IDs, content hash, and output-file hashes.
 
+## Real-data acceptance status
+
+The 2026-08-18 read-only replay used five immutable signals from GitHub Actions
+Run `30781220470`, artifact `market-screening-12`, generated at 11:15
+Asia/Shanghai on 2026-08-03. The local price artifact declared
+`raw_unadjusted` and used AKShare 1.18.83 Sina raw daily bars, with every stock
+OHLC row cross-checked against Baostock 0.9.3 raw bars. CSI 300 used AKShare raw
+index daily bars and a 09:30 signal-day opening snapshot as its time-safe
+reference. Baostock dividend data was checked for corporate actions.
+
+The source covered 11 observed exchange sessions through 2026-08-17. All five
+stocks completed the 1/3/5/10-session horizons; all five 20-session outcomes
+remained `pending`. Independent calculation of all 20 mature cases matched the
+engine for gross and 30-bps scenario net return, MFE, MAE, ordered-close maximum
+drawdown, CSI 300 return, and excess return. Identical execution returned
+`exists`, and JSON/Parquet IDs and manifest hashes matched.
+
+This is partial real-data acceptance only. The repository's earliest real
+full-market screening Run is dated 2026-07-29, so no existing full-market
+signal had accumulated 20 subsequent exchange sessions by 2026-08-18. The PR
+must remain Draft until that horizon can be replayed. Local market artifacts
+are intentionally not committed to Git; their hashes and reproduction evidence
+are recorded in `PROJECT_STATUS.md`.
+
 ## Scope boundaries
 
 Not implemented here: aggregate/grouped win rate, factor optimization,
