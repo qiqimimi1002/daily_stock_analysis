@@ -26,7 +26,8 @@
 
 - Baseline: latest `main` commit
   `de5c2757cd6ba6d4aaa4266583416f807baf13df`. Development branch:
-  `agent/v2-2-outcomes-v2`; a separate Draft PR is pending publication.
+  `agent/v2-2-outcomes-v2`; implementation commit `815c70c`; separate
+  Draft PR [#15](https://github.com/qiqimimi1002/daily_stock_analysis/pull/15).
 - Scope is offline research only. It reads verified immutable phase-1 signal
   archives and writes independent JSON, Parquet, and manifest outcomes for
   1/3/5/10/20 exchange sessions. No V2.1 score, workflow, scheduler,
