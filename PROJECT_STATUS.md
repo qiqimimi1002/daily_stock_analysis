@@ -25,10 +25,11 @@
 
 ## Public benchmark comparison framework Phase 1 (2026-08-18)
 
-- Baseline: latest `main` commit
-  `de5c2757cd6ba6d4aaa4266583416f807baf13df`. Development branch:
-  `agent/benchmark-model-framework-phase1`; Draft PR
-  [#16](https://github.com/qiqimimi1002/daily_stock_analysis/pull/16).
+- Baseline: `main` commit `de5c2757cd6ba6d4aaa4266583416f807baf13df`.
+  Development branch: `agent/benchmark-model-framework-phase1`. PR
+  [#16](https://github.com/qiqimimi1002/daily_stock_analysis/pull/16) was
+  marked Ready and squash-merged into `main` on 2026-08-18; squash commit:
+  `d8a48fd8a12642e086c0b4eafd05efec83a8fd8a`.
 - Scope is offline contract infrastructure only. No Low Volatility, Momentum,
   Value/Profitability or other real model is implemented. No outcome, win-rate,
   model voting, optimization or trading calculation is present.
@@ -52,10 +53,17 @@
   collected, 77 passed and the existing optional PyArrow test skipped because
   the isolated dependency is absent. Changed Python files passed `py_compile`,
   full changed-file flake8 and critical flake8; `git diff --check` passed.
+- Required PR CI Run
+  [32116077177](https://github.com/qiqimimi1002/daily_stock_analysis/actions/runs/32116077177)
+  passed Change Detection, AI governance, backend gate and Docker validation.
+  The repository CI workflow is `pull_request`-only, so the merge push did not
+  create a second CI Run on `main`; post-merge Auto Tag Run 32117912225 was
+  skipped as configured, not failed.
 - Production workflow, Cloudflare, reader, deep analysis, formal reports and
   notifications are untouched. Draft PR #6 and Draft PR #15 branches are not
-  modified or imported. Phase 2 must not start before this contract is
-  accepted.
+  modified or imported. Benchmark Phase 1 and Phase 1.1 are now formal offline
+  research infrastructure with zero production impact. The next planned stage
+  is Phase 2 Low Volatility; it has not started.
 
 ## P1 same-run market quote consistency (2026-08-14)
 
