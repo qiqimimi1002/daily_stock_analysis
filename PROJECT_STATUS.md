@@ -1,6 +1,6 @@
 # Project Status
 
-> Last updated: 2026-08-18 (Asia/Shanghai)
+> Last updated: 2026-08-19 (Asia/Shanghai)
 >
 > Codex workflow rule: read this file before substantial project work and
 > update it after every completed material task. Complete safe in-scope work
@@ -68,8 +68,11 @@
 ## Low Volatility benchmark Phase 2A (2026-08-19)
 
 - Baseline: `main` commit `271b11188dff2fded9f1eddd850333009ca97f46`.
-  Development branch: `agent/benchmark-low-volatility-phase2a`; Draft PR
-  [#17](https://github.com/qiqimimi1002/daily_stock_analysis/pull/17).
+  Development branch: `agent/benchmark-low-volatility-phase2a`; PR
+  [#17](https://github.com/qiqimimi1002/daily_stock_analysis/pull/17) was
+  marked Ready and squash-merged into `main` on 2026-08-19. The Phase 2A
+  squash commit and formal code baseline is
+  `92c8a0b6413cdae6014abe3a9043da48fc684e6a`.
 - Frozen model: `low_volatility_daily_60d_v1`, family `low_volatility`, variant
   `project_baseline_60d`. It is the project baseline, not a claimed paper
   reproduction. The formula is close-to-close simple return and 60-return
@@ -91,7 +94,19 @@
   cannot satisfy `scripts/check_ai_assets.py` because `CLAUDE.md` is not a
   symlink; the same failure reproduces on unmodified `main` and this branch does
   not alter governance files.
-- Before Phase 2B, choose and document trusted point-in-time trade-calendar,
+- Authoritative PR CI Run
+  [32204264104](https://github.com/qiqimimi1002/daily_stock_analysis/actions/runs/32204264104)
+  passed Change Detection, AI governance, backend gate and Docker validation.
+  The repository CI workflow is `pull_request`-only, so the merge push did not
+  create a second CI Run on `main`; this is expected, not a failure. Auto Tag
+  Run
+  [32205257834](https://github.com/qiqimimi1002/daily_stock_analysis/actions/runs/32205257834)
+  was skipped because the squash commit has no `#patch`, `#minor` or `#major`
+  release marker.
+- Phase 2A is now formal offline research infrastructure with zero production
+  impact. Phase 2B has not started. The next planned stage is **Phase 2B-0:
+  real data-source feasibility acceptance**: choose and document trusted
+  point-in-time trade-calendar,
   raw-history and corporate-action sources that can supply the frozen metadata;
   do not weaken the contract or substitute current qfq/hfq history. This is the
   remaining integration decision, not a Phase 2A calculation defect.
