@@ -68,7 +68,8 @@
 ## Low Volatility benchmark Phase 2A (2026-08-19)
 
 - Baseline: `main` commit `271b11188dff2fded9f1eddd850333009ca97f46`.
-  Development branch: `agent/benchmark-low-volatility-phase2a`.
+  Development branch: `agent/benchmark-low-volatility-phase2a`; Draft PR
+  [#17](https://github.com/qiqimimi1002/daily_stock_analysis/pull/17).
 - Frozen model: `low_volatility_daily_60d_v1`, family `low_volatility`, variant
   `project_baseline_60d`. It is the project baseline, not a claimed paper
   reproduction. The formula is close-to-close simple return and 60-return
