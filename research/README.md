@@ -6,8 +6,9 @@ The Phase 1 benchmark contract lives in
 [`research/benchmarks/README.md`](benchmarks/README.md). It defines deterministic
 model identity, logical signal identity plus exact snapshot hashes, strict
 point-in-time serialization, a V2.1-aligned offline universe adapter and a
-five-field future-outcome handoff. It contains no real benchmark models,
-outcome calculations or production integration.
+five-field future-outcome handoff. Phase 2A adds the frozen offline contract
+for `low_volatility_daily_60d_v1`, but does not run the model, create real
+signals, calculate outcomes or integrate with production.
 
 This first V2.2 stage records the V2.1 observation list exactly as it existed
 when the signal was generated. It does not recalculate candidates and does not
