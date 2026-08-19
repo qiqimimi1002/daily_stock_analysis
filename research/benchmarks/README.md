@@ -139,6 +139,109 @@ are deterministic and use these explicit statuses:
 The adapter widens only the internal `preselect_limit` to classify every input
 row; it does not change V2.1 configuration or production behavior.
 
+## Low Volatility Phase 2A contract
+
+The first project benchmark is `low_volatility_daily_60d_v1`, family
+`low_volatility`, variant `project_baseline_60d`. It is the project's own
+engineering baseline and **is not an original implementation of any paper**.
+A future paper reproduction must use a new variant and model identity rather
+than overwrite this contract.
+
+Phase 2A freezes specifications and deterministic synthetic tests only. It
+does not fetch market data, run the full universe, emit real benchmark signals
+or choose parameters from outcome results.
+
+### Formula and ranking
+
+For ordered completed closes, the only return definition is:
+
+```text
+r_t = close_t / close_(t-1) - 1
+volatility_daily_60d = sample_std(last_60_daily_returns, ddof=1)
+volatility_annualized = volatility_daily_60d * sqrt(252)
+```
+
+Exactly 60 returns require 61 closes. A 60-close window is
+`insufficient_history`; the window is never shortened. The annualized value is
+display/audit metadata only. The complete eligible ranking is frozen as:
+
+```text
+volatility_daily_60d ASC, stock_code ASC
+```
+
+No market cap, valuation, profitability, liquidity, industry or momentum
+tie-breaker is allowed. `benchmark_top_n=5` is frozen for Phase 2B signal
+selection, but the complete eligible ranking must be preserved before Top 5 is
+chosen. `score` remains `null`; no artificial 0-100 score is created.
+
+### History and decision-time contract
+
+The input must declare the exact last 61 expected trading dates from a named
+point-in-time calendar source, plus `previous_completed_trade_date`. The dates
+must be unique, increasing, strictly earlier than `signal_date`, and the last
+date must equal that declared previous completed session. A close is required
+for every one of those dates. Extra older data cannot replace a missing date;
+there is no forward fill, backward fill, interpolation or window expansion.
+
+For a signal at T 10:00, factor history ends at T-1 or the most recent earlier
+completed exchange session. A T intraday/daily bar or T close is rejected. The
+three concepts remain separate:
+
+- factor cutoff: `previous_completed_trade_date` and the 61-date history;
+- decision snapshot: T `market_data_at`;
+- reference price: the unified T snapshot price, supplied only when Phase 2B
+  creates a signal.
+
+All datetimes are timezone-aware and normalized to `Asia/Shanghai`. The
+contract requires:
+
+```text
+history_data_as_of <= source_data_as_of <= market_data_at <= generated_at
+```
+
+`fetched_at` may be later and is audit metadata only; it never authorizes later
+content.
+
+### Price and corporate-action policy
+
+Phase 2A accepts only explicitly declared `raw_unadjusted` closes with a named
+`history_source`. It rejects `qfq`, `hfq` and unknown bases. It never assumes a
+current adjusted series is point-in-time safe because later corporate actions
+may have been written backward into history.
+
+The first version performs no adjustment. A named corporate-action source and
+its point-in-time data cutoff are mandatory. If review coverage is not proven,
+or any dividend/ex-rights, bonus issue, split, rights issue or other material
+action occurs inside the 61-close window, the status is
+`corporate_action_review` and no volatility metric is emitted. Action knowledge
+later than `market_data_at` is rejected as look-ahead data.
+
+### Universe and model identity
+
+The existing V2.1 adapter remains the only eligibility implementation.
+Phase 2A records both:
+
+```text
+universe_contract_version = v2_1_mainboard_v1
+universe_config_hash = SHA256(canonical semantic universe config)
+```
+
+The hash covers board/name policy and V2.1 price, change, turnover, amount,
+five-day and history thresholds, while excluding retry/worker settings. Both
+the version and hash enter model parameters and therefore `model_id`.
+
+The full model identity also freezes `return_type=simple`,
+`lookback_returns=60`, `required_close_observations=61`, `std_ddof=1`,
+`annualization_factor=252`, ascending rank, `top_n=5`, the raw-price policy and
+the corporate-action policy. Changing any one creates a distinct experiment;
+the 60-day v1 identity is never overwritten by future 20/120/252-day variants.
+
+An eligible future signal's `raw_metric` contains daily and annualized
+volatility, return/close counts, window dates, price basis, history and calendar
+sources, data cutoff, corporate-action audit state, and the Universe
+version/hash. The synthetic fixture covers low/medium/high volatility, an exact
+tie, 60-close insufficiency, a missing date and corporate-action review.
+
 ## Future outcome adapter
 
 The only reserved handoff is:
@@ -164,12 +267,12 @@ python -m unittest tests.test_research_signal_archive
 python -m pytest tests/test_market_screener.py tests/test_market_scoring.py -q
 ```
 
-## Deferred to Phase 2
+## Deferred beyond Phase 2A
 
-- implementations of Low Volatility, 12-1 Momentum, Value + Profitability or
-  any other public model;
-- model-specific data adapters and point-in-time factor calculations;
+- full-market Low Volatility execution and real benchmark signals;
+- live/history data adapters and production integration;
+- 12-1 Momentum, Value + Profitability or any other benchmark model;
 - real-market benchmark runs and cross-model ranking;
 - outcome, win-rate, factor optimization or trading analysis.
 
-Phase 2 must start only after this schema and identity contract is accepted.
+Phase 2B must start only after the Phase 2A contract is accepted.

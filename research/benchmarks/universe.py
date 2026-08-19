@@ -4,15 +4,34 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from enum import Enum
+import hashlib
 import math
 from typing import Any, Dict, Mapping, Optional, Sequence, Tuple
 
 import pandas as pd
 
 from src.services.market_screener import (
+    MAIN_BOARD_PREFIXES,
     ScreeningConfig,
     apply_spot_filters,
     normalize_spot_frame,
+)
+
+from research.benchmarks.schema import canonical_json_bytes
+
+
+UNIVERSE_CONTRACT_VERSION = "v2_1_mainboard_v1"
+_UNIVERSE_CONFIG_FIELDS = (
+    "min_amount_yuan",
+    "min_turnover_pct",
+    "max_turnover_pct",
+    "min_price",
+    "max_price",
+    "min_daily_pct",
+    "max_daily_pct",
+    "min_five_day_pct",
+    "max_five_day_pct",
+    "min_history_rows",
 )
 
 
@@ -42,6 +61,28 @@ class UniverseDecision:
             "reasons": list(self.reasons),
             "history_rows": self.history_rows,
         }
+
+
+def universe_config_payload(
+    config: Optional[ScreeningConfig] = None,
+) -> Dict[str, Any]:
+    """Return the canonical semantic identity of the V2.1 universe contract."""
+
+    selected = config or ScreeningConfig()
+    return {
+        "contract_version": UNIVERSE_CONTRACT_VERSION,
+        "excluded_name_policy": "blank_or_st_or_exit_or_n_or_c",
+        "main_board_prefixes": list(MAIN_BOARD_PREFIXES),
+        "thresholds": {
+            field: getattr(selected, field) for field in _UNIVERSE_CONFIG_FIELDS
+        },
+    }
+
+
+def universe_config_hash(config: Optional[ScreeningConfig] = None) -> str:
+    """Hash only universe semantics, excluding retry and worker settings."""
+
+    return hashlib.sha256(canonical_json_bytes(universe_config_payload(config))).hexdigest()
 
 
 def _is_finite_number(value: Any) -> bool:

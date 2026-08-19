@@ -63,7 +63,37 @@
   notifications are untouched. Draft PR #6 and Draft PR #15 branches are not
   modified or imported. Benchmark Phase 1 and Phase 1.1 are now formal offline
   research infrastructure with zero production impact. The next planned stage
-  is Phase 2 Low Volatility; it has not started.
+  is Phase 2 Low Volatility.
+
+## Low Volatility benchmark Phase 2A (2026-08-19)
+
+- Baseline: `main` commit `271b11188dff2fded9f1eddd850333009ca97f46`.
+  Development branch: `agent/benchmark-low-volatility-phase2a`.
+- Frozen model: `low_volatility_daily_60d_v1`, family `low_volatility`, variant
+  `project_baseline_60d`. It is the project baseline, not a claimed paper
+  reproduction. The formula is close-to-close simple return and 60-return
+  sample standard deviation (`ddof=1`) from exactly 61 completed closes.
+- Factor history must end on the declared previous completed trading day,
+  strictly before the signal date. Missing dates are not filled or replaced.
+  Only `raw_unadjusted` history is accepted; incomplete action review or an
+  action in-window yields `corporate_action_review` without a metric.
+- The existing V2.1 Universe adapter remains authoritative. The auditable
+  environment uses `v2_1_mainboard_v1` plus a canonical semantic config SHA-256;
+  both enter `model_id` along with all formula/rank/policy parameters.
+- Phase 2A is offline contract/test infrastructure only. It performs no market
+  fetch, creates no real benchmark signal, changes no production workflow or
+  V2.1 behavior, and does not modify Draft PR #15. Phase 2B has not started.
+- Local verification: 52 Phase 2A/Phase 1 tests passed; 25 immutable-archive
+  tests passed with the existing optional PyArrow test skipped; 18 V2.1
+  screener/scoring tests passed. Changed Python files passed `py_compile` and
+  full changed-file flake8, and `git diff --check` passed. The Windows checkout
+  cannot satisfy `scripts/check_ai_assets.py` because `CLAUDE.md` is not a
+  symlink; the same failure reproduces on unmodified `main` and this branch does
+  not alter governance files.
+- Before Phase 2B, choose and document trusted point-in-time trade-calendar,
+  raw-history and corporate-action sources that can supply the frozen metadata;
+  do not weaken the contract or substitute current qfq/hfq history. This is the
+  remaining integration decision, not a Phase 2A calculation defect.
 
 ## P1 same-run market quote consistency (2026-08-14)
 

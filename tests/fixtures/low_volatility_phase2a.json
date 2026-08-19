@@ -1,0 +1,19 @@
+{
+  "fixture_type": "synthetic_contract_only",
+  "generated_at": "2026-03-31T10:01:00+08:00",
+  "market_data_at": "2026-03-31T10:00:00+08:00",
+  "source_data_as_of": "2026-03-30T15:00:00+08:00",
+  "history_data_as_of": "2026-03-30T15:00:00+08:00",
+  "fetched_at": "2026-03-31T10:00:30+08:00",
+  "signal_date": "2026-03-31",
+  "synthetic_calendar_start": "2026-01-05",
+  "stocks": [
+    {"code": "000001", "case": "low", "return_cycle": [0.001, -0.001]},
+    {"code": "000002", "case": "tie", "return_cycle": [0.001, -0.001]},
+    {"code": "600001", "case": "medium", "return_cycle": [0.01, -0.01]},
+    {"code": "600002", "case": "high", "return_cycle": [0.03, -0.03]},
+    {"code": "600003", "case": "insufficient", "return_cycle": [0.01, -0.01], "close_count": 60},
+    {"code": "600004", "case": "missing_date", "return_cycle": [0.01, -0.01], "missing_index": 30},
+    {"code": "600005", "case": "corporate_action", "return_cycle": [0.01, -0.01], "corporate_action_index": 30}
+  ]
+}
