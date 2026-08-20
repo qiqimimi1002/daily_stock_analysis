@@ -31,6 +31,11 @@ def _fetch_trend_data(stock_code: str):
 
 def _handle_analyze_trend(stock_code: str) -> dict:
     """Run technical trend analysis on a stock."""
+    import pandas as pd
+
+    from data_provider.technical_snapshot import (
+        load_configured_technical_snapshot_context,
+    )
     from src.stock_analyzer import StockTrendAnalyzer
 
     if not (stock_code and str(stock_code).strip()):
@@ -45,7 +50,16 @@ def _handle_analyze_trend(stock_code: str) -> dict:
 
     analyzer = StockTrendAnalyzer()
     try:
-        result = analyzer.analyze(df, stock_code)
+        technical_context = load_configured_technical_snapshot_context(stock_code)
+        if technical_context is not None:
+            cutoff = pd.Timestamp(technical_context.history_data_through)
+            dates = pd.to_datetime(df["date"], errors="coerce")
+            df = df.loc[dates <= cutoff].copy()
+        result = analyzer.analyze(
+            df,
+            stock_code,
+            technical_context=technical_context,
+        )
     except Exception:
         logger.warning("analyze_trend(%s): Trend analysis failed", stock_code, exc_info=True)
         return {"error": f"Trend analysis failed for {stock_code}"}
@@ -63,8 +77,14 @@ def _handle_analyze_trend(stock_code: str) -> dict:
         "bias_ma5": round(result.bias_ma5, 2),
         "bias_ma10": round(result.bias_ma10, 2),
         "bias_ma20": round(result.bias_ma20, 2),
-        "volume_status": result.volume_status.value,
-        "volume_ratio_5d": round(result.volume_ratio_5d, 2),
+        "volume_status": result.volume_status.value if result.volume_status else None,
+        "volume_ratio_5d": (
+            round(result.volume_ratio_5d, 2)
+            if result.volume_ratio_5d is not None
+            else None
+        ),
+        "provider_volume_ratio": result.provider_volume_ratio,
+        "completed_day_volume_ratio_5d": result.completed_day_volume_ratio_5d,
         "volume_trend": result.volume_trend,
         "support_ma5": result.support_ma5,
         "support_ma10": result.support_ma10,
@@ -205,8 +225,26 @@ calculate_ma_tool = ToolDefinition(
 
 def _handle_get_volume_analysis(stock_code: str, days: int = 30) -> dict:
     """Analyse volume-price patterns over recent trading days."""
+    from data_provider.technical_snapshot import (
+        load_configured_technical_snapshot_context,
+    )
     from src.services.history_loader import load_history_df
     import pandas as pd
+
+    technical_context = load_configured_technical_snapshot_context(stock_code)
+    if technical_context is not None:
+        ratio = technical_context.provider_volume_ratio
+        return {
+            "code": stock_code,
+            "source": "screening_technical_snapshot",
+            "as_of": technical_context.technical_as_of,
+            "provider_volume_ratio": ratio,
+            "completed_day_volume_ratio_5d": (
+                technical_context.completed_day_volume_ratio_5d
+            ),
+            "volume_status": "无法确认" if ratio is None else "由供应商实时量比判断",
+            "pattern": "无法确认" if ratio is None else "仅按供应商实时量比复核",
+        }
 
     df, source = load_history_df(stock_code, days=max(days + 20, 60))
 

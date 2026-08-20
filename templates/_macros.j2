@@ -11,7 +11,7 @@
 
 | {{ market_snapshot_price_label(result, labels, report_language) }} | {{ labels.volume_ratio_label }} | {{ labels.turnover_rate_label }} | {{ labels.source_label }} |
 |-------|------|--------|----------|
-| {{ snapshot.get('price', 'N/A') }} | {{ snapshot.get('volume_ratio', 'N/A') }} | {{ snapshot.get('turnover_rate', 'N/A') }} | {{ snapshot.get('source', 'N/A') }} |
+| {{ snapshot.get('price', 'N/A') }} | {{ snapshot.get('volume_ratio') if snapshot.get('volume_ratio') is not none else 'N/A' }} | {{ snapshot.get('turnover_rate') if snapshot.get('turnover_rate') is not none else 'N/A' }} | {{ snapshot.get('source', 'N/A') }} |
 {% endif %}
 
 {% endif %}

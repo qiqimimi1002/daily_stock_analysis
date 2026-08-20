@@ -195,6 +195,9 @@ class ScreeningCandidate:
     volume_ratio_5d: float
     trend_label: str
     watch_zone: str
+    history_data_through: str
+    history_source: str
+    history_price_adjustment: str
     industry: str
     pe_ratio: Optional[float]
     pb_ratio: Optional[float]
@@ -587,6 +590,7 @@ def calculate_history_metrics(
         "volume_ratio_5d": volume_ratio,
         "avg_amount_20d": avg_amount_20d,
         "is_intraday": is_intraday,
+        "history_data_through": history["date"].iloc[-1].date().isoformat(),
     }
 
 
@@ -705,6 +709,11 @@ def build_candidate(
             if ma20 > 0 and ma5 > 0
             else "无法确认"
         ),
+        history_data_through=str(metrics.get("history_data_through") or ""),
+        history_source=str(metrics.get("history_source") or "unknown"),
+        history_price_adjustment=str(
+            metrics.get("history_price_adjustment") or "unknown"
+        ),
         industry=str(spot_row.get("industry", "") or ""),
         pe_ratio=round(pe_ratio, 2) if pe_ratio is not None else None,
         pb_ratio=round(pb_ratio, 2) if pb_ratio is not None else None,
@@ -770,6 +779,56 @@ def build_market_snapshot(
         "prev_close_adjustment": "provider_exchange_reference",
         "price_change_formula": PRICE_CHANGE_FORMULA,
         "quotes": quotes,
+    }
+
+
+def build_technical_snapshot(
+    result: ScreeningResult,
+    *,
+    run_id: str,
+    run_number: str,
+) -> Dict[str, Any]:
+    """Build the same-run technical context consumed by deep analysis."""
+    if not run_id or not run_number:
+        raise ValueError("technical snapshot requires run_id and run_number")
+    try:
+        trade_date = datetime.fromisoformat(
+            result.market_data_at.replace("Z", "+00:00")
+        ).astimezone(CN_TZ).date().isoformat()
+    except ValueError as exc:
+        raise ValueError("technical snapshot market_data_at is invalid") from exc
+    quotes = result.market_snapshot.get("quotes", {})
+    candidates = {candidate.code: candidate for candidate in result.candidates}
+    indicators: Dict[str, Any] = {}
+    for code in result.analysis_codes:
+        candidate = candidates.get(code)
+        quote = quotes.get(code) if isinstance(quotes, Mapping) else None
+        if candidate is None or not isinstance(quote, Mapping):
+            raise ValueError(f"technical snapshot missing analysis code: {code}")
+        indicators[code] = {
+            "code": code,
+            "history_data_through": candidate.history_data_through,
+            "reference_price": candidate.latest_price,
+            "ma5": candidate.ma5,
+            "ma10": candidate.ma10,
+            "ma20": candidate.ma20,
+            "five_day_pct": candidate.five_day_pct,
+            "watch_zone": candidate.watch_zone,
+            "provider_volume_ratio": _optional_number(quote.get("volume_ratio")),
+            "completed_day_volume_ratio_5d": _optional_number(
+                candidate.volume_ratio_5d
+            ),
+            "history_source": candidate.history_source,
+            "history_price_adjustment": candidate.history_price_adjustment,
+        }
+    return {
+        "schema_version": "1.0",
+        "trade_date": trade_date,
+        "run_id": str(run_id),
+        "run_number": str(run_number),
+        "technical_as_of": result.market_data_at,
+        "market_data_source": result.data_source,
+        "indicators": indicators,
     }
 
 
@@ -1409,8 +1468,12 @@ class MarketScreener:
                     if isinstance(fetched, HistoryFetchResult):
                         history_frame = fetched.frame
                         record_history_metadata(fetched.metadata)
+                        history_source = str(
+                            fetched.metadata.get("selected_source") or "unknown"
+                        )
                     else:
                         history_frame = fetched
+                        history_source = "injected"
                         record_history_metadata(
                             {
                                 "providers": [
@@ -1433,6 +1496,10 @@ class MarketScreener:
                         failures += 1
                         record_history_failure(str(row["code"]), "insufficient_history")
                         continue
+                    metrics["history_source"] = history_source
+                    metrics["history_price_adjustment"] = (
+                        "qfq" if history_source != "injected" else "unknown"
+                    )
                     intraday_mode = intraday_mode or bool(
                         metrics.get("is_intraday", False)
                     )
@@ -1822,6 +1889,9 @@ def save_result(
     json_path: Path,
     codes_path: Path,
     snapshot_path: Optional[Path] = None,
+    technical_snapshot_path: Optional[Path] = None,
+    run_id: Optional[str] = None,
+    run_number: Optional[str] = None,
 ) -> None:
     report_path.parent.mkdir(parents=True, exist_ok=True)
     json_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1842,6 +1912,23 @@ def save_result(
         snapshot_path.write_text(
             json.dumps(
                 _strict_json_value(result.market_snapshot),
+                ensure_ascii=False,
+                indent=2,
+                allow_nan=False,
+            ),
+            encoding="utf-8",
+        )
+    if technical_snapshot_path is not None:
+        technical_snapshot_path.parent.mkdir(parents=True, exist_ok=True)
+        technical_snapshot_path.write_text(
+            json.dumps(
+                _strict_json_value(
+                    build_technical_snapshot(
+                        result,
+                        run_id=str(run_id or ""),
+                        run_number=str(run_number or ""),
+                    )
+                ),
                 ensure_ascii=False,
                 indent=2,
                 allow_nan=False,

@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -77,12 +78,16 @@ def main() -> int:
     json_path = data_dir / f"market_screening_{stamp}.json"
     codes_path = data_dir / "screened_codes.txt"
     snapshot_path = data_dir / "market_snapshot.json"
+    technical_snapshot_path = data_dir / "technical_snapshot.json"
     save_result(
         result,
         report_path=report_path,
         json_path=json_path,
         codes_path=codes_path,
         snapshot_path=snapshot_path,
+        technical_snapshot_path=technical_snapshot_path,
+        run_id=os.getenv("GITHUB_RUN_ID") or f"local-{stamp}",
+        run_number=os.getenv("GITHUB_RUN_NUMBER") or "local",
     )
 
     print(f"全市场记录: {result.universe_count}")
@@ -99,6 +104,7 @@ def main() -> int:
     print(f"深度分析代码: {','.join(result.analysis_codes) or '无'}")
     print(f"初筛报告: {report_path}")
     print(f"统一行情快照: {snapshot_path} ({result.market_data_at})")
+    print(f"同Run技术快照: {technical_snapshot_path}")
     return 0
 
 

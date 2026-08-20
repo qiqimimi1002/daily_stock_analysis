@@ -1038,3 +1038,53 @@
   this production acceptance.
 - Draft PR #6 remains open, Draft, unmerged, and unchanged at
   `50c995dc10765bb0bb822212663b7cd1b4c35120`.
+
+## Screening/deep-analysis technical consistency fix (2026-08-20)
+
+- Development branch `agent/screening-deep-technical-consistency` was created
+  from `main` commit `1a0544a525628a87ee6b620f69f1f375374cc95d`, which is the
+  squash merge of PR #18. PR #18 timing diagnostics remain unchanged.
+- The market screener now emits `data/technical_snapshot.json` for only the
+  selected deep-analysis codes. Its identity is bound to `trade_date`,
+  `run_id`, `run_number`, and `code`; it records the complete-daily-bar cutoff,
+  MA5/MA10/MA20, five-day return, watch zone, reference price, provider volume
+  ratio, completed-day volume ratio, history source, and adjustment metadata.
+- The screening workflow validates that same-run identity before deep analysis.
+  A missing, unreadable, stale, cross-run, cross-date, or wrong-code snapshot
+  fails closed and never falls back to intraday MA recomputation.
+- Screening-triggered trend analysis uses history only through the screener's
+  complete-bar cutoff and consumes the snapshot before trend, bias,
+  support/resistance, watch-zone, Agent tool, structured-result, and report
+  decisions. Independent Daily Stock analysis still preserves Issue #234's
+  realtime-bar augmentation.
+- Intraday provider volume ratio and completed-day volume ratio are separate
+  fields. A missing provider ratio remains JSON `null`, renders as `N/A` or
+  `无法确认`, and cannot produce fabricated volume-expansion/contraction wording.
+- Run #49 / ID `32207015938` was replayed against the downloaded production
+  Artifact and newly fetched real qfq histories through 2026-08-18. Sources
+  selected by the existing fallback were AKShare Eastmoney for `600378` and
+  AKShare Sina for `000063` and `002245`.
+  - `600378`: old deep MA `49.07/48.71/45.50`; screener and fixed deep MA
+    `49.02/48.30/45.30`.
+  - `000063`: old deep MA `35.10/34.90/34.59`; screener and fixed deep MA
+    `35.37/34.95/34.73`.
+  - `002245`: old deep MA `19.02/18.32/17.28`; screener and fixed deep MA
+    `18.89/18.08/17.17`.
+  In all three cases the internal trend object, structured dashboard, and final
+  report agree with the screener; `five_day_pct` and `watch_zone` are unchanged.
+  The PR #14 price/previous-close/change/source/time snapshot remains unchanged.
+  Missing provider volume ratios stay null/N/A instead of the old `0.0`, `0.22`,
+  `缩量`, or `平量` claims.
+- Verification: 312 related tests passed, including nine new contract tests,
+  nine PR #14 snapshot tests, five PR #18 diagnostic tests, V2.1 screener and
+  scoring regression, realtime augmentation, Agent, renderer, notification,
+  and history-report coverage. Python compilation, critical flake8 checks,
+  workflow YAML parsing, and `git diff --check` passed. The Windows checkout
+  still materializes `CLAUDE.md` rather than its tracked symlink; authoritative
+  Linux PR CI must verify the AI-assets gate.
+- No V2.1 score, candidate filter, provider priority/retry/fallback, PR #14
+  market-snapshot contract, PR #18 diagnostics, Cloudflare/scheduler,
+  concurrency/idempotency guard, calendar, OHLC/adjustment policy, or research
+  code was changed. Production candidate selection is unchanged.
+- Delivery remains a Draft PR and must not be merged without separate human
+  acceptance.
