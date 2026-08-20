@@ -1462,9 +1462,19 @@ class NotificationService(
                         ])
                     # 量能分析
                     if vol_data:
+                        volume_ratio_display = (
+                            vol_data.get('volume_ratio')
+                            if vol_data.get('volume_ratio') is not None
+                            else 'N/A'
+                        )
+                        turnover_display = (
+                            vol_data.get('turnover_rate')
+                            if vol_data.get('turnover_rate') is not None
+                            else 'N/A'
+                        )
                         report_lines.extend([
-                            f"**{labels['volume_label']}**: {labels['volume_ratio_label']} {vol_data.get('volume_ratio', 'N/A')} ({vol_data.get('volume_status', '')}) | "
-                            f"{labels['turnover_rate_label']} {vol_data.get('turnover_rate', 'N/A')}%",
+                            f"**{labels['volume_label']}**: {labels['volume_ratio_label']} {volume_ratio_display} ({vol_data.get('volume_status', '')}) | "
+                            f"{labels['turnover_rate_label']} {turnover_display}%",
                             f"💡 *{conservative_volume_meaning(vol_data, report_language)}*",
                             "",
                         ])

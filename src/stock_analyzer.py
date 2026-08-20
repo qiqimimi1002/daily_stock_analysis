@@ -18,7 +18,7 @@
 
 import logging
 from dataclasses import dataclass, field
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Mapping, Optional
 from enum import Enum
 
 import pandas as pd
@@ -103,9 +103,17 @@ class TrendAnalysisResult:
     bias_ma20: float = 0.0
     
     # 量能分析
-    volume_status: VolumeStatus = VolumeStatus.NORMAL
-    volume_ratio_5d: float = 0.0     # 当日成交量/5日均量
+    volume_status: Optional[VolumeStatus] = None
+    volume_ratio_5d: Optional[float] = None  # 实时供应商量比；缺失时保持 None
+    provider_volume_ratio: Optional[float] = None
+    completed_day_volume_ratio_5d: Optional[float] = None
     volume_trend: str = ""           # 量能趋势描述
+
+    # 全市场初筛同 Run 技术上下文
+    five_day_pct: Optional[float] = None
+    watch_zone: Optional[str] = None
+    technical_as_of: Optional[str] = None
+    history_data_through: Optional[str] = None
     
     # 支撑压力
     support_ma5: bool = False        # MA5 是否构成支撑
@@ -147,9 +155,15 @@ class TrendAnalysisResult:
             'bias_ma5': self.bias_ma5,
             'bias_ma10': self.bias_ma10,
             'bias_ma20': self.bias_ma20,
-            'volume_status': self.volume_status.value,
+            'volume_status': self.volume_status.value if self.volume_status else None,
             'volume_ratio_5d': self.volume_ratio_5d,
+            'provider_volume_ratio': self.provider_volume_ratio,
+            'completed_day_volume_ratio_5d': self.completed_day_volume_ratio_5d,
             'volume_trend': self.volume_trend,
+            'five_day_pct': self.five_day_pct,
+            'watch_zone': self.watch_zone,
+            'technical_as_of': self.technical_as_of,
+            'history_data_through': self.history_data_through,
             'support_ma5': self.support_ma5,
             'support_ma10': self.support_ma10,
             'buy_signal': self.buy_signal.value,
@@ -203,7 +217,12 @@ class StockTrendAnalyzer:
         """初始化分析器"""
         pass
     
-    def analyze(self, df: pd.DataFrame, code: str) -> TrendAnalysisResult:
+    def analyze(
+        self,
+        df: pd.DataFrame,
+        code: str,
+        technical_context: Optional[Mapping[str, Any] | Any] = None,
+    ) -> TrendAnalysisResult:
         """
         分析股票趋势
         
@@ -239,6 +258,25 @@ class StockTrendAnalyzer:
         result.ma20 = float(latest['MA20'])
         result.ma60 = float(latest.get('MA60', 0))
 
+        if technical_context is not None:
+            context = (
+                technical_context
+                if isinstance(technical_context, Mapping)
+                else vars(technical_context)
+            )
+            result.current_price = float(context["reference_price"])
+            result.ma5 = float(context["ma5"])
+            result.ma10 = float(context["ma10"])
+            result.ma20 = float(context["ma20"])
+            result.five_day_pct = float(context["five_day_pct"])
+            result.watch_zone = str(context["watch_zone"])
+            result.technical_as_of = str(context["technical_as_of"])
+            result.history_data_through = str(context["history_data_through"])
+            result.provider_volume_ratio = context.get("provider_volume_ratio")
+            result.completed_day_volume_ratio_5d = context.get(
+                "completed_day_volume_ratio_5d"
+            )
+
         # 1. 趋势判断
         self._analyze_trend(df, result)
 
@@ -246,7 +284,11 @@ class StockTrendAnalyzer:
         self._calculate_bias(result)
 
         # 3. 量能分析
-        self._analyze_volume(df, result)
+        if technical_context is None:
+            self._analyze_volume(df, result)
+            result.provider_volume_ratio = result.volume_ratio_5d
+        else:
+            self._analyze_context_volume(df, result)
 
         # 4. 支撑压力分析
         self._analyze_support_resistance(df, result)
@@ -422,6 +464,10 @@ class StockTrendAnalyzer:
         
         if vol_5d_avg > 0:
             result.volume_ratio_5d = float(latest['volume']) / vol_5d_avg
+        else:
+            result.volume_status = None
+            result.volume_trend = "量能数据不足"
+            return
         
         # 判断价格变化
         prev_close = df.iloc[-2]['close']
@@ -445,6 +491,40 @@ class StockTrendAnalyzer:
         else:
             result.volume_status = VolumeStatus.NORMAL
             result.volume_trend = "量能正常"
+
+    def _analyze_context_volume(
+        self,
+        df: pd.DataFrame,
+        result: TrendAnalysisResult,
+    ) -> None:
+        """Use only the run-scoped provider ratio for intraday volume semantics."""
+        ratio = result.provider_volume_ratio
+        result.volume_ratio_5d = ratio
+        if ratio is None:
+            result.volume_status = None
+            result.volume_trend = "量比缺失，无法确认盘中放量或缩量状态"
+            return
+        previous_close = float(df.iloc[-1]["close"])
+        price_change = (
+            (result.current_price - previous_close) / previous_close * 100
+            if previous_close > 0
+            else 0.0
+        )
+        if ratio >= self.VOLUME_HEAVY_RATIO:
+            result.volume_status = (
+                VolumeStatus.HEAVY_VOLUME_UP
+                if price_change > 0
+                else VolumeStatus.HEAVY_VOLUME_DOWN
+            )
+        elif ratio <= self.VOLUME_SHRINK_RATIO:
+            result.volume_status = (
+                VolumeStatus.SHRINK_VOLUME_UP
+                if price_change > 0
+                else VolumeStatus.SHRINK_VOLUME_DOWN
+            )
+        else:
+            result.volume_status = VolumeStatus.NORMAL
+        result.volume_trend = result.volume_status.value
     
     def _analyze_support_resistance(self, df: pd.DataFrame, result: TrendAnalysisResult) -> None:
         """
@@ -776,8 +856,8 @@ class StockTrendAnalyzer:
             f"   MA10: {result.ma10:.2f} (乖离 {result.bias_ma10:+.2f}%)",
             f"   MA20: {result.ma20:.2f} (乖离 {result.bias_ma20:+.2f}%)",
             f"",
-            f"📊 量能分析: {result.volume_status.value}",
-            f"   量比(vs5日): {result.volume_ratio_5d:.2f}",
+            f"📊 量能分析: {result.volume_status.value if result.volume_status else '无法确认'}",
+            f"   量比(vs5日): {result.volume_ratio_5d:.2f}" if result.volume_ratio_5d is not None else "   量比(vs5日): N/A",
             f"   量能趋势: {result.volume_trend}",
             f"",
             f"📈 MACD指标: {result.macd_status.value}",

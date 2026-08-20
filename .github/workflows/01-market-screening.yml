@@ -161,12 +161,19 @@ jobs:
           ENABLE_CHIP_DISTRIBUTION: "false"
           REALTIME_SOURCE_PRIORITY: ${{ vars.REALTIME_SOURCE_PRIORITY || 'tencent,akshare_sina,efinance,akshare_em' }}
           MARKET_SNAPSHOT_PATH: data/market_snapshot.json
+          TECHNICAL_SNAPSHOT_PATH: data/technical_snapshot.json
         shell: bash
         run: |
           python scripts/validate_market_snapshot.py \
             --snapshot "$MARKET_SNAPSHOT_PATH" \
             --codes "${{ steps.selected.outputs.codes }}" \
             --error-report reports/market_snapshot_error.md
+          python scripts/validate_technical_snapshot.py \
+            --snapshot "$TECHNICAL_SNAPSHOT_PATH" \
+            --codes "${{ steps.selected.outputs.codes }}" \
+            --run-id "${{ github.run_id }}" \
+            --run-number "${{ github.run_number }}" \
+            --error-report reports/technical_snapshot_error.md
 
           FORCE_ARG=""
           if [ "${{ inputs.force_run }}" = "true" ]; then
@@ -224,6 +231,9 @@ jobs:
           if [ -f data/market_snapshot.json ]; then
             cp data/market_snapshot.json "$PAYLOAD_DIR/latest/market_snapshot.json"
           fi
+          if [ -f data/technical_snapshot.json ]; then
+            cp data/technical_snapshot.json "$PAYLOAD_DIR/latest/technical_snapshot.json"
+          fi
           if compgen -G 'reports/*.md' > /dev/null; then
             cp reports/*.md "$PAYLOAD_DIR/latest/reports/"
           fi
@@ -262,6 +272,7 @@ jobs:
           path: |
             data/market_screening_*.json
             data/market_snapshot.json
+            data/technical_snapshot.json
             data/screened_codes.txt
             data/screening_execution_guard.json
             data/screening_run_manifest.json

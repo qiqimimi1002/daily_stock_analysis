@@ -13,6 +13,8 @@ A股自选股智能分析系统 - 核心分析流水线
 
 import logging
 import math
+import os
+import re
 import threading
 import time
 import uuid
@@ -29,6 +31,11 @@ from src.storage import get_db
 from data_provider import DataFetcherManager
 from data_provider.base import is_bse_code, normalize_stock_code
 from data_provider.market_snapshot import MarketSnapshotError
+from data_provider.technical_snapshot import (
+    TECHNICAL_SNAPSHOT_ENV,
+    TechnicalSnapshotError,
+    load_technical_snapshot_context,
+)
 from data_provider.realtime_types import ChipDistribution
 from src.analyzer import (
     GeminiAnalyzer,
@@ -599,12 +606,15 @@ class StockAnalysisPipeline:
                 historical_bars = self.db.get_data_range(code, start_date, end_date)
                 if historical_bars:
                     df = pd.DataFrame([bar.to_dict() for bar in historical_bars])
-                    # Issue #234: Augment with realtime for intraday MA calculation
-                    if self.config.enable_realtime_quote and realtime_quote:
-                        df = self._augment_historical_with_realtime(df, realtime_quote, code)
-                    trend_result = self.trend_analyzer.analyze(df, code)
+                    trend_result = self._analyze_trend_with_run_context(
+                        df,
+                        realtime_quote,
+                        code,
+                    )
                     logger.info(f"{stock_name}({code}) 趋势分析: {trend_result.trend_status.value}, "
                               f"买入信号={trend_result.buy_signal.value}, 评分={trend_result.signal_score}")
+            except TechnicalSnapshotError:
+                raise
             except Exception as e:
                 logger.warning(f"{stock_name}({code}) 趋势分析失败: {e}", exc_info=True)
 
@@ -820,6 +830,7 @@ class StockAnalysisPipeline:
                 realtime_data = enhanced_context.get('realtime', {})
                 result.current_price = realtime_data.get('price')
                 result.change_pct = realtime_data.get('change_pct')
+                self._apply_screening_technical_result(result, trend_result)
 
             # Step 7.6: chip_structure fallback (Issue #589) and unavailable collapse
             if result:
@@ -916,7 +927,7 @@ class StockAnalysisPipeline:
 
             return result
 
-        except MarketSnapshotError:
+        except (MarketSnapshotError, TechnicalSnapshotError):
             raise
         except Exception as e:
             logger.error(f"{stock_name}({code}) 分析失败: {e}")
@@ -977,7 +988,11 @@ class StockAnalysisPipeline:
                 'pre_close': getattr(realtime_quote, 'pre_close', None),
                 'change_pct': getattr(realtime_quote, 'change_pct', None),
                 'volume_ratio': volume_ratio,
-                'volume_ratio_desc': self._describe_volume_ratio(volume_ratio) if volume_ratio else '无数据',
+                'volume_ratio_desc': (
+                    self._describe_volume_ratio(volume_ratio)
+                    if volume_ratio is not None
+                    else '无法确认'
+                ),
                 'turnover_rate': getattr(realtime_quote, 'turnover_rate', None),
                 'pe_ratio': getattr(realtime_quote, 'pe_ratio', None),
                 'pb_ratio': getattr(realtime_quote, 'pb_ratio', None),
@@ -1015,7 +1030,23 @@ class StockAnalysisPipeline:
                 'trend_strength': trend_result.trend_strength,
                 'bias_ma5': trend_result.bias_ma5,
                 'bias_ma10': trend_result.bias_ma10,
-                'volume_status': trend_result.volume_status.value,
+                'ma5': trend_result.ma5,
+                'ma10': trend_result.ma10,
+                'ma20': trend_result.ma20,
+                'five_day_pct': trend_result.five_day_pct,
+                'watch_zone': trend_result.watch_zone,
+                'technical_as_of': trend_result.technical_as_of,
+                'history_data_through': trend_result.history_data_through,
+                'volume_status': (
+                    trend_result.volume_status.value
+                    if trend_result.volume_status
+                    else '无法确认'
+                ),
+                'volume_ratio_5d': trend_result.volume_ratio_5d,
+                'provider_volume_ratio': trend_result.provider_volume_ratio,
+                'completed_day_volume_ratio_5d': (
+                    trend_result.completed_day_volume_ratio_5d
+                ),
                 'volume_trend': trend_result.volume_trend,
                 'buy_signal': trend_result.buy_signal.value,
                 'signal_score': trend_result.signal_score,
@@ -1521,6 +1552,7 @@ class StockAnalysisPipeline:
             )
             if result:
                 result.query_id = query_id
+                self._apply_screening_technical_result(result, trend_result)
             # Agent weak integrity: placeholder fill only, no LLM retry
             if result and getattr(self.config, "report_integrity_enabled", False):
                 from src.analyzer import check_content_integrity, apply_placeholder_fill
@@ -2519,6 +2551,190 @@ class StockAnalysisPipeline:
             return "短期走弱 🔽"
         else:
             return "震荡整理 ↔️"
+
+    def _analyze_trend_with_run_context(
+        self,
+        df: pd.DataFrame,
+        realtime_quote: Any,
+        code: str,
+    ) -> TrendAnalysisResult:
+        """Use same-run screening indicators, otherwise preserve Issue #234."""
+        snapshot_path = os.getenv(TECHNICAL_SNAPSHOT_ENV)
+        if not snapshot_path:
+            augmented = df
+            if self.config.enable_realtime_quote and realtime_quote:
+                augmented = self._augment_historical_with_realtime(
+                    df,
+                    realtime_quote,
+                    code,
+                )
+            return self.trend_analyzer.analyze(augmented, code)
+
+        run_id = str(os.getenv("GITHUB_RUN_ID") or "").strip()
+        run_number = str(os.getenv("GITHUB_RUN_NUMBER") or "").strip()
+        if not run_id or not run_number:
+            raise TechnicalSnapshotError(
+                "screening-triggered technical snapshot requires GITHUB_RUN_ID and GITHUB_RUN_NUMBER"
+            )
+        timestamp = getattr(realtime_quote, "provider_timestamp", None) or getattr(
+            realtime_quote,
+            "fetched_at",
+            None,
+        )
+        try:
+            expected_trade_date = datetime.fromisoformat(
+                str(timestamp or "").replace("Z", "+00:00")
+            ).date().isoformat()
+        except ValueError as exc:
+            raise TechnicalSnapshotError(
+                "screening-triggered quote timestamp is invalid"
+            ) from exc
+        context = load_technical_snapshot_context(
+            snapshot_path,
+            code,
+            expected_trade_date=expected_trade_date,
+            expected_run_id=run_id,
+            expected_run_number=run_number,
+        )
+        completed = df.copy()
+        completed_dates = pd.to_datetime(completed["date"], errors="coerce").dt.date
+        cutoff = date.fromisoformat(context.history_data_through)
+        completed = completed.loc[completed_dates <= cutoff].copy()
+        if completed.empty or pd.to_datetime(completed["date"]).max().date() != cutoff:
+            raise TechnicalSnapshotError(
+                f"technical snapshot history_data_through is unavailable for {code}"
+            )
+        return self.trend_analyzer.analyze(
+            completed,
+            code,
+            technical_context=context,
+        )
+
+    @staticmethod
+    def _apply_screening_technical_result(
+        result: Optional[AnalysisResult],
+        trend_result: Optional[TrendAnalysisResult],
+    ) -> None:
+        """Make the same-run technical context authoritative in structured output."""
+        if (
+            result is None
+            or trend_result is None
+            or not trend_result.technical_as_of
+        ):
+            return
+        if not isinstance(result.dashboard, dict):
+            result.dashboard = {}
+        if trend_result.volume_ratio_5d is None:
+            result.dashboard = StockAnalysisPipeline._sanitize_missing_volume_claims(
+                result.dashboard
+            )
+            for field in (
+                "trend_prediction",
+                "operation_advice",
+                "trend_analysis",
+                "short_term_outlook",
+                "medium_term_outlook",
+                "fundamental_analysis",
+                "technical_analysis",
+                "ma_analysis",
+                "macd_analysis",
+                "kdj_analysis",
+                "rsi_analysis",
+                "volume_analysis",
+                "pattern_analysis",
+                "analysis_summary",
+                "key_points",
+                "risk_warning",
+                "buy_reason",
+            ):
+                setattr(
+                    result,
+                    field,
+                    StockAnalysisPipeline._sanitize_missing_volume_claims(
+                        getattr(result, field, "")
+                    ),
+                )
+            result.volume_analysis = "量比缺失，无法确认盘中放量或缩量状态"
+
+        perspective = result.dashboard.get("data_perspective")
+        if not isinstance(perspective, dict):
+            perspective = {}
+            result.dashboard["data_perspective"] = perspective
+        perspective["trend_status"] = {
+            "status": trend_result.trend_status.value,
+            "ma_alignment": trend_result.ma_alignment,
+            "technical_as_of": trend_result.technical_as_of,
+            "history_data_through": trend_result.history_data_through,
+        }
+        perspective["price_position"] = {
+            "current_price": trend_result.current_price,
+            "ma5": trend_result.ma5,
+            "ma10": trend_result.ma10,
+            "ma20": trend_result.ma20,
+            "bias_ma5": round(trend_result.bias_ma5, 2),
+            "bias_status": StockAnalysisPipeline._bias_status(
+                trend_result.bias_ma5
+            ),
+            "support_level": (
+                trend_result.support_levels[0]
+                if trend_result.support_levels
+                else None
+            ),
+            "resistance_level": (
+                trend_result.resistance_levels[0]
+                if trend_result.resistance_levels
+                else None
+            ),
+            "five_day_pct": trend_result.five_day_pct,
+            "watch_zone": trend_result.watch_zone,
+        }
+        perspective["volume_analysis"] = {
+            "volume_ratio": trend_result.provider_volume_ratio,
+            "completed_day_volume_ratio_5d": (
+                trend_result.completed_day_volume_ratio_5d
+            ),
+            "volume_status": (
+                trend_result.volume_status.value
+                if trend_result.volume_status
+                else "无法确认"
+            ),
+            "turnover_rate": (
+                result.market_snapshot.get("turnover_rate")
+                if isinstance(result.market_snapshot, dict)
+                else None
+            ),
+            "volume_meaning": trend_result.volume_trend,
+        }
+        result.ma_analysis = (
+            f"{trend_result.ma_alignment}；MA5 {trend_result.ma5:.2f}，"
+            f"MA10 {trend_result.ma10:.2f}，MA20 {trend_result.ma20:.2f}；"
+            f"技术观察带 {trend_result.watch_zone or '无法确认'}。"
+        )
+
+    @staticmethod
+    def _bias_status(value: float) -> str:
+        if value > 5:
+            return "偏高"
+        if value < -5:
+            return "偏低"
+        return "合理"
+
+    @staticmethod
+    def _sanitize_missing_volume_claims(value: Any) -> Any:
+        if isinstance(value, dict):
+            return {
+                key: StockAnalysisPipeline._sanitize_missing_volume_claims(item)
+                for key, item in value.items()
+            }
+        if isinstance(value, list):
+            return [
+                StockAnalysisPipeline._sanitize_missing_volume_claims(item)
+                for item in value
+            ]
+        if not isinstance(value, str):
+            return value
+        text = re.sub(r"量比\s*0(?:\.0+)?", "量比N/A", value)
+        return re.sub(r"(?:温和|明显|极度)?(?:放量|缩量|平量)", "量能状态无法确认", text)
 
     def _augment_historical_with_realtime(
         self, df: pd.DataFrame, realtime_quote: Any, code: str
