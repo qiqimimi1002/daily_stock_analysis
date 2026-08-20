@@ -2629,13 +2629,22 @@ class StockAnalysisPipeline:
                 result.dashboard
             )
             for field in (
+                "trend_prediction",
+                "operation_advice",
                 "trend_analysis",
                 "short_term_outlook",
                 "medium_term_outlook",
+                "fundamental_analysis",
                 "technical_analysis",
+                "ma_analysis",
+                "macd_analysis",
+                "kdj_analysis",
+                "rsi_analysis",
+                "volume_analysis",
                 "pattern_analysis",
                 "analysis_summary",
                 "key_points",
+                "risk_warning",
                 "buy_reason",
             ):
                 setattr(

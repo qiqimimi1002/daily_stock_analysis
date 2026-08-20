@@ -15,6 +15,7 @@ from data_provider.technical_snapshot import (
     load_configured_technical_snapshot_context,
     load_technical_snapshot_context,
 )
+from src.agent.orchestrator import AgentOrchestrator
 from src.analyzer import AnalysisResult
 from src.core.pipeline import StockAnalysisPipeline
 from src.services.report_renderer import render
@@ -233,16 +234,53 @@ def test_missing_volume_ratio_remains_null_and_removes_volume_claims(tmp_path: P
     assert trend.to_dict()["volume_ratio_5d"] is None
 
     result = _result()
+    result.operation_advice = "缩量观望"
+    result.risk_warning = "缩量风险"
     StockAnalysisPipeline._apply_screening_technical_result(result, trend)
     volume = result.dashboard["data_perspective"]["volume_analysis"]
     assert volume["volume_ratio"] is None
     assert volume["volume_status"] == "无法确认"
     assert result.volume_analysis == "量比缺失，无法确认盘中放量或缩量状态"
     assert "缩量洗盘" not in result.trend_analysis
+    assert "缩量" not in result.operation_advice
+    assert "缩量" not in result.risk_warning
     markdown = render("markdown", [result], report_date="2026-08-19")
     assert markdown is not None
     assert "量比 N/A" in markdown
     assert "量比 0.0" not in markdown
+
+
+def test_agent_perspective_does_not_bypass_missing_run_volume_ratio() -> None:
+    context_data = {
+        "realtime_quote": {"volume_ratio": 0.0, "turnover_rate": 1.2},
+        "trend_result": {
+            "technical_as_of": "2026-08-19T10:01:42+08:00",
+            "current_price": 48.15,
+            "ma5": 49.02,
+            "ma10": 48.30,
+            "ma20": 45.30,
+            "provider_volume_ratio": None,
+            "volume_status": None,
+            "volume_trend": "量比缺失，无法确认盘中放量或缩量状态",
+        },
+    }
+    ctx = SimpleNamespace(
+        opinions=[],
+        get_data=lambda key: context_data.get(key),
+    )
+    orchestrator = AgentOrchestrator.__new__(AgentOrchestrator)
+    orchestrator._latest_opinion = Mock(  # type: ignore[method-assign]
+        return_value=SimpleNamespace(
+            raw_data={"volume_status": "缩量", "reasoning": "缩量洗盘"}
+        )
+    )
+
+    perspective = orchestrator._build_data_perspective(ctx, {})
+
+    volume = perspective["volume_analysis"]
+    assert volume["volume_ratio"] is None
+    assert volume["volume_status"] == "N/A"
+    assert volume["volume_meaning"] == "量比缺失，无法确认盘中放量或缩量状态"
 
 
 def test_valid_provider_volume_ratio_is_displayed(tmp_path: Path) -> None:

@@ -1103,8 +1103,12 @@
   changed.
 - Boundary coverage now includes a configured snapshot with missing GitHub Run
   identity, which fails closed before any realtime-MA fallback. The focused
-  manifest/technical suite passes 29 tests; the related regression suite passes
-  313 tests (the previously accepted 312 plus this explicit boundary test).
+  manifest/technical suite passes 29 tests. A release audit also closed the
+  Agent-orchestrator fallback that could reuse an unrelated `缩量/平量` opinion
+  when the authoritative provider ratio was null, and expanded final narrative
+  sanitization for the same missing-ratio case. The related regression suite
+  passes 314 tests (the previously accepted 312 plus the missing-identity and
+  Agent-bypass boundaries).
   Python compilation, critical flake8, workflow YAML parsing, and
   `git diff --check` also pass locally. Latest-head GitHub CI must be green
   before PR #19 can become Ready or merge.

@@ -1687,6 +1687,7 @@ class AgentOrchestrator:
             return v2 if v2 is not None else default
 
         if isinstance(realtime, dict) or trend_dict:
+            screening_technical = bool(trend_dict.get("technical_as_of"))
             data_perspective["price_position"] = {
                 "current_price": _r(_pick(trend_dict, "current_price", realtime or {}, "price")),
                 "ma5": _r(_pick(trend_dict, "ma5", tech_raw, "ma5")),
@@ -1698,10 +1699,24 @@ class AgentOrchestrator:
                 "resistance_level": key_levels.get("resistance") or key_levels.get("current_resistance") or "N/A",
             }
             data_perspective["volume_analysis"] = {
-                "volume_ratio": (realtime or {}).get("volume_ratio", "N/A"),
+                "volume_ratio": (
+                    trend_dict.get("provider_volume_ratio")
+                    if screening_technical
+                    else (realtime or {}).get("volume_ratio", "N/A")
+                ),
                 "turnover_rate": (realtime or {}).get("turnover_rate", "N/A"),
-                "volume_status": trend_dict.get("volume_status") or tech_raw.get("volume_status", "N/A"),
-                "volume_meaning": tech_raw.get("reasoning", "") if tech_raw else "",
+                "volume_status": (
+                    trend_dict.get("volume_status") or "N/A"
+                    if screening_technical
+                    else trend_dict.get("volume_status")
+                    or tech_raw.get("volume_status", "N/A")
+                ),
+                "volume_meaning": (
+                    trend_dict.get("volume_trend")
+                    or "量比缺失，无法确认盘中放量或缩量状态"
+                    if screening_technical
+                    else tech_raw.get("reasoning", "") if tech_raw else ""
+                ),
             }
 
         if isinstance(chip, dict):
