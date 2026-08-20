@@ -1,0 +1,716 @@
+{
+  "generated_at": "2026-08-20T10:49:47+08:00",
+  "market_data_at": "2026-08-20T10:48:01+08:00",
+  "universe_count": 5547,
+  "spot_filtered_count": 60,
+  "history_success_count": 60,
+  "history_failure_count": 0,
+  "history_success_rate": 100.0,
+  "history_failure_reasons": {
+    "counts": {},
+    "by_code": []
+  },
+  "history_source_stats": {
+    "akshare_eastmoney": {
+      "attempts": 104,
+      "successes": 21,
+      "failures": 39,
+      "skipped": 0,
+      "retries": 44,
+      "failure_reasons": {
+        "remote_disconnect": 83
+      },
+      "success_rate": 35.0
+    },
+    "akshare_sina": {
+      "attempts": 60,
+      "successes": 60,
+      "failures": 0,
+      "skipped": 0,
+      "retries": 0,
+      "failure_reasons": {},
+      "success_rate": 100.0
+    },
+    "efinance_eastmoney": {
+      "attempts": 0,
+      "successes": 0,
+      "failures": 0,
+      "skipped": 39,
+      "retries": 0,
+      "failure_reasons": {},
+      "success_rate": null
+    },
+    "cache_hits": 0
+  },
+  "history_consistency": {
+    "status_counts": {
+      "matched": 21,
+      "single_backend": 39
+    },
+    "checked_count": 21,
+    "conflict_count": 0,
+    "single_backend_count": 39
+  },
+  "history_data_quality": {
+    "status": "ok",
+    "confidence_label": "high",
+    "warning": null
+  },
+  "evidence_success_count": 8,
+  "evidence_failure_count": 0,
+  "candidates": [
+    {
+      "code": "000975",
+      "name": "山金国际",
+      "score": 47.28,
+      "raw_score": 35.46,
+      "available_max_score": 44.0,
+      "score_coverage_pct": 44.0,
+      "confidence_label": "低",
+      "score_breakdown": {
+        "fundamental": {
+          "score": 0.0,
+          "available_max": 0.0,
+          "max_score": 30.0,
+          "status": "unavailable",
+          "evidence": []
+        },
+        "industry_catalyst": {
+          "score": 0.0,
+          "available_max": 0.0,
+          "max_score": 20.0,
+          "status": "unavailable",
+          "evidence": []
+        },
+        "capital": {
+          "score": 12.34,
+          "available_max": 14.0,
+          "max_score": 20.0,
+          "status": "partial",
+          "evidence": [
+            "换手率 2.42%",
+            "成交额 17.40亿元",
+            "量比/量能比 1.15"
+          ]
+        },
+        "technical": {
+          "score": 15.08,
+          "available_max": 20.0,
+          "max_score": 20.0,
+          "status": "ok",
+          "evidence": [
+            "价格与MA5/MA10/MA20呈多头结构",
+            "近5日涨跌 +1.21%",
+            "相对MA20偏离 +9.22%",
+            "当日涨跌 +4.89%"
+          ]
+        },
+        "valuation": {
+          "score": 8.04,
+          "available_max": 10.0,
+          "max_score": 10.0,
+          "status": "ok",
+          "evidence": [
+            "动态PE 26.26",
+            "PB 4.89"
+          ]
+        }
+      },
+      "latest_price": 28.11,
+      "prev_close": 26.8,
+      "daily_pct": 4.89,
+      "five_day_pct": 1.21,
+      "amount_yi": 17.4,
+      "avg_amount_20d_yi": 16.46,
+      "turnover_pct": 2.42,
+      "ma5": 26.35,
+      "ma10": 26.32,
+      "ma20": 24.54,
+      "volume_ratio_5d": 1.15,
+      "trend_label": "均线多头",
+      "watch_zone": "24.54—26.35",
+      "industry": "",
+      "pe_ratio": 26.26,
+      "pb_ratio": 4.89,
+      "historical_win_rate": null,
+      "risk_gate": "需深度复核",
+      "reasons": [
+        "V2.1综合评分47.28，证据覆盖率44.00%",
+        "成交额17.40亿元，满足流动性门槛",
+        "capital得分12.34/14.00",
+        "technical得分15.08/20.00",
+        "valuation得分8.04/10.00",
+        "近20日平均成交额16.46亿元，满足流动性门槛",
+        "近5日涨幅+1.21%，未进入追高区间"
+      ],
+      "risks": [],
+      "evidence_gaps": [
+        "行业催化结构化证据尚未接入，预留20分不计分",
+        "最近3年净利润与毛利率趋势尚未完成结构化核验",
+        "连续亏损年数未取得，不能据此断言企业不存在连续亏损",
+        "基本面数据不完整",
+        "主力资金或多日资金流数据不完整",
+        "PE/PB已取得，但同行业估值分位尚未接入",
+        "历史类似信号胜率将在V2.2积累后提供",
+        "重大公告与监管风险仍需由后续深度分析复核"
+      ],
+      "trigger_conditions": [
+        "保持在上一完整交易日MA20上方",
+        "盘中量价关系保持温和，不出现巨量冲高回落",
+        "深度分析补齐公告、财务和资金流证据后仍未触发风险降级"
+      ],
+      "abandon_conditions": [
+        "跌破MA20且无法快速收复",
+        "出现重大风险公告、监管处罚或最新财务亏损证据",
+        "高开急拉、巨量冲高回落或近5日涨幅突破追高上限"
+      ]
+    },
+    {
+      "code": "000725",
+      "name": "京东方Ａ",
+      "score": 46.21,
+      "raw_score": 34.66,
+      "available_max_score": 44.0,
+      "score_coverage_pct": 44.0,
+      "confidence_label": "低",
+      "score_breakdown": {
+        "fundamental": {
+          "score": 0.0,
+          "available_max": 0.0,
+          "max_score": 30.0,
+          "status": "unavailable",
+          "evidence": []
+        },
+        "industry_catalyst": {
+          "score": 0.0,
+          "available_max": 0.0,
+          "max_score": 20.0,
+          "status": "unavailable",
+          "evidence": []
+        },
+        "capital": {
+          "score": 11.94,
+          "available_max": 14.0,
+          "max_score": 20.0,
+          "status": "partial",
+          "evidence": [
+            "换手率 2.47%",
+            "成交额 52.14亿元",
+            "量比/量能比 1.42"
+          ]
+        },
+        "technical": {
+          "score": 15.47,
+          "available_max": 20.0,
+          "max_score": 20.0,
+          "status": "ok",
+          "evidence": [
+            "价格位于MA20上方且短期均线未转弱",
+            "近5日涨跌 +1.35%",
+            "相对MA20偏离 +2.74%",
+            "当日涨跌 -1.00%"
+          ]
+        },
+        "valuation": {
+          "score": 7.25,
+          "available_max": 10.0,
+          "max_score": 10.0,
+          "status": "ok",
+          "evidence": [
+            "动态PE 37.19",
+            "PB 1.62"
+          ]
+        }
+      },
+      "latest_price": 5.95,
+      "prev_close": 6.01,
+      "daily_pct": -1.0,
+      "five_day_pct": 1.35,
+      "amount_yi": 52.14,
+      "avg_amount_20d_yi": 108.97,
+      "turnover_pct": 2.47,
+      "ma5": 6.05,
+      "ma10": 6.0,
+      "ma20": 5.85,
+      "volume_ratio_5d": 1.42,
+      "trend_label": "趋势偏强",
+      "watch_zone": "5.85—6.05",
+      "industry": "",
+      "pe_ratio": 37.19,
+      "pb_ratio": 1.62,
+      "historical_win_rate": null,
+      "risk_gate": "需深度复核",
+      "reasons": [
+        "V2.1综合评分46.21，证据覆盖率44.00%",
+        "成交额52.14亿元，满足流动性门槛",
+        "capital得分11.94/14.00",
+        "technical得分15.47/20.00",
+        "valuation得分7.25/10.00",
+        "近20日平均成交额108.97亿元，满足流动性门槛",
+        "近5日涨幅+1.35%，未进入追高区间"
+      ],
+      "risks": [],
+      "evidence_gaps": [
+        "行业催化结构化证据尚未接入，预留20分不计分",
+        "最近3年净利润与毛利率趋势尚未完成结构化核验",
+        "连续亏损年数未取得，不能据此断言企业不存在连续亏损",
+        "基本面数据不完整",
+        "主力资金或多日资金流数据不完整",
+        "PE/PB已取得，但同行业估值分位尚未接入",
+        "历史类似信号胜率将在V2.2积累后提供",
+        "重大公告与监管风险仍需由后续深度分析复核"
+      ],
+      "trigger_conditions": [
+        "保持在上一完整交易日MA20上方",
+        "盘中量价关系保持温和，不出现巨量冲高回落",
+        "深度分析补齐公告、财务和资金流证据后仍未触发风险降级"
+      ],
+      "abandon_conditions": [
+        "跌破MA20且无法快速收复",
+        "出现重大风险公告、监管处罚或最新财务亏损证据",
+        "高开急拉、巨量冲高回落或近5日涨幅突破追高上限"
+      ]
+    },
+    {
+      "code": "600026",
+      "name": "中远海能",
+      "score": 40.44,
+      "raw_score": 30.33,
+      "available_max_score": 44.0,
+      "score_coverage_pct": 44.0,
+      "confidence_label": "低",
+      "score_breakdown": {
+        "fundamental": {
+          "score": 0.0,
+          "available_max": 0.0,
+          "max_score": 30.0,
+          "status": "unavailable",
+          "evidence": []
+        },
+        "industry_catalyst": {
+          "score": 0.0,
+          "available_max": 0.0,
+          "max_score": 20.0,
+          "status": "unavailable",
+          "evidence": []
+        },
+        "capital": {
+          "score": 6.23,
+          "available_max": 14.0,
+          "max_score": 20.0,
+          "status": "partial",
+          "evidence": [
+            "换手率 1.47%",
+            "成交额 10.63亿元",
+            "量比/量能比 2.08"
+          ]
+        },
+        "technical": {
+          "score": 14.56,
+          "available_max": 20.0,
+          "max_score": 20.0,
+          "status": "ok",
+          "evidence": [
+            "价格与MA5/MA10/MA20呈多头结构",
+            "近5日涨跌 +9.44%",
+            "相对MA20偏离 +8.35%",
+            "当日涨跌 +0.87%"
+          ]
+        },
+        "valuation": {
+          "score": 9.54,
+          "available_max": 10.0,
+          "max_score": 10.0,
+          "status": "ok",
+          "evidence": [
+            "动态PE 22.37",
+            "PB 2.10"
+          ]
+        }
+      },
+      "latest_price": 18.48,
+      "prev_close": 18.32,
+      "daily_pct": 0.87,
+      "five_day_pct": 9.44,
+      "amount_yi": 10.63,
+      "avg_amount_20d_yi": 10.03,
+      "turnover_pct": 1.47,
+      "ma5": 17.49,
+      "ma10": 17.33,
+      "ma20": 16.91,
+      "volume_ratio_5d": 2.08,
+      "trend_label": "均线多头",
+      "watch_zone": "16.91—17.49",
+      "industry": "",
+      "pe_ratio": 22.37,
+      "pb_ratio": 2.1,
+      "historical_win_rate": null,
+      "risk_gate": "需深度复核",
+      "reasons": [
+        "V2.1综合评分40.44，证据覆盖率44.00%",
+        "成交额10.63亿元，满足流动性门槛",
+        "capital得分6.23/14.00",
+        "technical得分14.56/20.00",
+        "valuation得分9.54/10.00",
+        "近20日平均成交额10.03亿元，满足流动性门槛"
+      ],
+      "risks": [],
+      "evidence_gaps": [
+        "行业催化结构化证据尚未接入，预留20分不计分",
+        "最近3年净利润与毛利率趋势尚未完成结构化核验",
+        "连续亏损年数未取得，不能据此断言企业不存在连续亏损",
+        "基本面数据不完整",
+        "主力资金或多日资金流数据不完整",
+        "PE/PB已取得，但同行业估值分位尚未接入",
+        "历史类似信号胜率将在V2.2积累后提供",
+        "重大公告与监管风险仍需由后续深度分析复核"
+      ],
+      "trigger_conditions": [
+        "保持在上一完整交易日MA20上方",
+        "盘中量价关系保持温和，不出现巨量冲高回落",
+        "深度分析补齐公告、财务和资金流证据后仍未触发风险降级"
+      ],
+      "abandon_conditions": [
+        "跌破MA20且无法快速收复",
+        "出现重大风险公告、监管处罚或最新财务亏损证据",
+        "高开急拉、巨量冲高回落或近5日涨幅突破追高上限"
+      ]
+    },
+    {
+      "code": "600489",
+      "name": "中金黄金",
+      "score": 40.4,
+      "raw_score": 30.3,
+      "available_max_score": 44.0,
+      "score_coverage_pct": 44.0,
+      "confidence_label": "低",
+      "score_breakdown": {
+        "fundamental": {
+          "score": 0.0,
+          "available_max": 0.0,
+          "max_score": 30.0,
+          "status": "unavailable",
+          "evidence": []
+        },
+        "industry_catalyst": {
+          "score": 0.0,
+          "available_max": 0.0,
+          "max_score": 20.0,
+          "status": "unavailable",
+          "evidence": []
+        },
+        "capital": {
+          "score": 11.47,
+          "available_max": 14.0,
+          "max_score": 20.0,
+          "status": "partial",
+          "evidence": [
+            "换手率 1.89%",
+            "成交额 24.77亿元",
+            "量比/量能比 1.15"
+          ]
+        },
+        "technical": {
+          "score": 10.38,
+          "available_max": 20.0,
+          "max_score": 20.0,
+          "status": "ok",
+          "evidence": [
+            "价格站上MA20",
+            "近5日涨跌 +0.36%",
+            "相对MA20偏离 +7.41%",
+            "当日涨跌 +5.60%"
+          ]
+        },
+        "valuation": {
+          "score": 8.45,
+          "available_max": 10.0,
+          "max_score": 10.0,
+          "status": "ok",
+          "evidence": [
+            "动态PE 26.08",
+            "PB 3.93"
+          ]
+        }
+      },
+      "latest_price": 26.6,
+      "prev_close": 25.19,
+      "daily_pct": 5.6,
+      "five_day_pct": 0.36,
+      "amount_yi": 24.77,
+      "avg_amount_20d_yi": 22.62,
+      "turnover_pct": 1.89,
+      "ma5": 24.92,
+      "ma10": 25.06,
+      "ma20": 23.45,
+      "volume_ratio_5d": 1.15,
+      "trend_label": "站上MA20",
+      "watch_zone": "23.45—24.92",
+      "industry": "",
+      "pe_ratio": 26.08,
+      "pb_ratio": 3.93,
+      "historical_win_rate": null,
+      "risk_gate": "需深度复核",
+      "reasons": [
+        "V2.1综合评分40.40，证据覆盖率44.00%",
+        "成交额24.77亿元，满足流动性门槛",
+        "capital得分11.47/14.00",
+        "technical得分10.38/20.00",
+        "valuation得分8.45/10.00",
+        "近20日平均成交额22.62亿元，满足流动性门槛",
+        "近5日涨幅+0.36%，未进入追高区间"
+      ],
+      "risks": [
+        "当日已上涨5.60%，存在追高风险"
+      ],
+      "evidence_gaps": [
+        "行业催化结构化证据尚未接入，预留20分不计分",
+        "最近3年净利润与毛利率趋势尚未完成结构化核验",
+        "连续亏损年数未取得，不能据此断言企业不存在连续亏损",
+        "基本面数据不完整",
+        "主力资金或多日资金流数据不完整",
+        "PE/PB已取得，但同行业估值分位尚未接入",
+        "历史类似信号胜率将在V2.2积累后提供",
+        "重大公告与监管风险仍需由后续深度分析复核"
+      ],
+      "trigger_conditions": [
+        "保持在上一完整交易日MA20上方",
+        "盘中量价关系保持温和，不出现巨量冲高回落",
+        "深度分析补齐公告、财务和资金流证据后仍未触发风险降级"
+      ],
+      "abandon_conditions": [
+        "跌破MA20且无法快速收复",
+        "出现重大风险公告、监管处罚或最新财务亏损证据",
+        "高开急拉、巨量冲高回落或近5日涨幅突破追高上限"
+      ]
+    },
+    {
+      "code": "600522",
+      "name": "中天科技",
+      "score": 40.05,
+      "raw_score": 30.04,
+      "available_max_score": 38.0,
+      "score_coverage_pct": 38.0,
+      "confidence_label": "低",
+      "score_breakdown": {
+        "fundamental": {
+          "score": 0.0,
+          "available_max": 0.0,
+          "max_score": 30.0,
+          "status": "unavailable",
+          "evidence": []
+        },
+        "industry_catalyst": {
+          "score": 0.0,
+          "available_max": 0.0,
+          "max_score": 20.0,
+          "status": "unavailable",
+          "evidence": []
+        },
+        "capital": {
+          "score": 7.82,
+          "available_max": 8.0,
+          "max_score": 20.0,
+          "status": "partial",
+          "evidence": [
+            "换手率 3.33%",
+            "成交额 37.18亿元"
+          ]
+        },
+        "technical": {
+          "score": 14.63,
+          "available_max": 20.0,
+          "max_score": 20.0,
+          "status": "ok",
+          "evidence": [
+            "价格位于MA20上方且短期均线未转弱",
+            "近5日涨跌 +1.16%",
+            "相对MA20偏离 +4.11%",
+            "当日涨跌 +3.94%"
+          ]
+        },
+        "valuation": {
+          "score": 7.59,
+          "available_max": 10.0,
+          "max_score": 10.0,
+          "status": "ok",
+          "evidence": [
+            "动态PE 38.83",
+            "PB 2.99"
+          ]
+        }
+      },
+      "latest_price": 33.28,
+      "prev_close": 32.02,
+      "daily_pct": 3.94,
+      "five_day_pct": 1.16,
+      "amount_yi": 37.18,
+      "avg_amount_20d_yi": 81.54,
+      "turnover_pct": 3.33,
+      "ma5": 34.33,
+      "ma10": 33.64,
+      "ma20": 31.97,
+      "volume_ratio_5d": null,
+      "trend_label": "趋势偏强",
+      "watch_zone": "31.97—34.33",
+      "industry": "",
+      "pe_ratio": 38.83,
+      "pb_ratio": 2.99,
+      "historical_win_rate": null,
+      "risk_gate": "需深度复核",
+      "reasons": [
+        "V2.1综合评分40.05，证据覆盖率38.00%",
+        "成交额37.18亿元，满足流动性门槛",
+        "capital得分7.82/8.00",
+        "technical得分14.63/20.00",
+        "valuation得分7.59/10.00",
+        "近20日平均成交额81.54亿元，满足流动性门槛",
+        "近5日涨幅+1.16%，未进入追高区间"
+      ],
+      "risks": [
+        "盘中未完成K线不参与日线量能计算"
+      ],
+      "evidence_gaps": [
+        "行业催化结构化证据尚未接入，预留20分不计分",
+        "最近3年净利润与毛利率趋势尚未完成结构化核验",
+        "连续亏损年数未取得，不能据此断言企业不存在连续亏损",
+        "基本面数据不完整",
+        "主力资金或多日资金流数据不完整",
+        "PE/PB已取得，但同行业估值分位尚未接入",
+        "历史类似信号胜率将在V2.2积累后提供",
+        "重大公告与监管风险仍需由后续深度分析复核"
+      ],
+      "trigger_conditions": [
+        "保持在上一完整交易日MA20上方",
+        "盘中量价关系保持温和，不出现巨量冲高回落",
+        "深度分析补齐公告、财务和资金流证据后仍未触发风险降级"
+      ],
+      "abandon_conditions": [
+        "跌破MA20且无法快速收复",
+        "出现重大风险公告、监管处罚或最新财务亏损证据",
+        "高开急拉、巨量冲高回落或近5日涨幅突破追高上限"
+      ]
+    }
+  ],
+  "analysis_codes": [
+    "000975",
+    "000725",
+    "600026"
+  ],
+  "config": {
+    "top_n": 5,
+    "analysis_limit": 3,
+    "preselect_limit": 60,
+    "history_workers": 4,
+    "enrichment_limit": 8,
+    "evidence_workers": 2,
+    "evidence_budget_seconds": 12.0,
+    "min_amount_yuan": 200000000.0,
+    "min_turnover_pct": 0.5,
+    "max_turnover_pct": 12.0,
+    "min_price": 3.0,
+    "max_price": 3000.0,
+    "min_daily_pct": -4.0,
+    "max_daily_pct": 6.0,
+    "min_five_day_pct": -5.0,
+    "max_five_day_pct": 12.0,
+    "min_history_rows": 20,
+    "history_max_retries": 1,
+    "history_retry_delay_seconds": 0.5,
+    "history_consistency_tolerance_pct": 2.0
+  },
+  "data_source": "sina",
+  "limitations": [
+    "V2.1综合评分覆盖基本面、资金面、技术面和估值；行业催化评分将在后续阶段补充。",
+    "证据覆盖率单独展示；缺失数据不会按正面信号计分，也不会被表述为无风险。",
+    "候选名单用于缩小人工复核范围，不代表买入、加仓或建仓建议。",
+    "免费行情接口可能延迟或失败；历史数据失败的股票会被跳过并计数。",
+    "历史类似信号胜率和5/10/20日表现将在V2.2积累足够样本后展示。",
+    "重大公告、监管处罚和异常事项仍由候选股深度分析继续复核。",
+    "盘中运行时，当日未完成K线不参与日线均线和量能计算；最新价仅用于判断相对上一完整交易日均线的位置。"
+  ],
+  "model_version": "V2.1",
+  "market_environment": {
+    "score": 83.99,
+    "strategy": "积极观察，但仍需等待个股触发条件",
+    "coverage": "partial",
+    "coverage_note": "当前仅使用全市场涨跌广度；指数趋势和历史成交额基线待后续接入",
+    "advance_ratio_pct": 77.18,
+    "median_pct_change": 1.19,
+    "limit_up_count": 123,
+    "limit_down_count": 15,
+    "snapshot_status": "active",
+    "active_quote_count": 5540,
+    "observation_limit": 5
+  },
+  "market_snapshot": {
+    "schema_version": "1.0",
+    "market_data_at": "2026-08-20T10:48:01+08:00",
+    "data_source": "sina",
+    "price_adjustment": "none_realtime_spot",
+    "prev_close_adjustment": "provider_exchange_reference",
+    "price_change_formula": "(price - prev_close) / prev_close * 100",
+    "quotes": {
+      "000975": {
+        "code": "000975",
+        "name": "山金国际",
+        "price": 28.11,
+        "prev_close": 26.8,
+        "change_pct": 4.89,
+        "provider_change_pct": 4.888,
+        "change_amount": 1.31,
+        "open": 28.3,
+        "high": 29.0,
+        "low": 27.97,
+        "volume": 61025912.0,
+        "amount": 1739770636.0,
+        "volume_ratio": null,
+        "turnover_rate": 2.41858,
+        "amplitude": 3.8433,
+        "pe_ratio": 26.259,
+        "pb_ratio": 4.895,
+        "prev_close_basis": "provider_exchange_reference"
+      },
+      "000725": {
+        "code": "000725",
+        "name": "京东方Ａ",
+        "price": 5.95,
+        "prev_close": 6.01,
+        "change_pct": -1.0,
+        "provider_change_pct": -0.998,
+        "change_amount": -0.06,
+        "open": 6.07,
+        "high": 6.09,
+        "low": 5.87,
+        "volume": 873514751.0,
+        "amount": 5214407491.0,
+        "volume_ratio": null,
+        "turnover_rate": 2.46985,
+        "amplitude": 3.6606,
+        "pe_ratio": 37.188,
+        "pb_ratio": 1.62,
+        "prev_close_basis": "provider_exchange_reference"
+      },
+      "600026": {
+        "code": "600026",
+        "name": "中远海能",
+        "price": 18.48,
+        "prev_close": 18.32,
+        "change_pct": 0.87,
+        "provider_change_pct": 0.873,
+        "change_amount": 0.16,
+        "open": 18.5,
+        "high": 19.23,
+        "low": 18.38,
+        "volume": 56197132.0,
+        "amount": 1062754707.0,
+        "volume_ratio": null,
+        "turnover_rate": 1.46806,
+        "amplitude": 4.6397,
+        "pe_ratio": 22.367,
+        "pb_ratio": 2.097,
+        "prev_close_basis": "provider_exchange_reference"
+      }
+    }
+  }
+}
