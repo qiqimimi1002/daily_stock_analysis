@@ -21,6 +21,9 @@ from src.services.market_screener import (  # noqa: E402
     ScreeningConfig,
     save_result,
 )
+from src.services.market_screener_diagnostics import (  # noqa: E402
+    MarketScreenerDiagnostics,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -40,6 +43,10 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if callable(reconfigure):
+            reconfigure(line_buffering=True, write_through=True)
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
@@ -54,7 +61,13 @@ def main() -> int:
         evidence_budget_seconds=args.evidence_budget_seconds,
         min_amount_yuan=args.min_amount_yuan,
     )
-    result = MarketScreener(config=config).run()
+    diagnostics = MarketScreenerDiagnostics(
+        PROJECT_ROOT / "logs" / "market_screener_timing.jsonl",
+    )
+    result = MarketScreener(
+        config=config,
+        diagnostics=diagnostics,
+    ).run()
 
     now = datetime.now(ZoneInfo("Asia/Shanghai"))
     stamp = now.strftime("%Y%m%d_%H%M")
@@ -91,4 +104,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

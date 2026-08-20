@@ -39,6 +39,10 @@ from src.services.market_scoring import (
     build_v21_scorecard,
     calculate_market_environment,
 )
+from src.services.market_screener_diagnostics import (
+    MarketScreenerDiagnostics,
+    diagnostic_error_category,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -774,7 +778,12 @@ class PublicMarketDataSource:
 
     name = "AKShare/东方财富；失败时使用新浪原始接口或 efinance"
 
-    def __init__(self, *, sleep: Callable[[float], None] = time_module.sleep) -> None:
+    def __init__(
+        self,
+        *,
+        sleep: Callable[[float], None] = time_module.sleep,
+        diagnostics: Optional[MarketScreenerDiagnostics] = None,
+    ) -> None:
         self._fundamental_manager = None
         self._fundamental_manager_lock = Lock()
         self._history_cache: Dict[
@@ -782,6 +791,7 @@ class PublicMarketDataSource:
         ] = {}
         self._history_cache_lock = Lock()
         self._sleep = sleep
+        self.diagnostics = diagnostics or MarketScreenerDiagnostics()
 
     def _get_fundamental_manager(self):
         if self._fundamental_manager is not None:
@@ -795,36 +805,66 @@ class PublicMarketDataSource:
 
     def fetch_spot(self) -> pd.DataFrame:
         errors: List[str] = []
+        provider = "akshare_eastmoney"
+        self.diagnostics.set_active_provider(
+            code="full_market",
+            provider=provider,
+        )
         try:
             import akshare as ak
 
             frame = ak.stock_zh_a_spot_em()
             if frame is not None and not frame.empty:
-                return self._mark_spot_snapshot(frame, "akshare_eastmoney")
+                return self._mark_spot_snapshot(frame, provider)
             errors.append("AKShare 返回空表")
         except Exception as exc:  # pragma: no cover - live provider
             errors.append(f"AKShare: {exc}")
+        finally:
+            self.diagnostics.clear_active_provider(
+                code="full_market",
+                provider=provider,
+            )
 
         # AKShare 的 stock_zh_a_spot() 会解析新浪的 turnoverratio，却在
         # 返回 DataFrame 前删除该列。这里直接读取同一原始接口并保留换手率，
         # 否则基础风险过滤无法执行。
+        provider = "sina"
+        self.diagnostics.set_active_provider(
+            code="full_market",
+            provider=provider,
+        )
         try:
             frame = self._fetch_sina_spot_with_turnover()
             if not frame.empty:
-                return self._mark_spot_snapshot(frame, "sina")
+                return self._mark_spot_snapshot(frame, provider)
             errors.append("新浪原始接口返回空表")
         except Exception as exc:  # pragma: no cover - live provider
             errors.append(f"新浪原始接口: {exc}")
+        finally:
+            self.diagnostics.clear_active_provider(
+                code="full_market",
+                provider=provider,
+            )
 
+        provider = "efinance_eastmoney"
+        self.diagnostics.set_active_provider(
+            code="full_market",
+            provider=provider,
+        )
         try:
             import efinance as ef
 
             frame = ef.stock.get_realtime_quotes()
             if frame is not None and not frame.empty:
-                return self._mark_spot_snapshot(frame, "efinance_eastmoney")
+                return self._mark_spot_snapshot(frame, provider)
             errors.append("efinance 返回空表")
         except Exception as exc:  # pragma: no cover - live provider
             errors.append(f"efinance: {exc}")
+        finally:
+            self.diagnostics.clear_active_provider(
+                code="full_market",
+                provider=provider,
+            )
 
         raise RuntimeError("全市场实时行情获取失败；" + "；".join(errors))
 
@@ -1017,10 +1057,26 @@ class PublicMarketDataSource:
             observed_failures: Dict[str, int] = {}
             while attempts <= retries:
                 attempts += 1
+                request_started_monotonic, request_started_at = (
+                    self.diagnostics.request_started(
+                        code=normalized_code,
+                        provider=provider_name,
+                        attempt=attempts,
+                    )
+                )
                 try:
                     frame = self._validate_history_frame(
                         fetcher(normalized_code, start, end),
                         min_rows,
+                    )
+                    self.diagnostics.request_completed(
+                        code=normalized_code,
+                        provider=provider_name,
+                        attempt=attempts,
+                        started_monotonic=request_started_monotonic,
+                        started_at=request_started_at,
+                        success=True,
+                        error_category=None,
                     )
                     valid_results.append((provider_name, family, frame))
                     provider_results.append(
@@ -1037,6 +1093,15 @@ class PublicMarketDataSource:
                     break
                 except Exception as exc:  # pragma: no cover - live provider details vary
                     last_reason = classify_history_failure(exc)
+                    self.diagnostics.request_completed(
+                        code=normalized_code,
+                        provider=provider_name,
+                        attempt=attempts,
+                        started_monotonic=request_started_monotonic,
+                        started_at=request_started_at,
+                        success=False,
+                        error_category=last_reason,
+                    )
                     observed_failures[last_reason] = observed_failures.get(last_reason, 0) + 1
                     if last_reason not in {"remote_disconnect", "timeout"} or attempts > retries:
                         provider_results.append(
@@ -1140,9 +1205,16 @@ class MarketScreener:
         self,
         config: Optional[ScreeningConfig] = None,
         data_source: Optional[PublicMarketDataSource] = None,
+        diagnostics: Optional[MarketScreenerDiagnostics] = None,
     ) -> None:
         self.config = config or ScreeningConfig()
-        self.data_source = data_source or PublicMarketDataSource()
+        self.diagnostics = diagnostics or MarketScreenerDiagnostics()
+        if data_source is None:
+            self.data_source = PublicMarketDataSource(diagnostics=self.diagnostics)
+        else:
+            self.data_source = data_source
+            if diagnostics is not None:
+                self.data_source.diagnostics = self.diagnostics
 
     def run(
         self,
@@ -1151,7 +1223,45 @@ class MarketScreener:
         history_fetcher: Optional[Callable[[str], pd.DataFrame]] = None,
         evidence_fetcher: Optional[Callable[[str], Mapping[str, Any]]] = None,
     ) -> ScreeningResult:
-        raw_spot = spot_frame if spot_frame is not None else self.data_source.fetch_spot()
+        self.diagnostics.start()
+        try:
+            result = self._run(
+                spot_frame=spot_frame,
+                history_fetcher=history_fetcher,
+                evidence_fetcher=evidence_fetcher,
+            )
+        except BaseException as exc:
+            self.diagnostics.stop(
+                status="failure",
+                error_category=diagnostic_error_category(exc),
+            )
+            raise
+        self.diagnostics.stop(status="success")
+        return result
+
+    def _run(
+        self,
+        *,
+        spot_frame: Optional[pd.DataFrame] = None,
+        history_fetcher: Optional[Callable[[str], pd.DataFrame]] = None,
+        evidence_fetcher: Optional[Callable[[str], Mapping[str, Any]]] = None,
+    ) -> ScreeningResult:
+        spot_started = self.diagnostics.begin_stage("full_market_fetch")
+        try:
+            raw_spot = (
+                spot_frame
+                if spot_frame is not None
+                else self.data_source.fetch_spot()
+            )
+        except BaseException as exc:
+            self.diagnostics.end_stage(
+                "full_market_fetch",
+                spot_started,
+                status="failure",
+                source="unavailable",
+                error_category=diagnostic_error_category(exc),
+            )
+            raise
         market_data_at = str(
             raw_spot.attrs.get("market_data_at")
             or datetime.now(CN_TZ).isoformat(timespec="seconds")
@@ -1161,6 +1271,13 @@ class MarketScreener:
             or ("injected" if spot_frame is not None else self.data_source.name)
         )
         universe_count = len(raw_spot)
+        self.diagnostics.end_stage(
+            "full_market_fetch",
+            spot_started,
+            status="success",
+            source=market_data_source,
+            record_count=universe_count,
+        )
         normalized_spot = normalize_spot_frame(raw_spot)
         active_spot = _active_spot_rows(normalized_spot)
         if active_spot.empty:
@@ -1182,7 +1299,29 @@ class MarketScreener:
                 "snapshot_status": "active",
                 "active_quote_count": len(active_spot),
             }
-        filtered = apply_spot_filters(raw_spot, self.config)
+        filter_started = self.diagnostics.begin_stage(
+            "basic_filter",
+            input_count=universe_count,
+        )
+        try:
+            filtered = apply_spot_filters(raw_spot, self.config)
+        except BaseException as exc:
+            self.diagnostics.end_stage(
+                "basic_filter",
+                filter_started,
+                status="failure",
+                input_count=universe_count,
+                output_count=None,
+                error_category=diagnostic_error_category(exc),
+            )
+            raise
+        self.diagnostics.end_stage(
+            "basic_filter",
+            filter_started,
+            status="success",
+            input_count=universe_count,
+            output_count=len(filtered),
+        )
         if history_fetcher is None:
             fetch_history: Callable[[str], Any] = lambda code: self.data_source.fetch_history_with_meta(
                 code,
@@ -1252,6 +1391,12 @@ class MarketScreener:
             failure_by_code.append({"stock_code": code, "reason": reason})
 
         rows = [row._asdict() for row in filtered.itertuples(index=False)]
+        history_started = self.diagnostics.begin_stage(
+            "history_fetch",
+            pending_codes=(str(row["code"]) for row in rows),
+            input_count=len(rows),
+            worker_count=self.config.history_workers,
+        )
         with ThreadPoolExecutor(max_workers=self.config.history_workers) as executor:
             futures = {
                 executor.submit(fetch_history, str(row["code"])): row
@@ -1306,6 +1451,16 @@ class MarketScreener:
                     reason = classify_history_failure(exc)
                     record_history_failure(str(row["code"]), reason)
                     logger.warning("历史数据获取或计算失败 %s: %s", row["code"], reason)
+                finally:
+                    self.diagnostics.mark_completed(str(row["code"]))
+        self.diagnostics.end_stage(
+            "history_fetch",
+            history_started,
+            status="success",
+            input_count=len(rows),
+            success_count=success,
+            failure_count=failures,
+        )
 
         # Expensive fundamentals and capital-flow requests are limited to the
         # strongest transparent price/volume candidates.
@@ -1321,6 +1476,13 @@ class MarketScreener:
 
         evidence_by_code: Dict[str, Mapping[str, Any]] = {}
         should_fetch_evidence = evidence_fetcher is not None or spot_frame is None
+        evidence_codes = [str(row["code"]) for row, _, _ in candidate_inputs]
+        evidence_started = self.diagnostics.begin_stage(
+            "evidence_enrichment",
+            pending_codes=evidence_codes,
+            input_count=len(evidence_codes),
+            worker_count=self.config.evidence_workers,
+        )
         if should_fetch_evidence and candidate_inputs:
             if evidence_fetcher is None:
                 fetch_evidence = lambda code: self.data_source.fetch_evidence(
@@ -1329,9 +1491,29 @@ class MarketScreener:
                 )
             else:
                 fetch_evidence = evidence_fetcher
+
+            def fetch_evidence_with_diagnostics(
+                code: str,
+            ) -> Mapping[str, Any]:
+                provider = "evidence_pipeline"
+                self.diagnostics.set_active_provider(
+                    code=code,
+                    provider=provider,
+                )
+                try:
+                    return fetch_evidence(code)
+                finally:
+                    self.diagnostics.clear_active_provider(
+                        code=code,
+                        provider=provider,
+                    )
+
             with ThreadPoolExecutor(max_workers=self.config.evidence_workers) as executor:
                 evidence_futures = {
-                    executor.submit(fetch_evidence, str(row["code"])): str(row["code"])
+                    executor.submit(
+                        fetch_evidence_with_diagnostics,
+                        str(row["code"]),
+                    ): str(row["code"])
                     for row, _, _ in candidate_inputs
                 }
                 for future in as_completed(evidence_futures):
@@ -1349,6 +1531,20 @@ class MarketScreener:
                         evidence_failures += 1
                         logger.warning("V2.1 证据增强失败 %s: %s", code, exc)
                         evidence_by_code[code] = {}
+                    finally:
+                        self.diagnostics.mark_completed(code)
+        self.diagnostics.end_stage(
+            "evidence_enrichment",
+            evidence_started,
+            status=(
+                "success"
+                if should_fetch_evidence and candidate_inputs
+                else "skipped"
+            ),
+            input_count=len(evidence_codes),
+            success_count=evidence_success,
+            failure_count=evidence_failures,
+        )
 
         candidates: List[ScreeningCandidate] = []
         for row, metrics, _ in candidate_inputs:
