@@ -1145,3 +1145,22 @@
   `git diff --check` pass. The
   local Windows AI-assets check retains the pre-existing `CLAUDE.md` symlink
   limitation; authoritative Linux PR CI must validate that unchanged asset.
+- Commit `8009de5b4aaac85e27d4ff7487128c6f9e15de7a` is frozen as the
+  next-trading-day intraday acceptance baseline. Current status is
+  **Offline PASS / Awaiting intraday acceptance**; PR #20 remains Draft.
+- A standalone offline validator reads only the two sanitized Private
+  acceptance JSON files and optional run logs. It checks the exact Artifact
+  allowlist/schema, single-stock identity, normalized-column evidence,
+  shares/yuan units, Asia/Shanghai ordering and 180-second freshness,
+  intraday/quality status, hashes, redaction status, file size, and sensitive
+  or raw-data patterns. It emits machine JSON on stdout and a human checklist
+  on stderr, performs no network access, imports no Provider, reads no Secret,
+  and writes no file.
+- Verification passes 132 tests: the frozen 105-test baseline plus 27 new
+  synthetic validator cases covering PASS, schema/type/time/state/unit errors,
+  missing/extra/oversized Artifacts, simulated credential/raw-response leaks,
+  CLI output, and a network-call spy fixed at zero. Python compilation,
+  changed-file flake8, and `git diff --check` pass.
+- The next authorized acceptance window remains 09:35-09:40 Asia/Shanghai for
+  `600000.SH` only. Offline tooling does not authorize or perform that run;
+  real intraday acceptance remains pending.
