@@ -94,6 +94,17 @@ class ScreeningRunManifestTest(unittest.TestCase):
         (self.data / "market_snapshot.json").write_text(
             json.dumps(market_snapshot, ensure_ascii=False), encoding="utf-8"
         )
+        technical_snapshot = {
+            "schema_version": "1.0",
+            "trade_date": "2026-08-04",
+            "run_id": "123456",
+            "run_number": "14",
+            "technical_as_of": "2026-08-04T10:18:00+08:00",
+            "indicators": {code: {"code": code} for code in analysis_codes},
+        }
+        (self.data / "technical_snapshot.json").write_text(
+            json.dumps(technical_snapshot, ensure_ascii=False), encoding="utf-8"
+        )
         (self.reports / "market_screening_20260804_1018.md").write_text("测试初筛报告", encoding="utf-8")
 
     def _build(
@@ -141,10 +152,26 @@ class ScreeningRunManifestTest(unittest.TestCase):
         self.assertEqual(manifest["screening_generated_at"], "2026-08-04T10:18:30+08:00")
         self.assertEqual(manifest["market_data_at"], "2026-08-04T10:18:00+08:00")
         self.assertEqual(manifest["market_snapshot"], "data/market_snapshot.json")
+        self.assertEqual(manifest["technical_snapshot"], "data/technical_snapshot.json")
         self.assertEqual(manifest["data_source"], "synthetic-test-source")
         self.assertEqual(manifest["model_version"], "V2.1-test")
         self.assertEqual(manifest["fixed_result_entry"]["branch"], "screening-results")
+        self.assertEqual(
+            manifest["fixed_result_entry"]["latest_technical_snapshot"],
+            "latest/technical_snapshot.json",
+        )
+        self.assertIn("data/technical_snapshot.json", manifest["result_file_sha256"])
         self.assertIn("reports/report_20260804.md", manifest["result_file_sha256"])
+
+    def test_missing_technical_snapshot_is_an_explicit_manifest_failure(self) -> None:
+        self._write_screening(candidate_codes=["600089"], analysis_codes=["600089"])
+        (self.data / "technical_snapshot.json").unlink()
+
+        manifest = self._build(deep_analysis_outcome="failure")
+
+        self.assertFalse(manifest["integrity"]["ok"])
+        self.assertIn("technical_snapshot_missing", manifest["integrity"]["errors"])
+        self.assertIn("technical_snapshot_missing", manifest["reason_codes"])
 
     def test_market_snapshot_must_match_screening_candidate_quote(self) -> None:
         self._write_screening(candidate_codes=["600089"], analysis_codes=["600089"])

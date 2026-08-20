@@ -12,6 +12,7 @@ import pytest
 from data_provider.technical_snapshot import (
     TECHNICAL_SNAPSHOT_ENV,
     TechnicalSnapshotError,
+    load_configured_technical_snapshot_context,
     load_technical_snapshot_context,
 )
 from src.analyzer import AnalysisResult
@@ -201,6 +202,19 @@ def test_missing_code_fails_closed_without_realtime_ma_fallback(tmp_path: Path) 
             expected_run_id="32207015938",
             expected_run_number="49",
         )
+
+
+def test_configured_snapshot_without_run_identity_fails_closed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = _write_snapshot(tmp_path / "technical.json")
+    monkeypatch.setenv(TECHNICAL_SNAPSHOT_ENV, str(path))
+    monkeypatch.delenv("GITHUB_RUN_ID", raising=False)
+    monkeypatch.delenv("GITHUB_RUN_NUMBER", raising=False)
+
+    with pytest.raises(TechnicalSnapshotError, match="requires GITHUB_RUN_ID"):
+        load_configured_technical_snapshot_context("600378")
 
 
 def test_missing_volume_ratio_remains_null_and_removes_volume_claims(tmp_path: Path) -> None:

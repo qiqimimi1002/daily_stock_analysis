@@ -1090,3 +1090,21 @@
   `https://github.com/qiqimimi1002/daily_stock_analysis/pull/19`. The initial
   implementation head is `09076aa408bb405e0876241acf9d4ad15f544561`; it must
   not be merged without separate human acceptance.
+
+### PR #19 release-audit blocker fixed (2026-08-20)
+
+- Final release audit found one publication-layer gap: the workflow already
+  uploaded and published `data/technical_snapshot.json`, but the run manifest
+  did not register this critical same-run input.
+- The manifest now records the technical-snapshot path, its SHA-256 in
+  `result_file_sha256`, the fixed-entry reference
+  `latest/technical_snapshot.json`, and explicit missing/preflight failure
+  reason codes. No technical-indicator calculation or selection behavior was
+  changed.
+- Boundary coverage now includes a configured snapshot with missing GitHub Run
+  identity, which fails closed before any realtime-MA fallback. The focused
+  manifest/technical suite passes 29 tests; the related regression suite passes
+  313 tests (the previously accepted 312 plus this explicit boundary test).
+  Python compilation, critical flake8, workflow YAML parsing, and
+  `git diff --check` also pass locally. Latest-head GitHub CI must be green
+  before PR #19 can become Ready or merge.
