@@ -1086,5 +1086,7 @@
   market-snapshot contract, PR #18 diagnostics, Cloudflare/scheduler,
   concurrency/idempotency guard, calendar, OHLC/adjustment policy, or research
   code was changed. Production candidate selection is unchanged.
-- Delivery remains a Draft PR and must not be merged without separate human
-  acceptance.
+- Delivery is Draft PR #19:
+  `https://github.com/qiqimimi1002/daily_stock_analysis/pull/19`. The initial
+  implementation head is `09076aa408bb405e0876241acf9d4ad15f544561`; it must
+  not be merged without separate human acceptance.
