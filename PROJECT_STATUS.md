@@ -1118,29 +1118,30 @@
 - Branch `agent/tushare-rt-k-phase1` was created from official `main`
   `01b8c5337ee52c23cceb532a08f3367911aa1d48` after PR #19. Repository
   inspection confirmed this project is still a Public Fork.
-- The initial uncommitted prototype was stopped before push, CI, live API use,
-  production screening, or Artifact creation. A working-tree audit found no
-  Tushare Token, complete `rt_k` response, real paid-market fixture, or raw
-  paid snapshot. Two unsafe proposed paths were removed before commit: passing
-  `TUSHARE_TOKEN` to the production screener, and a PR/manual live-acceptance
-  workflow that would have read the Secret and uploaded evidence.
+- Public Draft PR #20 remains isolated from production and contains no Token,
+  complete `rt_k` response, real paid-market fixture, raw paid snapshot, live
+  acceptance workflow, or production Secret injection. The separate
+  standalone Private collector has a Repository Secret configured and completed
+  one owner-only `600000.SH` after-close read-only call on 2026-08-20; no
+  intraday acceptance has been performed, and no Private response or Artifact
+  was copied into this Public repository.
 - The retained code is an isolated, uncredentialed `rt_k` provider contract
   plus explicitly synthetic offline tests. It is not imported by the Market
   Screener, Daily Stock, research, scheduler, or any workflow. Existing V2.1,
   PR #14/#18/#19 behavior, public fallbacks, Cloudflare, idempotency, production
   times, `market_snapshot.json`, caches, logs, and Artifact rules are unchanged.
-- The proposed compliant boundary is documented as a future private collector
-  that stores raw paid data privately and a Public model side that, only after
-  written permission, receives candidate code, timestamp, strictly necessary
-  price fields, score, provenance label `数据来源：Tushare数据`, and an integrity
-  hash. No private repository, migration, publication channel, or live
-  acceptance is implemented in this phase.
-- Release gate: obtain written clarification from Tushare covering automated
-  GitHub/private-service access and public display of candidate-level derived
-  results. Until then this work must remain Draft, unmerged, undeployed, and
-  must not perform real after-close or intraday `rt_k` calls.
-- Offline verification passed: 31 adapter/security-boundary tests and 60
-  existing screener/snapshot/manifest/fallback regressions. New Python files
-  compile; critical flake8 and `git diff --check` pass. The local Windows
-  AI-assets check retains the pre-existing `CLAUDE.md` symlink limitation;
-  authoritative Linux PR CI must validate that unchanged repository asset.
+- The strict public input gate accepts only one to five comma-separated codes
+  matching `^[0-9]{6}\.(SH|SZ)$`. It strips surrounding whitespace only and
+  rejects empty items, lowercase/wrong suffixes, malformed codes, duplicates,
+  and more than five codes before reading the Secret or making a provider call.
+- The Private collector and Public model remain separated. Public publication
+  of realtime prices or derived paid-data output requires a separate licensing
+  decision; PR #20 itself stays Draft, unmerged, undeployed, and unable to read
+  a Secret or call live `rt_k`.
+- Offline verification passed 105 tests: 53 adapter/public-boundary cases and
+  52 existing screener/snapshot/manifest/fallback regressions. This includes 22
+  new exact-input and zero-call ordering cases plus three adjusted existing
+  adapter cases. Changed Python files compile; changed-file flake8 and
+  `git diff --check` pass. The
+  local Windows AI-assets check retains the pre-existing `CLAUDE.md` symlink
+  limitation; authoritative Linux PR CI must validate that unchanged asset.

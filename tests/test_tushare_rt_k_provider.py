@@ -15,6 +15,7 @@ from data_provider.tushare_rt_k_provider import (
     TushareRtKAuthError,
     TushareRtKProvider,
     TushareRtKValidationError,
+    validate_rt_k_stock_codes,
 )
 
 
@@ -81,6 +82,87 @@ def _provider(
     return provider, client, sleep_calls
 
 
+@pytest.mark.parametrize("stock_code", ["600000.SH", "000001.SZ"])
+def test_stock_code_validator_accepts_exact_uppercase_codes(stock_code):
+    assert validate_rt_k_stock_codes(stock_code) == [stock_code]
+
+
+@pytest.mark.parametrize(
+    "stock_codes",
+    [
+        "BAD.SH",
+        "60000.SH",
+        "6000000.SH",
+        "60A000.SH",
+        "600000.SS",
+        "600000",
+        "600000.sh",
+        "000001.sz",
+        "",
+        "600000.SH,",
+        ",600000.SH",
+        "600000.SH,,000001.SZ",
+    ],
+)
+def test_stock_code_validator_rejects_invalid_or_empty_items(stock_codes):
+    with pytest.raises(TushareRtKValidationError, match="stock code"):
+        validate_rt_k_stock_codes(stock_codes)
+
+
+@pytest.mark.parametrize(
+    "stock_codes",
+    [
+        "600000.SH,600000.SH",
+        "600000.SH, 600000.SH",
+        "600000.SH,000001.SZ,600000.SH",
+    ],
+)
+def test_stock_code_validator_rejects_duplicates(stock_codes):
+    with pytest.raises(TushareRtKValidationError, match="duplicate"):
+        validate_rt_k_stock_codes(stock_codes)
+
+
+def test_stock_code_validator_rejects_more_than_five_codes():
+    with pytest.raises(TushareRtKValidationError, match="at most 5"):
+        validate_rt_k_stock_codes(
+            "600000.SH,601138.SH,000001.SZ,000333.SZ,600519.SH,601318.SH"
+        )
+
+
+@pytest.mark.parametrize(
+    "stock_codes",
+    [
+        "BAD.SH",
+        "600000.sh",
+        "600000.SH,",
+        "600000.SH,600000.SH",
+    ],
+)
+def test_invalid_request_fails_before_secret_or_provider_access(
+    stock_codes,
+    monkeypatch,
+):
+    secret_reads = []
+
+    def getenv(name, default=None):
+        if name == "TUSHARE_TOKEN":
+            secret_reads.append(name)
+        return default
+
+    monkeypatch.setattr(
+        "data_provider.tushare_rt_k_provider.os.getenv",
+        getenv,
+    )
+    client = FakeClient([pd.DataFrame([_row()])])
+    provider = TushareRtKProvider(client=client)
+
+    with pytest.raises(TushareRtKValidationError):
+        provider.fetch(stock_codes)
+
+    assert secret_reads == []
+    assert client.calls == []
+
+
 def test_normal_mapping_uses_close_as_latest_and_preserves_native_units():
     provider, client, _ = _provider([pd.DataFrame([_row()])])
 
@@ -135,7 +217,7 @@ def test_duplicate_code_is_rejected():
         provider.fetch("600000.SH")
 
 
-def test_main_board_filter_does_not_trust_tushare_wildcard_alone():
+def test_main_board_filter_still_applies_to_valid_exact_requests():
     provider, _, _ = _provider(
         [
             pd.DataFrame(
@@ -150,7 +232,9 @@ def test_main_board_filter_does_not_trust_tushare_wildcard_alone():
         ]
     )
 
-    frame = provider.fetch("6*.SH,0*.SZ")
+    frame = provider.fetch(
+        "600000.SH,688001.SH,300001.SZ,000001.SZ,002001.SZ"
+    )
 
     assert set(frame["code"]) == {"600000", "000001"}
 
@@ -200,9 +284,10 @@ def test_invalid_market_time_fails_closed(now, trade_time, phase, message):
 def test_missing_token_fails_without_calling_client(monkeypatch):
     monkeypatch.delenv("TUSHARE_TOKEN", raising=False)
     client = FakeClient([pd.DataFrame([_row()])])
+    provider = TushareRtKProvider(client=client)
 
     with pytest.raises(TushareRtKAuthError, match="missing"):
-        TushareRtKProvider(client=client)
+        provider.fetch("600000.SH")
 
     assert client.calls == []
 
@@ -285,4 +370,4 @@ def test_quote_time_rollback_for_same_code_fails_closed():
     provider.fetch("600000.SH")
 
     with pytest.raises(TushareRtKValidationError, match="time_rollback"):
-        provider.fetch("6*.SH,0*.SZ")
+        provider.fetch("600000.SH,000001.SZ")

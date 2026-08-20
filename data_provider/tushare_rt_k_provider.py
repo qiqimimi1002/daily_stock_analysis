@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import math
 import os
+import re
 import time
 from datetime import datetime, time as clock_time
 from typing import Any, Callable, Optional
@@ -21,11 +22,12 @@ from data_provider.tushare_fetcher import _TushareHttpClient
 
 CN_TZ = ZoneInfo("Asia/Shanghai")
 RT_K_API_NAME = "rt_k"
-RT_K_MAIN_BOARD_QUERY = "6*.SH,0*.SZ"
+RT_K_MAX_CODES = 5
 RT_K_FIELDS = (
     "ts_code,name,pre_close,open,high,low,close,vol,amount,num,"
     "bid_price1,bid_volume1,ask_price1,ask_volume1,trade_time"
 )
+_RT_K_STOCK_CODE_PATTERN = re.compile(r"^[0-9]{6}\.(SH|SZ)$")
 
 
 class TushareRtKError(RuntimeError):
@@ -46,6 +48,38 @@ class TushareRtKValidationError(TushareRtKError):
 
 class TushareRtKRecoverableError(TushareRtKError):
     """Transient request failure after the finite retry budget is exhausted."""
+
+
+def validate_rt_k_stock_codes(value: str) -> list[str]:
+    """Validate one to five exact Tushare A-share stock codes."""
+
+    if not isinstance(value, str):
+        raise TushareRtKValidationError(
+            "stock_code_invalid",
+            "rt_k stock code input must be a comma-separated string",
+        )
+    codes = [item.strip() for item in value.split(",")]
+    if not codes or any(not code for code in codes):
+        raise TushareRtKValidationError(
+            "stock_code_invalid",
+            "rt_k stock code input contains an empty item",
+        )
+    if len(codes) > RT_K_MAX_CODES:
+        raise TushareRtKValidationError(
+            "stock_code_limit",
+            f"rt_k accepts at most {RT_K_MAX_CODES} stock codes",
+        )
+    if any(_RT_K_STOCK_CODE_PATTERN.fullmatch(code) is None for code in codes):
+        raise TushareRtKValidationError(
+            "stock_code_invalid",
+            "rt_k stock code must match six digits followed by .SH or .SZ",
+        )
+    if len(set(codes)) != len(codes):
+        raise TushareRtKValidationError(
+            "stock_code_duplicate",
+            "rt_k duplicate stock code is not allowed",
+        )
+    return codes
 
 
 def _default_phase(now: datetime) -> str:
@@ -106,12 +140,6 @@ class TushareRtKProvider:
         request_timeout_seconds: int = 15,
         rate_limit_per_minute: int = 50,
     ) -> None:
-        resolved_token = os.getenv("TUSHARE_TOKEN")
-        if not resolved_token or not str(resolved_token).strip():
-            raise TushareRtKAuthError(
-                "token_missing",
-                "tushare_rt_k token is missing",
-            )
         if max_attempts < 1:
             raise ValueError("max_attempts must be positive")
         if rate_limit_per_minute < 1 or rate_limit_per_minute > 50:
@@ -130,22 +158,15 @@ class TushareRtKProvider:
         self._window_started = time.monotonic()
         self._cache: dict[tuple[str, str], pd.DataFrame] = {}
         self._last_quote_times: dict[str, datetime] = {}
-        if client is None:
-            api_url = str(
-                os.getenv("TUSHARE_HTTP_URL") or "https://api.tushare.pro"
-            ).strip()
-            if not api_url.startswith("https://"):
-                raise ValueError("tushare_rt_k requires an HTTPS API endpoint")
-            client = _TushareHttpClient(
-                token=str(resolved_token).strip(),
-                timeout=request_timeout_seconds,
-                api_url=api_url,
-            )
         self._client = client
+        self._request_timeout_seconds = request_timeout_seconds
 
-    def fetch(self, ts_code: str = RT_K_MAIN_BOARD_QUERY) -> pd.DataFrame:
+    def fetch(self, ts_code: str) -> pd.DataFrame:
+        codes = validate_rt_k_stock_codes(ts_code)
+        validated_query = ",".join(codes)
+        self._ensure_client()
         now = self._now().astimezone(CN_TZ)
-        cache_key = (now.date().isoformat(), ts_code)
+        cache_key = (now.date().isoformat(), validated_query)
         cached = self._cache.get(cache_key)
         if cached is not None:
             result = cached.copy(deep=True)
@@ -155,7 +176,7 @@ class TushareRtKProvider:
 
         started_at = datetime.now(CN_TZ)
         started = time.perf_counter()
-        raw = self._query_with_retry(ts_code)
+        raw = self._query_with_retry(validated_query)
         fetched_at = datetime.now(CN_TZ)
         result = self._normalize(raw, now=now)
         result.attrs.update(
@@ -183,6 +204,26 @@ class TushareRtKProvider:
             }
         )
         return result
+
+    def _ensure_client(self) -> None:
+        resolved_token = os.getenv("TUSHARE_TOKEN")
+        if not resolved_token or not str(resolved_token).strip():
+            raise TushareRtKAuthError(
+                "token_missing",
+                "tushare_rt_k token is missing",
+            )
+        if self._client is not None:
+            return
+        api_url = str(
+            os.getenv("TUSHARE_HTTP_URL") or "https://api.tushare.pro"
+        ).strip()
+        if not api_url.startswith("https://"):
+            raise ValueError("tushare_rt_k requires an HTTPS API endpoint")
+        self._client = _TushareHttpClient(
+            token=str(resolved_token).strip(),
+            timeout=self._request_timeout_seconds,
+            api_url=api_url,
+        )
 
     def _query_with_retry(self, ts_code: str) -> pd.DataFrame:
         last_category = "non_retryable_provider_error"
