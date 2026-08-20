@@ -1,0 +1,22 @@
+{
+  "fixture_type": "synthetic_non_market_data",
+  "query_start": "2026-01-01",
+  "query_end": "2026-01-13",
+  "trading_dates": [
+    "2026-01-02",
+    "2026-01-05",
+    "2026-01-06",
+    "2026-01-07",
+    "2026-01-08",
+    "2026-01-09",
+    "2026-01-12",
+    "2026-01-13"
+  ],
+  "explicit_non_trading_dates": {
+    "2026-01-01": "synthetic_legal_holiday",
+    "2026-01-03": "weekend",
+    "2026-01-04": "weekend",
+    "2026-01-10": "weekend",
+    "2026-01-11": "weekend"
+  }
+}

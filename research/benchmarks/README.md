@@ -242,6 +242,90 @@ sources, data cutoff, corporate-action audit state, and the Universe
 version/hash. The synthetic fixture covers low/medium/high volatility, an exact
 tie, 60-close insufficiency, a missing date and corporate-action review.
 
+## Phase 2B-0B1 trade-calendar and no-lookahead contract
+
+Phase 2B-0B1 adds research-only calendar/source acceptance infrastructure. It
+does not implement a new factor or generate a stock signal. The production
+`src/core/trading_calendar.py` remains untouched because its compatibility
+paths intentionally fail open; those semantics are not valid research
+evidence.
+
+The fixed independent sources are:
+
+```text
+primary: baostock.query_trade_dates
+cross:   akshare.tool_trade_date_hist_sina
+```
+
+`VerifiedTradeCalendar.create()` accepts only observations for the same
+requested interval. Each source must identify the correct role and supply a
+non-empty, canonical `YYYY-MM-DD`, strictly increasing, duplicate-free list
+whose dates are all inside the request. Only after both lists are normalized to
+their unique ascending representation are they compared, and they must match
+exactly in both count and dates. Import/query/login failure, empty data, invalid
+format, duplicate, source-order anomaly, out-of-range date, count difference or
+specific-date difference raises `TradeCalendarContractError`. No partial
+calendar object is returned, no source is promoted to sole authority, and
+there is no weekday, natural-day or hard-coded-holiday fallback.
+
+A successful calendar records the query interval, fixed source identifiers,
+each normalized count, each `source_data_as_of` and `fetched_at`, the `pass`
+consistency state, schema/calculation versions, normalized dates and a stable
+SHA-256 over canonical JSON. Raw provider responses are never serialized by
+the contract. Because neither provider exposes a native calendar publication
+timestamp, the live adapters conservatively use response-observation completion
+as both `source_data_as_of` and `fetched_at`; this limitation is explicit and
+does not authorize later bars. Repository fixtures must state that they are
+synthetic.
+
+`HistoryWindowContract.create()` consumes that verified market calendar and
+the Phase 1 timestamp names. All timestamps must be timezone-aware with
+Asia/Shanghai (`+08:00`) semantics, and it enforces:
+
+```text
+history_data_as_of <= source_data_as_of <= market_data_at <= generated_at
+```
+
+`fetched_at` is optional audit metadata. It may be later than
+`market_data_at`, but it cannot change the completed-bar cutoff or authorize
+later content. Both calendar-source `source_data_as_of` values must also be no
+later than `market_data_at`; a calendar observed only after the decision point
+cannot be retroactively treated as point-in-time evidence. For an A-share
+trading date T before the 15:00 completed-daily-
+bar boundary, the cutoff is the preceding verified market session. At or after
+the boundary, T may be used as a completed session. For a non-trading signal
+date, the cutoff is the latest earlier verified market session. The signal date
+must itself be covered by the verified query interval.
+
+The observed history dates must equal the last N consecutive verified market
+sessions through the cutoff. Missing one required session, shortening the
+window, substituting an older or security-specific next session, inserting T
+intraday, using a future date, or filling/interpolating is a hard error. The
+result exposes `required_trade_dates` and `previous_completed_trade_date` using
+the exact Phase 2A input names, so future 2B adapters can pass the accepted
+window into the frozen Low Volatility contract without duplicating its formula.
+
+External reads are explicit and separate from the pure contract:
+
+```bash
+python scripts/research_trade_calendar_smoke.py \
+  --start-date 2026-04-01 \
+  --end-date 2026-08-18 \
+  --allow-network
+```
+
+The script requires `--allow-network`; default calls and all automated tests
+make zero network requests. It writes only the verified normalized result to a
+system temporary directory unless `--output` is supplied. `research/runtime/`
+is gitignored for local evidence. A provider failure or disagreement exits
+nonzero without writing a PASS artifact.
+
+Phase 2A's `raw_unadjusted` policy remains frozen. This stage accepts neither a
+raw-history source nor a corporate-action source. Until separate source
+acceptance proves comparability and point-in-time coverage, incomplete review
+continues to produce `corporate_action_review`; qfq/hfq, new return definitions
+and automatic adjustment are not introduced here.
+
 ## Future outcome adapter
 
 The only reserved handoff is:
@@ -275,4 +359,5 @@ python -m pytest tests/test_market_screener.py tests/test_market_scoring.py -q
 - real-market benchmark runs and cross-model ranking;
 - outcome, win-rate, factor optimization or trading analysis.
 
-Phase 2B must start only after the Phase 2A contract is accepted.
+Phase 2B-0B1 starts only the calendar/time guard acceptance layer. Raw-history
+and corporate-action source acceptance remain later Phase 2B-0 work.

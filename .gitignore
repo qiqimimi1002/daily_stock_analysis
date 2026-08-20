@@ -58,6 +58,7 @@ env/
 
 # 数据和日志
 /data/
+/research/runtime/
 /.llm_usage_hmac_secret
 **/.llm_usage_hmac_secret
 logs/

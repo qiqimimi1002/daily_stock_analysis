@@ -16,6 +16,12 @@ from research.benchmarks.schema import (
     BenchmarkValidationError,
     serialize_signal_batch,
 )
+from research.benchmarks.trade_calendar import (
+    CalendarSourceObservation,
+    HistoryWindowContract,
+    TradeCalendarContractError,
+    VerifiedTradeCalendar,
+)
 from research.benchmarks.universe import (
     UNIVERSE_CONTRACT_VERSION,
     UniverseDecision,
@@ -31,11 +37,15 @@ __all__ = [
     "BenchmarkModelIdentity",
     "BenchmarkSignal",
     "BenchmarkValidationError",
+    "CalendarSourceObservation",
+    "HistoryWindowContract",
     "LowVolatilityResult",
     "LowVolatilityStatus",
+    "TradeCalendarContractError",
     "UNIVERSE_CONTRACT_VERSION",
     "UniverseDecision",
     "UniverseStatus",
+    "VerifiedTradeCalendar",
     "create_low_volatility_model_identity",
     "evaluate_low_volatility_history",
     "evaluate_v21_universe",
