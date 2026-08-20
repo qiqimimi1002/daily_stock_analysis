@@ -1,6 +1,6 @@
 # Project Status
 
-> Last updated: 2026-08-19 (Asia/Shanghai)
+> Last updated: 2026-08-20 (Asia/Shanghai)
 >
 > Codex workflow rule: read this file before substantial project work and
 > update it after every completed material task. Complete safe in-scope work
@@ -22,6 +22,34 @@
   `agent/v2-2-outcomes`; its current CI checks pass. This work is separate from
   the screening-result publication change below and was not modified here.
 - Do not use or merge the abandoned branch `v2-1-market-scoring`.
+
+## Market Screener slow-request diagnostics (2026-08-20)
+
+- Baseline: `main` commit `4c30b01097103e3ae5780e1074ae32ed940f6f0f`.
+  Development branch: `agent/market-screener-slow-request-diagnostics`;
+  implementation commit `5ee7000267815f96adf9a97fdaf13567fbdf477b`;
+  Draft PR [#18](https://github.com/qiqimimi1002/daily_stock_analysis/pull/18).
+- Scope is observability only. The production CLI incrementally appends
+  stage, provider-attempt and 20-second heartbeat events to
+  `logs/market_screener_timing.jsonl`; every line is strict JSON and is flushed
+  immediately so a cancelled job can retain the events already written.
+- Heartbeats expose the current stage, completed count, pending stock codes,
+  active provider/attempt and total runtime. History request completion events
+  include code, provider, attempt, start/end timestamps, elapsed seconds,
+  success/failure and a stable error category without provider error text.
+- Diagnostic file failures are fail-open and do not stop screening. Existing
+  `logs/*.jsonl` Artifact collection already includes this file, so no workflow
+  change was required.
+- Local verification on Python 3.12.9: 58 focused diagnostics, V2.1
+  screener/scoring, PR #14 snapshot, history fallback and realtime-indicator
+  tests passed. Changed Python files passed `py_compile`; new diagnostic files
+  passed full flake8, all changed files passed critical flake8, and
+  `git diff --check` passed.
+- Provider priority, retries, fallback, thread-pool waiting, timeout behavior,
+  V2.1 scoring, market snapshot, MA/volume-ratio work, Cloudflare,
+  concurrency/idempotency and all research modules are unchanged. This PR does
+  not repair Run #54; a later behavior fix requires evidence from a real slow
+  run captured by these diagnostics.
 
 ## Public benchmark comparison framework Phase 1 (2026-08-18)
 
