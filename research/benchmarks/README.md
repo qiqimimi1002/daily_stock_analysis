@@ -1,9 +1,9 @@
 # Public benchmark model framework — Phase 1
 
-This package defines the common offline contracts for later public-model
-comparison experiments. Phase 1 deliberately contains **no stock-selection
-model** and produces no live observation list. Its purpose is to make future
-model inputs, identities and outputs comparable before any model is added.
+This package defines the common offline contracts for public-model comparison
+experiments. It contains the frozen Phase 2A Low Volatility baseline and the
+first offline Short-term v1 research model. It produces no live observation
+list and remains separate from production screening.
 
 ## Boundaries
 
@@ -14,8 +14,10 @@ model inputs, identities and outputs comparable before any model is added.
   `signal_date | stock_code | model_version | batch_id` UUIDv5 contract is not
   changed or reinterpreted.
 - A future outcome engine may read only the five-field adapter returned by
-  `BenchmarkSignal.to_outcome_signal_core()`. This package does not import an
-  outcome module and does not calculate returns, MFE, MAE, drawdown or win rate.
+  `BenchmarkSignal.to_outcome_signal_core()`. Short-term v1 reserves the
+  1/3/5/10/20-session research horizons through that existing adapter. This
+  package does not import an outcome module and does not calculate returns,
+  MFE, MAE, drawdown or win rate.
 - No production workflow, Cloudflare Worker, reader, deep analysis, report or
   notification path imports this package.
 
@@ -293,6 +295,65 @@ sources, data cutoff, corporate-action audit state, and the Universe
 version/hash. The synthetic fixture covers low/medium/high volatility, an exact
 tie, 60-close insufficiency, a missing date and corporate-action review.
 
+## Short-term v1 first-stage contract
+
+`short_term_relative_strength_daily_v1` is an offline, deterministic research
+model. It reuses the V2.1 Universe contract and its frozen `top_n=5`; `amount`
+may participate only in that existing liquidity eligibility gate and is never
+a model score. No industry, market-cap, financial, news, money-flow, RSI, MACD,
+moving-average, stop-loss, dynamic-weight or tuned-threshold input is present.
+
+For the exact 21-session raw-unadjusted main-model window ending at T-1:
+
+```text
+ret_20 = close_last / close_20_sessions_ago - 1
+ret_5  = close_last / close_5_sessions_ago - 1
+gate   = ret_20 > 0
+rank   = ret_5 DESC, stock_code ASC
+```
+
+The complete positive-trend ranking is formed before Top 5 selection. Signal
+date, decision snapshot and reference price remain caller-supplied values from
+the unified Benchmark race; the model never substitutes a historical close
+for the unified reference. `score` remains null and the native measurements
+stay in `raw_metric`.
+
+The evaluator requires a successful `HistoryWindowContract` and a hash-matched
+`RawHistoryAcceptance` plus its primary `RawHistoryObservation`. Only
+`conditional_pass`, prospective-cutoff, Baostock-primary/AKShare-Sina-cross,
+`raw_unadjusted` evidence is admitted. A current-snapshot backfill is not a
+historical vintage and is rejected for model use. Public payload and licence
+boundaries are checked; raw rows remain local/private and are never serialized
+into repository outputs.
+
+Short-term v1 is stricter than the calendar's after-close allowance: its daily
+signal always uses T-1, so a T bar is rejected even after 15:00. Missing,
+duplicate, unordered, future, non-trading or non-finite rows fail closed. The
+model never switches to qfq/hfq or edits raw prices. Incomplete corporate-action
+review, future-known action evidence, or any action inside the 61-session window
+produces no metric and no ranking candidate. This conservative gate preserves
+the corporate-action `CONDITIONAL PASS` boundary; it does not claim that current
+snapshots provide a historical vintage.
+
+Three ablation factors use the same accepted data contracts but are returned as
+independent factor records and never enter the main model rank or weight. Their
+separate window contains exactly 61 sessions so the 60-return volatility term
+cannot tighten the main model's 21-session history requirement:
+
+```text
+vol_contraction_10_60 = sample_std(last_10_daily_returns, ddof=1)
+                        / sample_std(last_60_daily_returns, ddof=1)
+breakout_strength_20  = close_last / max(prior_20_closes) - 1
+volume_ratio_5        = volume_last / mean(prior_5_volumes)
+```
+
+Undefined denominators produce an unavailable factor rather than NaN or a
+changed main-model decision. The only evaluation handoff is the existing
+five-field `BenchmarkSignal.to_outcome_signal_core()` adapter. Main currently
+contains no merged Benchmark executor for the five reserved horizons, and the
+production DecisionSignal outcome service supports only 1/3/5/10 days; this
+research module therefore does not claim that a 20-day evaluation has run.
+
 ## Phase 2B-0B1 trade-calendar and no-lookahead contract
 
 Phase 2B-0B1 adds research-only calendar/source acceptance infrastructure. It
@@ -398,17 +459,19 @@ does not copy, import or rewrite any unmerged outcome engine.
 
 ```bash
 python -m pytest tests/test_benchmark_schema.py tests/test_benchmark_universe.py -q
+python -m pytest tests/test_short_term_contract.py -q
 python -m unittest tests.test_research_signal_archive
 python -m pytest tests/test_market_screener.py tests/test_market_scoring.py -q
 ```
 
-## Deferred beyond Phase 2A
+## Deferred beyond the current research-only stage
 
 - full-market Low Volatility execution and real benchmark signals;
 - live/history data adapters and production integration;
-- 12-1 Momentum, Value + Profitability or any other benchmark model;
+- 12-1 Momentum, Value + Profitability or any other additional benchmark model;
 - real-market benchmark runs and cross-model ranking;
 - outcome, win-rate, factor optimization or trading analysis.
 
-Phase 2B-0B1 starts only the calendar/time guard acceptance layer. Raw-history
-and corporate-action source acceptance remain later Phase 2B-0 work.
+Raw-history and corporate-action source acceptance remain conditional gates;
+their current-snapshot and redistribution limits are not promoted to full
+Phase 2B acceptance by this model implementation.
