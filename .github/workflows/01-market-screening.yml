@@ -147,7 +147,6 @@ jobs:
           GEMINI_RETRY_DELAY: ${{ vars.GEMINI_RETRY_DELAY || '5' }}
           GEMINI_RETRY_MAX_DELAY: ${{ vars.GEMINI_RETRY_MAX_DELAY || '20' }}
           LLM_RETRY_EVENTS_PATH: logs/llm_retry_events.jsonl
-          TUSHARE_TOKEN: ${{ secrets.TUSHARE_TOKEN }}
           TICKFLOW_API_KEY: ${{ secrets.TICKFLOW_API_KEY }}
           TAVILY_API_KEYS: ${{ secrets.TAVILY_API_KEYS }}
           SERPAPI_API_KEYS: ${{ secrets.SERPAPI_API_KEYS }}
