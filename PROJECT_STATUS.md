@@ -23,6 +23,46 @@
   the screening-result publication change below and was not modified here.
 - Do not use or merge the abandoned branch `v2-1-market-scoring`.
 
+## Short-term v1 first-stage research model (2026-08-21)
+
+- Real-time baseline: `main` commit
+  `d87bcdcb8cce054ab2a8d80255b2442d741de78a`, fetched before branch creation.
+  It contains merged PR #21/#22/#23/#24. Development branch:
+  `codex/short-term-v1-phase1`; Draft PR and final CI evidence are pending at
+  this local-validation checkpoint. PR #15 and PR #20 remain untouched.
+- The only main rule is `ret_20 > 0`, followed by `ret_5 DESC` and
+  `stock_code ASC` as the deterministic tie-break. The main window has exactly
+  21 completed T-1 sessions. V2.1 remains the single Universe/liquidity source,
+  Top N remains 5, `amount` is not scored, and Benchmark `score` stays null.
+- `vol_contraction_10_60`, `breakout_strength_20` and `volume_ratio_5` are
+  separate factor records with no threshold, weight or influence on the main
+  rank. Their distinct 61-session window prevents the 60-return volatility
+  factor from tightening the main model's 21-session eligibility requirement.
+- Model input requires a verified Phase 2B-0B1 `HistoryWindowContract` and a
+  hash-matched prospective `RawHistoryAcceptance` plus its Baostock primary
+  observation and AKShare/Sina cross-source evidence. Only raw unadjusted data
+  is accepted. Current-snapshot backfill, qfq/hfq, missing/duplicate/unsorted,
+  future/T, non-trading and non-finite rows fail closed. Public outputs retain
+  metadata and hashes only; the raw-history licence/vintage decision remains
+  **CONDITIONAL PASS**.
+- Corporate-action review is an independent no-signal gate. Incomplete review,
+  future-known evidence or any action inside the applicable raw-price window
+  emits no metric and no ranking candidate. Raw prices are never rewritten or
+  adjusted, and the existing corporate-action decision remains
+  **CONDITIONAL PASS**.
+- Top-N results use the existing `BenchmarkSignal` schema, caller-supplied
+  unified signal date/decision snapshot/reference price, and the frozen
+  five-field outcome handoff. The research plan reserves 1d/3d/5d/10d/20d,
+  but main has no merged Benchmark outcome executor; the production
+  DecisionSignal engine supports only 1d/3d/5d/10d. This phase does not claim a
+  20d run or model efficacy and does not import or modify production outcomes.
+- Offline verification so far: 144 Short-term/Benchmark/Phase 2A/Phase 2B/raw-
+  history/corporate-action tests passed; 42 archive/Universe/V2.1 tests passed
+  with one optional PyArrow test skipped; 47 existing outcome service/API tests
+  passed after isolating pytest's temporary directory inside the worktree.
+  Changed Python files pass `py_compile` and full flake8. No network, provider,
+  production workflow, Secret or real/restricted market-data call was made.
+
 ## Market Screener slow-request diagnostics (2026-08-20)
 
 - Baseline: `main` commit `4c30b01097103e3ae5780e1074ae32ed940f6f0f`.
