@@ -240,8 +240,9 @@
 ## Phase 2B raw-history source acceptance (2026-08-21)
 
 - Baseline: `main` commit `08301b9fd4e2ad84847b7c9742d3654007bf010e`.
-  Research-only branch: `agent/phase2b-0b2-raw-history-acceptance`. Draft PR is
-  to be created after local validation. Draft PR #15 remains at
+  Research-only branch: `agent/phase2b-0b2-raw-history-acceptance`; review is in
+  Draft PR [#23](https://github.com/qiqimimi1002/daily_stock_analysis/pull/23).
+  Draft PR #15 remains at
   `b7fafbbf279d0f21bc779c921f303dcd3974ed91`; Draft PR #20 remains at
   `f493b1c4dbdfb76e8ba21aa5a8a0686c22259d07`.
 - Decision: **CONDITIONAL PASS**, not full Phase 2B completion. The fixed
