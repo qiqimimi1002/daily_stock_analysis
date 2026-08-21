@@ -140,7 +140,7 @@
   do not weaken the contract or substitute current qfq/hfq history. This is the
   remaining integration decision, not a Phase 2A calculation defect.
 
-## Phase 2B-0B1 trade calendar and no-lookahead Draft (2026-08-21)
+## Phase 2B-0B1 trade calendar and no-lookahead main baseline (2026-08-21)
 
 - Actual baseline is latest `origin/main` commit
   `01b8c5337ee52c23cceb532a08f3367911aa1d48`. Development branch
@@ -149,10 +149,13 @@
   `b7fafbbf279d0f21bc779c921f303dcd3974ed91` or Draft PR #20 head
   `f493b1c4dbdfb76e8ba21aa5a8a0686c22259d07`.
 - Implementation commit `5d0c6bcf8f2685b2dd88e2f516018ab92f7f4b94`
-  is published in Draft PR
-  [#21](https://github.com/qiqimimi1002/daily_stock_analysis/pull/21).
-  This records **Phase 2B-0B1 started / Draft acceptance only**; it does not
-  claim Phase 2B completion or source production acceptance.
+  passed functional acceptance in
+  [#21](https://github.com/qiqimimi1002/daily_stock_analysis/pull/21), which was
+  marked Ready and squash-merged as
+  `b5078ef174788bd38aa0b40d580b823cd1e47629`. The frozen trade-calendar and
+  no-lookahead contract is now the formal `main` research baseline. This does
+  not claim broader Phase 2B completion, raw-history or corporate-action source
+  acceptance, or the start of Short-term v1.
 - The research-only primary source is fixed to
   `baostock.query_trade_dates`; the independent cross source is fixed to
   `akshare.tool_trade_date_hist_sina`. A verified calendar exists only after
@@ -210,10 +213,12 @@
   remain under gitignored `.tmp` and independently pass hash recomputation.
 - Production impact is zero: no `src/`, production provider, scheduler,
   Market Screener, Cloudflare, workflow, PR #15/#20 or frozen Phase 2A formula
-  file changed. Next, keep PR #21 Draft for Linux CI/review. After acceptance,
-  Phase 2B-0 should evaluate a raw-history source before corporate-action
-  source acceptance; until both are proven, keep `raw_unadjusted` and
-  `corporate_action_review` fail-closed behavior unchanged.
+  file changed. Required PR CI Run `32434113897` passed; the repository CI is
+  pull-request-only, so the merge push did not create a second full CI Run.
+  Post-merge Auto Tag Run `32440533201` was skipped as configured, not failed.
+  Next, Phase 2B-0 should evaluate raw-history source acceptance before
+  corporate-action source acceptance; until both are proven, keep
+  `raw_unadjusted` and `corporate_action_review` fail-closed behavior unchanged.
 
 ## P1 same-run market quote consistency (2026-08-14)
 
