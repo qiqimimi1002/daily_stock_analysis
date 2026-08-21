@@ -68,9 +68,11 @@
 
 - Baseline: `main@211de4fb8c8df1ae8c5e227ba9dc91e08d3c7228`; research
   branch: `codex/short-term-v1-unified-race`; implementation commit
-  `de69a87616f13f4b6ea225c38f6a4a1cf30d7b11`; Draft PR
-  [#26](https://github.com/qiqimimi1002/daily_stock_analysis/pull/26).
-  Draft PR #15 and Draft PR #20 remain unchanged.
+  `de69a87616f13f4b6ea225c38f6a4a1cf30d7b11`. PR
+  [#26](https://github.com/qiqimimi1002/daily_stock_analysis/pull/26) passed
+  final acceptance, was marked Ready and squash-merged as
+  `743c269ef163696a066df688d1f52dde7a4fe9e2`. Draft PR #15 and Draft PR #20
+  remain unchanged.
 - The evaluator requires identical V2.1 Universe codes/hash, signal date,
   Phase 2B-0B1 calendar, T-1 cutoff, prospective raw-unadjusted history,
   corporate-action review, Top 5, reference snapshot and forward calendar for
@@ -80,7 +82,8 @@
   pending because main has no merged unified Benchmark 20d execution chain.
   MFE, MAE, date-level maximum drawdown and HS300 excess are aggregate-only;
   the three ablation factors are independent Spearman-IC diagnostics only.
-- Real-environment result: **INSUFFICIENT EVIDENCE / 表现接近/证据不足**.
+- Real-environment result: **INSUFFICIENT EVIDENCE**. This does not establish
+  that the two models perform similarly.
   No prospective/private/immutable batch with retained raw rows and historical
   corporate-action vintage was found, so candidate signals, common evaluable
   samples and signal dates are all zero. Four located raw-history smoke samples
@@ -98,6 +101,9 @@
   authoritative cross-platform gate. No `src/`, production
   provider/fallback, V2.1, frozen Phase 2A formula, workflow, Cloudflare,
   scheduler, Secret/Tushare boundary or PR #15/#20 content is modified.
+- Final PR CI Run `32496790703` passed: backend-gate reported 5288 passed,
+  1 skipped, 4 deselected and 534 subtests passed; Docker, AI governance and
+  Change Detection passed, while Web and desktop jobs were path-rule skips.
 
 ## Market Screener slow-request diagnostics (2026-08-20)
 
