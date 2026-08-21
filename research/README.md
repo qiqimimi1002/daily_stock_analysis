@@ -18,6 +18,10 @@ formula, accept a history/corporate-action source, or modify production paths.
 The full contract is documented in
 [`research/benchmarks/README.md`](benchmarks/README.md).
 
+The later raw-history and corporate-action source gates are both conditional
+research baselines. Corporate actions remain a separate overlay on immutable
+raw prices; they do not introduce adjusted bars or production behavior.
+
 This first V2.2 stage records the V2.1 observation list exactly as it existed
 when the signal was generated. It does not recalculate candidates and does not
 calculate forward returns, drawdowns, win rates, or trading points.
