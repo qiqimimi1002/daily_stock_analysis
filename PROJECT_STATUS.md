@@ -220,6 +220,23 @@
   corporate-action source acceptance; until both are proven, keep
   `raw_unadjusted` and `corporate_action_review` fail-closed behavior unchanged.
 
+## Public workflow Tushare credential boundary (2026-08-21)
+
+- PR [#22](https://github.com/qiqimimi1002/daily_stock_analysis/pull/22)
+  passed final acceptance and was squash-merged into `main` as
+  `3ccf6cc7e26f18702f5c7fcfebb11855c81cb0be`.
+- Public GitHub Actions can no longer inject `TUSHARE_TOKEN` or
+  `TUSHARE_HTTP_URL` into runtime code. Static regression coverage freezes this
+  boundary for both public workflows.
+- Cloudflare dispatch, the existing free-provider fallback and all other
+  production behavior were not modified. Draft PR #15 and Draft PR #20 remain
+  unchanged.
+- Main CI Run `32449745022` and External Scheduler CI Run `32449745025`
+  passed on the accepted head. The merge push produced only skipped Auto Tag
+  Run `32452102526`; full CI is pull-request-only by design.
+- The next research stage is raw-history source acceptance. Do not start
+  corporate-action source acceptance or Short-term v1 before that gate passes.
+
 ## P1 same-run market quote consistency (2026-08-14)
 
 - Baseline: `main` commit `009446c04d92127e890a87cb1c8fe6d6e50fdaa5`.
