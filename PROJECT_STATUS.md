@@ -190,11 +190,14 @@
   skipped. Linux Draft-PR CI remains the authoritative full gate. The local AI
   governance check also retains the known Windows `CLAUDE.md` symlink
   limitation.
-- The optional real Baostock/AKShare interval check for 2026-04-01 through
-  2026-08-18 was not run because its prerequisite, a clean complete offline
-  suite, was not met. No 95-count result is claimed or hard-coded. No Tushare
-  token/rt_k, market workflow, full-market screen, real 2B signal, win rate or
-  tuning was invoked.
+- After GitHub Linux backend-gate passed the complete offline suite, the
+  optional public-calendar check ran for 2026-04-01 through 2026-08-18.
+  Baostock and AKShare/Sina each returned 95 normalized trading dates with no
+  count or date difference; consistency passed with content SHA-256
+  `06ca44d1946d5a41befaf19368669bde0a1a21c948bd305511552749d6229e55`.
+  The verified JSON remains only under gitignored `.tmp`; no raw response or
+  count was added to automated tests. No Tushare token/rt_k, market workflow,
+  full-market screen, real 2B signal, win rate or tuning was invoked.
 - Production impact is zero: no `src/`, production provider, scheduler,
   Market Screener, Cloudflare, workflow, PR #15/#20 or frozen Phase 2A formula
   file changed. Next, keep PR #21 Draft for Linux CI/review. After acceptance,
