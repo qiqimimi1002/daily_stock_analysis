@@ -46,6 +46,28 @@ def _source_failure(source_id: str, message: str) -> TradeCalendarContractError:
     return TradeCalendarContractError(f"{source_id} failed closed: {message}")
 
 
+def _validate_baostock_iteration_end(result: Any) -> None:
+    if getattr(result, "error_code", None) != "0":
+        raise _source_failure(PRIMARY_SOURCE_ID, "query_error")
+
+    page_data = getattr(result, "data", None)
+    per_page_count = getattr(result, "per_page_count", None)
+    current_row = getattr(result, "cur_row_num", None)
+    if page_data is None or per_page_count is None or current_row is None:
+        return
+    try:
+        page_limit = int(per_page_count)
+        row_index = int(current_row)
+    except (TypeError, ValueError):
+        raise _source_failure(PRIMARY_SOURCE_ID, "pagination_schema_error") from None
+    if (
+        page_limit > 0
+        and len(page_data) == page_limit
+        and row_index >= len(page_data)
+    ):
+        raise _source_failure(PRIMARY_SOURCE_ID, "pagination_incomplete")
+
+
 def fetch_baostock_trade_dates(
     query_start: date | str,
     query_end: date | str,
@@ -93,6 +115,7 @@ def fetch_baostock_trade_dates(
                 raise _source_failure(PRIMARY_SOURCE_ID, "invalid_trading_flag")
             if trading_flag == "1":
                 trading_dates.append(row_date)
+        _validate_baostock_iteration_end(result)
         if len(set(row_dates)) != len(row_dates):
             raise _source_failure(PRIMARY_SOURCE_ID, "duplicate_calendar_date")
         if tuple(sorted(row_dates)) != tuple(row_dates):

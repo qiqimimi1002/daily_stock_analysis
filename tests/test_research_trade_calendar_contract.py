@@ -128,6 +128,12 @@ class ResearchTradeCalendarContractTests(unittest.TestCase):
         with self.assertRaisesRegex(TradeCalendarContractError, "sources disagree"):
             self._calendar(cross_overrides={"trading_dates": dates})
 
+    def test_same_count_specific_date_disagreement_fails_closed(self) -> None:
+        dates = list(self.fixture["trading_dates"])
+        dates[1] = "2026-01-04"
+        with self.assertRaisesRegex(TradeCalendarContractError, "sources disagree"):
+            self._calendar(cross_overrides={"trading_dates": dates})
+
     def test_unsorted_source_dates_are_rejected_before_comparison(self) -> None:
         dates = list(self.fixture["trading_dates"])
         dates[2], dates[3] = dates[3], dates[2]
@@ -407,6 +413,37 @@ class ResearchTradeCalendarContractTests(unittest.TestCase):
             ["2026-01-02"],
         )
         logout.assert_called_once_with()
+
+    def test_baostock_incomplete_pagination_fails_closed(self) -> None:
+        class FakeResult:
+            error_code = "0"
+            fields = ["calendar_date", "is_trading_day"]
+            data = [["2026-01-01", "0"]]
+            per_page_count = "1"
+            cur_row_num = 0
+
+            def next(self) -> bool:
+                return self.cur_row_num < len(self.data)
+
+            def get_row_data(self):
+                row = self.data[self.cur_row_num]
+                self.cur_row_num += 1
+                return row
+
+        fake_module = SimpleNamespace(
+            login=lambda: SimpleNamespace(error_code="0"),
+            query_trade_dates=lambda **_kwargs: FakeResult(),
+            logout=Mock(),
+        )
+        with patch.dict(sys.modules, {"baostock": fake_module}):
+            with self.assertRaisesRegex(
+                TradeCalendarContractError,
+                "pagination_incomplete",
+            ):
+                fetch_baostock_trade_dates(
+                    "2026-01-01",
+                    "2026-01-01",
+                )
 
     def test_akshare_adapter_uses_only_requested_interval(self) -> None:
         class FakeFrame:

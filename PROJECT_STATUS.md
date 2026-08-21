@@ -173,10 +173,14 @@
   day window must equal exactly N consecutive verified market sessions; no
   missing day, fill, interpolation, older/security-specific substitution,
   future session or intraday T bar is accepted.
-- Final local related regression: 35 new offline contract tests passed and
+- Final merge-acceptance review closed a Baostock pagination fail-open: an
+  error or ambiguous full-page terminal state from `ResultData.next()` can no
+  longer be accepted as a complete response. It also added the missing
+  equal-count/specific-date disagreement case. Final local related regression:
+  37 offline contract tests passed and
   explicitly asserted zero default Baostock/AKShare calls; the combined Phase
   1 schema/universe, Phase 2A Low Volatility, immutable archive, production
-  trading-calendar and V2.1 screener/scoring selection passed 171 tests with
+  trading-calendar and V2.1 screener/scoring selection passed 173 tests with
   one existing optional PyArrow skip. Changed Python files passed `py_compile`
   and full flake8; repository critical flake8 returned zero; staged
   `git diff --check` passed. Full `flake8 .` was executed and reported 2,587
@@ -198,6 +202,12 @@
   The verified JSON remains only under gitignored `.tmp`; no raw response or
   count was added to automated tests. No Tushare token/rt_k, market workflow,
   full-market screen, real 2B signal, win rate or tuning was invoked.
+- The merge-acceptance repeat returned the same 95/95 normalized dates with
+  zero date difference. Its snapshot hash is
+  `17aa09f1fb41962cfe75b7ced7bbdf39b46b41d990c8da915e3d34482d4edf8d`;
+  it differs from the prior snapshot because provider observation/fetch times
+  are intentionally hash-covered audit metadata. Both verified JSON files
+  remain under gitignored `.tmp` and independently pass hash recomputation.
 - Production impact is zero: no `src/`, production provider, scheduler,
   Market Screener, Cloudflare, workflow, PR #15/#20 or frozen Phase 2A formula
   file changed. Next, keep PR #21 Draft for Linux CI/review. After acceptance,
