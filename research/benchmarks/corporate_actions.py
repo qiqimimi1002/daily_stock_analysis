@@ -29,6 +29,16 @@ ACTION_TYPES = {
     "rights_issue",
     "suspension_resumption",
 }
+PRIMARY_SOURCE_IDS = {
+    "issuer_exchange.implementation_disclosure",
+    "akshare.stock_dividend_cninfo.snapshot",
+    "akshare.stock_allotment_cninfo.snapshot",
+}
+CROSS_SOURCE_IDS = {
+    "akshare.stock_history_dividend_detail.sina.snapshot",
+    "baostock.query_dividend_data.operate.snapshot",
+    "baostock.query_history_k_data_plus.tradestatus.raw",
+}
 _SYMBOL_RE = re.compile(r"^[0-9]{6}$")
 
 
@@ -354,6 +364,10 @@ def evaluate_corporate_actions(
     market_time = _time(market_data_at, field="market_data_at")
     if primary.source_id == cross.source_id:
         raise CorporateActionContractError("primary and cross sources must be independent")
+    if primary.source_id not in PRIMARY_SOURCE_IDS:
+        raise CorporateActionContractError("unexpected corporate-action primary source")
+    if cross.source_id not in CROSS_SOURCE_IDS:
+        raise CorporateActionContractError("unexpected corporate-action cross source")
     for observation in (primary, cross):
         if observation.source_data_as_of > market_time or observation.fetched_at > market_time:
             raise CorporateActionContractError("action evidence must exist before market_data_at")

@@ -105,8 +105,13 @@ class CorporateActionContractTests(unittest.TestCase):
         values = {
             "calendar": self._calendar(),
             "market_data_at": "2026-01-09T10:00:00+08:00",
-            "primary": self._observation("akshare.cninfo.snapshot", events),
-            "cross": self._observation("akshare.sina.snapshot", cross_events),
+            "primary": self._observation(
+                "akshare.stock_dividend_cninfo.snapshot", events
+            ),
+            "cross": self._observation(
+                "akshare.stock_history_dividend_detail.sina.snapshot",
+                cross_events,
+            ),
             "raw_bars": raw_bars or [
                 self._bar("2026-01-05"), self._bar("2026-01-06")
             ],
@@ -195,7 +200,7 @@ class CorporateActionContractTests(unittest.TestCase):
 
     def test_future_source_snapshot_fails_closed(self):
         primary = self._observation(
-            "akshare.cninfo.snapshot", [self._event()],
+            "akshare.stock_dividend_cninfo.snapshot", [self._event()],
             source_data_as_of="2026-01-09T10:01:00+08:00",
             fetched_at="2026-01-09T10:02:00+08:00",
         )
@@ -208,6 +213,12 @@ class CorporateActionContractTests(unittest.TestCase):
         cross = self._observation("same.snapshot", [event])
         with self.assertRaisesRegex(CorporateActionContractError, "independent"):
             self._evaluate(primary=primary, cross=cross)
+
+    def test_unapproved_source_alias_fails_closed(self):
+        event = self._event()
+        primary = self._observation("unapproved.snapshot", [event])
+        with self.assertRaisesRegex(CorporateActionContractError, "primary source"):
+            self._evaluate(primary=primary)
 
     def test_event_date_outside_frozen_calendar_fails(self):
         event = self._event(record_date="2026-01-01")
