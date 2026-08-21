@@ -304,6 +304,9 @@
 
 - Baseline: `main` commit `3e6125a95039c8bbe032ae2e9ad0b87db98dfb9b`.
   Research-only branch: `agent/phase2b-0b3-corporate-action-acceptance`.
+  PR [#24](https://github.com/qiqimimi1002/daily_stock_analysis/pull/24)
+  passed final acceptance, was marked Ready and squash-merged into `main` as
+  `e63308c8749bfaa694c1049ca3123b98fe83221e`.
 - Decision: **CONDITIONAL PASS**, not full Phase 2B completion and not approval
   to start Short-term v1. Formal primary evidence is a prospectively captured
   issuer/exchange or CNINFO implementation disclosure; AKShare/Sina is the
@@ -331,6 +334,10 @@
   limited to research contract, fictional-fixture tests and documentation; no
   production, workflow, provider/fallback, frozen Phase 2A/2B contract,
   Cloudflare, scheduler, Secret boundary or PR #15/#20 content is changed.
+- Required PR CI Run `32479396407` passed on the accepted Head: backend-gate
+  reported 5,258 passed, one skipped and four deselected; Docker, AI governance
+  and change detection also passed. The merge push did not rerun pull-request-
+  only full CI; Auto Tag Run `32481434201` was skipped as configured, not failed.
 
 ## P1 same-run market quote consistency (2026-08-14)
 
