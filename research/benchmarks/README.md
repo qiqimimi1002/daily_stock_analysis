@@ -455,6 +455,24 @@ The only reserved handoff is:
 This is a compatibility contract, not an implementation dependency. Phase 1
 does not copy, import or rewrite any unmerged outcome engine.
 
+## Unified Short-term v1 versus Phase 2A race
+
+The research-only aligned evaluator is documented in
+[`../UNIFIED_RACE.md`](../UNIFIED_RACE.md). It accepts only common-date,
+common-Universe, common-reference inputs that already passed the frozen
+calendar, raw-history and corporate-action gates. It reuses the existing pure
+1d/3d/5d/10d outcome calculation, applies a fixed 30 bps round-trip cost, and
+writes sanitized aggregates only. The three Short-term ablation factors remain
+independent Spearman-IC diagnostics and never enter either model's rank.
+Both models' `raw_metric.window_end` must equal the batch's single verified
+`previous_completed_trade_date`, which must be strictly earlier than T.
+
+The 2026-08-21 real-environment inventory found no prospective/private/
+immutable batch with retained raw rows and point-in-time corporate-action
+evidence. Its committed result is therefore `insufficient_evidence` with zero
+evaluable samples, not a model-performance claim. Benchmark 20d remains
+pending until its unified execution chain is implemented separately.
+
 ## Verification
 
 ```bash

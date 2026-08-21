@@ -38,6 +38,12 @@ from research.benchmarks.trade_calendar import (
     TradeCalendarContractError,
     VerifiedTradeCalendar,
 )
+from research.benchmarks.unified_race import (
+    ROUND_TRIP_COST_BPS,
+    SUPPORTED_HORIZONS,
+    UnifiedRaceError,
+    evaluate_unified_race,
+)
 from research.benchmarks.universe import (
     UNIVERSE_CONTRACT_VERSION,
     UniverseDecision,
@@ -63,6 +69,7 @@ __all__ = [
     "ShortTermResult",
     "ShortTermStatus",
     "TradeCalendarContractError",
+    "UnifiedRaceError",
     "UNIVERSE_CONTRACT_VERSION",
     "UniverseDecision",
     "UniverseStatus",
@@ -74,10 +81,13 @@ __all__ = [
     "evaluate_ablation_factors",
     "evaluate_low_volatility_history",
     "evaluate_short_term_history",
+    "evaluate_unified_race",
     "evaluate_v21_universe",
     "rank_low_volatility_eligible",
     "rank_short_term_eligible",
     "serialize_signal_batch",
+    "ROUND_TRIP_COST_BPS",
+    "SUPPORTED_HORIZONS",
     "simple_daily_returns",
     "short_term_outcome_handoff",
     "universe_config_hash",
