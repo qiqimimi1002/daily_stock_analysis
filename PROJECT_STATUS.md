@@ -237,6 +237,64 @@
 - The next research stage is raw-history source acceptance. Do not start
   corporate-action source acceptance or Short-term v1 before that gate passes.
 
+## Phase 2B raw-history source acceptance (2026-08-21)
+
+- Baseline: `main` commit `08301b9fd4e2ad84847b7c9742d3654007bf010e`.
+  Research-only branch: `agent/phase2b-0b2-raw-history-acceptance`; review is in
+  Draft PR [#23](https://github.com/qiqimimi1002/daily_stock_analysis/pull/23).
+  Draft PR #15 remains at
+  `b7fafbbf279d0f21bc779c921f303dcd3974ed91`; Draft PR #20 remains at
+  `f493b1c4dbdfb76e8ba21aa5a8a0686c22259d07`.
+- Decision: **CONDITIONAL PASS**, not full Phase 2B completion. The fixed
+  primary is Baostock `query_history_k_data_plus` with daily frequency and
+  `adjustflag="3"`; the independent cross-source is AKShare/Sina
+  `stock_zh_a_daily` with `adjust=""`. Both are interpreted explicitly as raw
+  unadjusted CNY/share prices, share volume and CNY amount. There is no cache,
+  source substitution or fallback in the research adapter.
+- A real-source smoke compared `600519`, `000001` and `600734` over 37 sessions
+  from 2026-07-01 through 2026-08-20, plus `000029` over 20 calendar sessions
+  from 2020-10-26 through 2020-11-20. The first three had 37/37 active rows;
+  `000029` had 20 primary rows, ten explicit `tradestatus=0` suspended rows and
+  ten active cross-source rows. Active-date sets and every open, high, low,
+  close and volume value agreed: 121 common active rows, zero OHLCV conflicts.
+- Amount strings differed exactly on 37/37, 36/37, 20/37 and 10/10 active rows,
+  respectively, but every absolute difference was at most CNY 0.50 (observed
+  maxima CNY 0.49, 0.50, 0.46 and 0.50). The contract records exact conflict
+  counts and permits only the declared CNY 0.50 provider-rounding tolerance;
+  it never reports amount as exact. A larger difference fails closed.
+- At 15:19 Asia/Shanghai, a live-cutoff smoke correctly failed because the
+  verified calendar admitted the completed 2026-08-21 session while Baostock
+  had not yet returned its row. No partial manifest was written and the test
+  did not silently back off. The successful comparison therefore uses the
+  explicit completed 2026-08-20 end date and is labeled
+  `backfill_current_snapshot`, not point-in-time historical evidence.
+- A later repeat encountered one AKShare/Sina TLS failure and stopped without
+  fallback. The smoke now removes its prior ignored output before acquisition,
+  so a failed repeat cannot leave stale success evidence at the requested path;
+  only completion of all four samples creates a new manifest.
+- No-lookahead is inherited from the frozen Phase 2B-0B1 calendar. Provider
+  requests cannot end after its completed-session cutoff, acquisition crossing
+  into a new cutoff fails, rows must exactly match verified trade dates, and
+  acquisition must finish before `market_data_at`. Natural-day substitution,
+  missing active dates, duplicate/unsorted rows, schema drift, source failure
+  or any OHLCV conflict fails the whole result.
+- The sanitized smoke output under gitignored `research/runtime/` states
+  `raw_rows_persisted=false` and contains only source IDs, symbol/range, fetch
+  time, schema/calculation version, row/status/conflict counts and canonical
+  content/manifest SHA-256. Raw rows remain memory-only. Package software
+  licenses do not establish upstream data redistribution rights, so raw data
+  must stay in a private/local immutable archive and never enter this Public
+  repository or a Public Artifact.
+- Remaining conditions before model use: prospective immutable captures are
+  required because both APIs expose current snapshots without historical
+  vintages, source update latency must continue to fail closed, and the
+  separate corporate-action source acceptance must decide action/revision
+  boundaries. Do not begin that stage or Short-term v1 without owner approval.
+- Scope is research contract, adapter, smoke, tests and this status only. No
+  `src/`, production provider/fallback, V2.1, Phase 2A formula, Phase 2B-0B1
+  contract, workflow, scheduler, Cloudflare, idempotency, Secret boundary or
+  PR #15/#20 content is modified.
+
 ## P1 same-run market quote consistency (2026-08-14)
 
 - Baseline: `main` commit `009446c04d92127e890a87cb1c8fe6d6e50fdaa5`.

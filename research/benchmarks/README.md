@@ -19,6 +19,40 @@ model inputs, identities and outputs comparable before any model is added.
 - No production workflow, Cloudflare Worker, reader, deep analysis, report or
   notification path imports this package.
 
+## Phase 2B raw-history source acceptance
+
+Raw daily-history research uses two fixed, independent public interfaces:
+Baostock `query_history_k_data_plus` with `frequency="d"` and
+`adjustflag="3"` as primary, and AKShare/Sina `stock_zh_a_daily` with
+`adjust=""` as cross-source. Both are declared as CNY/share prices, share
+volume and CNY amount. The research adapter has no provider fallback and no
+cache; all network access is disabled unless the smoke command receives the
+explicit `--allow-network` flag.
+
+AKShare's [stock interface documentation](https://akshare.akfamily.xyz/data/stock/stock.html)
+defines the empty adjustment mode as unadjusted and documents the daily fields.
+Its [MIT software license](https://github.com/akfamily/akshare/blob/main/LICENSE)
+does not grant redistribution rights for upstream data. The Baostock Python
+package declares a [BSD software license](https://pypi.org/project/baostock/),
+while the provider's [disclaimer](https://baostock.com/disclaimer) does not
+establish a raw-data redistribution grant. These are software/interface
+permissions, not a Public-repository market-data license.
+
+Acceptance is fail-closed on non-raw adjustment, a date outside the frozen
+Phase 2B-0B1 completed-session cutoff, natural-day substitution, missing active
+dates, duplicates, unsorted rows, any OHLCV difference, or an amount difference
+above CNY 0.50. A primary suspended row must be explicitly marked and omitted
+by the cross-source. The public manifest contains metadata, counts and hashes
+only; provider rows are never serialized.
+
+The source decision is **CONDITIONAL PASS**. Current provider snapshots do not
+offer a historical vintage proving what an earlier fetch would have returned,
+and the packages' software licenses do not establish permission to redistribute
+upstream raw market data. Raw captures therefore stay in a private/local
+immutable archive; only sanitized manifests may enter this public repository.
+Prospective capture is required before model use, and corporate-action review
+remains a separate later acceptance stage.
+
 ## Benchmark model identity
 
 Use `BenchmarkModelIdentity.create(...)`. The complete serialized record is:
