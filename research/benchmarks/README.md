@@ -53,6 +53,23 @@ immutable archive; only sanitized manifests may enter this public repository.
 Prospective capture is required before model use, and corporate-action review
 remains a separate later acceptance stage.
 
+## Phase 2B corporate-action source acceptance
+
+The research-only corporate-action overlay is documented in
+[`../../docs/research-corporate-action-acceptance.md`](../../docs/research-corporate-action-acceptance.md).
+Its source decision is **CONDITIONAL PASS**. Issuer/exchange or CNINFO
+implementation disclosures are the primary evidence; AKShare/Sina is the
+independent cross-source, with Baostock dividend fields and `tradestatus` used
+as additional term/suspension evidence. All are current snapshots, not
+historical vintages.
+
+Raw unadjusted bars remain unchanged. Cash/stock terms may be used only in a
+versioned derived overlay; rights issues and unsupported/special actions stay
+`review_required`. Suspended provider-carried OHLC is discarded, never
+forward-filled. Any missing event, source conflict, future-known evidence,
+calendar mismatch or network failure is fail-closed. Public outputs contain
+metadata and hashes only, never upstream event or market rows.
+
 ## Benchmark model identity
 
 Use `BenchmarkModelIdentity.create(...)`. The complete serialized record is:

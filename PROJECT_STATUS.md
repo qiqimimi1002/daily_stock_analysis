@@ -300,6 +300,38 @@
   not rerun pull-request-only full CI; Auto Tag Run `32467485963` was skipped
   as configured, not failed.
 
+## Phase 2B corporate-action source acceptance (2026-08-21)
+
+- Baseline: `main` commit `3e6125a95039c8bbe032ae2e9ad0b87db98dfb9b`.
+  Research-only branch: `agent/phase2b-0b3-corporate-action-acceptance`.
+- Decision: **CONDITIONAL PASS**, not full Phase 2B completion and not approval
+  to start Short-term v1. Formal primary evidence is a prospectively captured
+  issuer/exchange or CNINFO implementation disclosure; AKShare/Sina is the
+  independent cross-source. Baostock dividend fields and raw `tradestatus` are
+  additional term and suspension evidence.
+- Real current-snapshot checks covered two `600519` cash dividends, the
+  `001387` same-day 10-for-3 capitalization plus cash distribution, and the
+  `600030` 10-for-1.5 rights issue with six-session suspension and resumption.
+  Cash/transfer terms and the successful raw-price windows agreed across
+  sources. The `600030` CNINFO query timed out and its fixed Sina raw cross
+  failed TLS; the run stopped without fallback, so that raw-price check remains
+  single-source diagnostic evidence rather than dual-source acceptance.
+- Raw prices remain unadjusted and immutable. Mechanical action effects belong
+  only to a versioned derived overlay. Rights participation, true/reverse
+  splits, standalone stock dividends, cross-year and special/differential
+  cases remain `review_required`. Baostock-carried OHLC on suspended rows is
+  discarded and never forward-filled; the resumption bar must be real trading.
+- Current snapshot interfaces do not provide historical vintage evidence, and
+  software/interface licences do not grant upstream row redistribution. Before
+  model use, prospective private immutable capture is required. Public outputs
+  may contain only metadata/counts/hashes, never raw event or market rows.
+- The new offline contract fails on future-known/source-as-of evidence,
+  missing/duplicate/unsorted events, source term/date conflicts, frozen-calendar
+  mismatch, incomplete suspension/resumption and any source failure. Scope is
+  limited to research contract, fictional-fixture tests and documentation; no
+  production, workflow, provider/fallback, frozen Phase 2A/2B contract,
+  Cloudflare, scheduler, Secret boundary or PR #15/#20 content is changed.
+
 ## P1 same-run market quote consistency (2026-08-14)
 
 - Baseline: `main` commit `009446c04d92127e890a87cb1c8fe6d6e50fdaa5`.
