@@ -25,11 +25,12 @@
 
 ## Short-term v1 first-stage research model (2026-08-21)
 
-- Real-time baseline: `main` commit
-  `d87bcdcb8cce054ab2a8d80255b2442d741de78a`, fetched before branch creation.
-  It contains merged PR #21/#22/#23/#24. Development branch:
-  `codex/short-term-v1-phase1`; Draft PR and final CI evidence are pending at
-  this local-validation checkpoint. PR #15 and PR #20 remain untouched.
+- Implementation baseline: `main` commit
+  `d87bcdcb8cce054ab2a8d80255b2442d741de78a`. PR #25 Head
+  `463cef319c4e97b1e04b609551378321af1a1106` passed final acceptance, was
+  marked Ready, and was squash-merged as
+  `c7bc1d277efcbdf946aa9bfb9bd258960cdd32e2`. PR #15 and PR #20 remain
+  untouched.
 - The only main rule is `ret_20 > 0`, followed by `ret_5 DESC` and
   `stock_code ASC` as the deterministic tie-break. The main window has exactly
   21 completed T-1 sessions. V2.1 remains the single Universe/liquidity source,
@@ -56,12 +57,12 @@
   but main has no merged Benchmark outcome executor; the production
   DecisionSignal engine supports only 1d/3d/5d/10d. This phase does not claim a
   20d run or model efficacy and does not import or modify production outcomes.
-- Offline verification so far: 144 Short-term/Benchmark/Phase 2A/Phase 2B/raw-
-  history/corporate-action tests passed; 42 archive/Universe/V2.1 tests passed
-  with one optional PyArrow test skipped; 47 existing outcome service/API tests
-  passed after isolating pytest's temporary directory inside the worktree.
-  Changed Python files pass `py_compile` and full flake8. No network, provider,
-  production workflow, Secret or real/restricted market-data call was made.
+- Final PR CI Run `32488718750` passed: backend-gate reported 5273 passed,
+  1 skipped, 4 deselected and 534 subtests passed; Docker, AI governance and
+  Change Detection passed, while Web and desktop jobs were path-rule skips.
+  Short-term v1 Phase 1 is merged, but no real unified-sample benchmark race has
+  run and model efficacy has not been established. No production workflow,
+  provider, Secret or real/restricted market-data call was made.
 
 ## Market Screener slow-request diagnostics (2026-08-20)
 
