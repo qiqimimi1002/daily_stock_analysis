@@ -1,6 +1,6 @@
 # Project Status
 
-> Last updated: 2026-08-20 (Asia/Shanghai)
+> Last updated: 2026-08-21 (Asia/Shanghai)
 >
 > Codex workflow rule: read this file before substantial project work and
 > update it after every completed material task. Complete safe in-scope work
@@ -114,7 +114,8 @@
   both enter `model_id` along with all formula/rank/policy parameters.
 - Phase 2A is offline contract/test infrastructure only. It performs no market
   fetch, creates no real benchmark signal, changes no production workflow or
-  V2.1 behavior, and does not modify Draft PR #15. Phase 2B has not started.
+  V2.1 behavior, and does not modify Draft PR #15. Phase 2B-0B1 has since
+  started in separate Draft PR #21; broader Phase 2B is not complete.
 - Local verification: 52 Phase 2A/Phase 1 tests passed; 25 immutable-archive
   tests passed with the existing optional PyArrow test skipped; 18 V2.1
   screener/scoring tests passed. Changed Python files passed `py_compile` and
@@ -132,12 +133,87 @@
   was skipped because the squash commit has no `#patch`, `#minor` or `#major`
   release marker.
 - Phase 2A is now formal offline research infrastructure with zero production
-  impact. Phase 2B has not started. The next planned stage is **Phase 2B-0:
-  real data-source feasibility acceptance**: choose and document trusted
-  point-in-time trade-calendar,
-  raw-history and corporate-action sources that can supply the frozen metadata;
+  impact. Phase 2B-0B1 has since started in Draft acceptance. The remaining
+  **Phase 2B-0 real data-source feasibility acceptance** must choose and
+  document trusted raw-history and corporate-action sources that can supply
+  the frozen metadata after the point-in-time trade-calendar contract;
   do not weaken the contract or substitute current qfq/hfq history. This is the
   remaining integration decision, not a Phase 2A calculation defect.
+
+## Phase 2B-0B1 trade calendar and no-lookahead Draft (2026-08-21)
+
+- Actual baseline is latest `origin/main` commit
+  `01b8c5337ee52c23cceb532a08f3367911aa1d48`. Development branch
+  `agent/phase2b-0b1-trade-calendar-no-lookahead` was created directly from
+  that SHA. It does not import Draft PR #15 head
+  `b7fafbbf279d0f21bc779c921f303dcd3974ed91` or Draft PR #20 head
+  `f493b1c4dbdfb76e8ba21aa5a8a0686c22259d07`.
+- Implementation commit `5d0c6bcf8f2685b2dd88e2f516018ab92f7f4b94`
+  is published in Draft PR
+  [#21](https://github.com/qiqimimi1002/daily_stock_analysis/pull/21).
+  This records **Phase 2B-0B1 started / Draft acceptance only**; it does not
+  claim Phase 2B completion or source production acceptance.
+- The research-only primary source is fixed to
+  `baostock.query_trade_dates`; the independent cross source is fixed to
+  `akshare.tool_trade_date_hist_sina`. A verified calendar exists only after
+  both requested-interval outputs are non-empty, canonical, strictly ordered,
+  unique, in range and identical in count and dates. Any source/query/schema,
+  format, order, duplicate, range or comparison failure stops the entire result
+  without single-source, weekday, natural-day or hard-coded-holiday fallback.
+- Successful metadata records the interval, fixed source IDs, both normalized
+  counts, both source/fetch times, consistency state, schema/calculation
+  versions, normalized dates and canonical content SHA-256. Raw responses and
+  runtime results are not committed; `research/runtime/` is gitignored and the
+  optional smoke script defaults to a system temporary directory.
+- The no-lookahead guard requires timezone-aware Asia/Shanghai semantics and
+  `history_data_as_of <= source_data_as_of <= market_data_at <= generated_at`.
+  Calendar-source content times also cannot follow `market_data_at`;
+  `fetched_at` remains audit-only. Before the 15:00 completed-daily-bar
+  boundary, a T signal can use at most the prior verified market session. An N
+  day window must equal exactly N consecutive verified market sessions; no
+  missing day, fill, interpolation, older/security-specific substitution,
+  future session or intraday T bar is accepted.
+- Final merge-acceptance review closed a Baostock pagination fail-open: an
+  error or ambiguous full-page terminal state from `ResultData.next()` can no
+  longer be accepted as a complete response. It also added the missing
+  equal-count/specific-date disagreement case. Final local related regression:
+  37 offline contract tests passed and
+  explicitly asserted zero default Baostock/AKShare calls; the combined Phase
+  1 schema/universe, Phase 2A Low Volatility, immutable archive, production
+  trading-calendar and V2.1 screener/scoring selection passed 173 tests with
+  one existing optional PyArrow skip. Changed Python files passed `py_compile`
+  and full flake8; repository critical flake8 returned zero; staged
+  `git diff --check` passed. Full `flake8 .` was executed and reported 2,587
+  pre-existing repository style errors, while this PR's Python files report
+  zero.
+- The Windows full offline suite is not a clean acceptance result. The first
+  run hit an inaccessible global pytest Temp directory. With an isolated
+  basetemp, unrelated native-Windows Codex App Server tests still failed on
+  `platform_unsupported`, missing POSIX `os.killpg` and pipe `select`
+  semantics; the diagnostic selection returned 45 failed, 6 passed and 2
+  skipped. Linux Draft-PR CI remains the authoritative full gate. The local AI
+  governance check also retains the known Windows `CLAUDE.md` symlink
+  limitation.
+- After GitHub Linux backend-gate passed the complete offline suite, the
+  optional public-calendar check ran for 2026-04-01 through 2026-08-18.
+  Baostock and AKShare/Sina each returned 95 normalized trading dates with no
+  count or date difference; consistency passed with content SHA-256
+  `06ca44d1946d5a41befaf19368669bde0a1a21c948bd305511552749d6229e55`.
+  The verified JSON remains only under gitignored `.tmp`; no raw response or
+  count was added to automated tests. No Tushare token/rt_k, market workflow,
+  full-market screen, real 2B signal, win rate or tuning was invoked.
+- The merge-acceptance repeat returned the same 95/95 normalized dates with
+  zero date difference. Its snapshot hash is
+  `17aa09f1fb41962cfe75b7ced7bbdf39b46b41d990c8da915e3d34482d4edf8d`;
+  it differs from the prior snapshot because provider observation/fetch times
+  are intentionally hash-covered audit metadata. Both verified JSON files
+  remain under gitignored `.tmp` and independently pass hash recomputation.
+- Production impact is zero: no `src/`, production provider, scheduler,
+  Market Screener, Cloudflare, workflow, PR #15/#20 or frozen Phase 2A formula
+  file changed. Next, keep PR #21 Draft for Linux CI/review. After acceptance,
+  Phase 2B-0 should evaluate a raw-history source before corporate-action
+  source acceptance; until both are proven, keep `raw_unadjusted` and
+  `corporate_action_review` fail-closed behavior unchanged.
 
 ## P1 same-run market quote consistency (2026-08-14)
 

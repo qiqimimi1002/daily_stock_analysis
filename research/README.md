@@ -10,6 +10,14 @@ five-field future-outcome handoff. Phase 2A adds the frozen offline contract
 for `low_volatility_daily_60d_v1`, but does not run the model, create real
 signals, calculate outcomes or integrate with production.
 
+Phase 2B-0B1 adds a strict research-only dual-source A-share trade-calendar and
+completed-history-window guard. It requires exact Baostock/AKShare agreement,
+is network-disabled by default, and blocks naive/wrong-zone timestamps, future
+content and intraday T daily-bar leakage. It does not change the Phase 2A
+formula, accept a history/corporate-action source, or modify production paths.
+The full contract is documented in
+[`research/benchmarks/README.md`](benchmarks/README.md).
+
 This first V2.2 stage records the V2.1 observation list exactly as it existed
 when the signal was generated. It does not recalculate candidates and does not
 calculate forward returns, drawdowns, win rates, or trading points.
