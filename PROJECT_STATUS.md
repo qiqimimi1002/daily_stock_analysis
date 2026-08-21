@@ -64,6 +64,40 @@
   run and model efficacy has not been established. No production workflow,
   provider, Secret or real/restricted market-data call was made.
 
+## Short-term v1 versus Phase 2A unified race (2026-08-21)
+
+- Baseline: `main@211de4fb8c8df1ae8c5e227ba9dc91e08d3c7228`; research
+  branch: `codex/short-term-v1-unified-race`. PR publication and CI are pending
+  at this local-verification checkpoint. Draft PR #15 and Draft PR #20 remain
+  unchanged.
+- The evaluator requires identical V2.1 Universe codes/hash, signal date,
+  Phase 2B-0B1 calendar, T-1 cutoff, prospective raw-unadjusted history,
+  corporate-action review, Top 5, reference snapshot and forward calendar for
+  both frozen models. Missing data excludes both models for the affected date
+  and horizon. The 30 bps cost is fixed; no model parameter or formula changed.
+- 1d/3d/5d/10d reuse the existing pure outcome calculation. 20d remains
+  pending because main has no merged unified Benchmark 20d execution chain.
+  MFE, MAE, date-level maximum drawdown and HS300 excess are aggregate-only;
+  the three ablation factors are independent Spearman-IC diagnostics only.
+- Real-environment result: **INSUFFICIENT EVIDENCE / 表现接近/证据不足**.
+  No prospective/private/immutable batch with retained raw rows and historical
+  corporate-action vintage was found, so candidate signals, common evaluable
+  samples and signal dates are all zero. Four located raw-history smoke samples
+  were excluded because they are `backfill_current_snapshot`, persist no raw
+  rows and are not a private immutable archive. No current-provider refetch or
+  fallback was attempted. Aggregate result hash:
+  `8cccce82528d51f5ee41a91e882bf17bb2cd07e4ef191a20abebb808e413f42a`.
+- Local verification: 15 new race tests pass; 230 focused race/Short-term/
+  Phase 2A/Phase 2B/raw-history/corporate-action/archive/outcome tests passed
+  with one optional test skipped using a worktree-local pytest basetemp.
+  Changed Python files pass py_compile and flake8. The full local Windows/
+  Python 3.12 run reached 5209 passed and 5 skipped; its 77 persistent failures
+  reproduce unchanged on clean `main` in the same environment, and one timing
+  boundary failure passed on immediate isolated retry. GitHub CI remains the
+  authoritative cross-platform gate. No `src/`, production
+  provider/fallback, V2.1, frozen Phase 2A formula, workflow, Cloudflare,
+  scheduler, Secret/Tushare boundary or PR #15/#20 content is modified.
+
 ## Market Screener slow-request diagnostics (2026-08-20)
 
 - Baseline: `main` commit `4c30b01097103e3ae5780e1074ae32ed940f6f0f`.
