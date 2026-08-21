@@ -67,9 +67,10 @@
 ## Short-term v1 versus Phase 2A unified race (2026-08-21)
 
 - Baseline: `main@211de4fb8c8df1ae8c5e227ba9dc91e08d3c7228`; research
-  branch: `codex/short-term-v1-unified-race`. PR publication and CI are pending
-  at this local-verification checkpoint. Draft PR #15 and Draft PR #20 remain
-  unchanged.
+  branch: `codex/short-term-v1-unified-race`; implementation commit
+  `de69a87616f13f4b6ea225c38f6a4a1cf30d7b11`; Draft PR
+  [#26](https://github.com/qiqimimi1002/daily_stock_analysis/pull/26).
+  Draft PR #15 and Draft PR #20 remain unchanged.
 - The evaluator requires identical V2.1 Universe codes/hash, signal date,
   Phase 2B-0B1 calendar, T-1 cutoff, prospective raw-unadjusted history,
   corporate-action review, Top 5, reference snapshot and forward calendar for
