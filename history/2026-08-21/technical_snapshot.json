@@ -1,0 +1,52 @@
+{
+  "schema_version": "1.0",
+  "trade_date": "2026-08-21",
+  "run_id": "32438334586",
+  "run_number": "59",
+  "technical_as_of": "2026-08-21T10:02:35+08:00",
+  "market_data_source": "sina",
+  "indicators": {
+    "603259": {
+      "code": "603259",
+      "history_data_through": "2026-08-20",
+      "reference_price": 163.34,
+      "ma5": 165.04,
+      "ma10": 162.3,
+      "ma20": 146.8,
+      "five_day_pct": 3.43,
+      "watch_zone": "146.80—165.04",
+      "provider_volume_ratio": null,
+      "completed_day_volume_ratio_5d": 1.41,
+      "history_source": "akshare_sina",
+      "history_price_adjustment": "qfq"
+    },
+    "600489": {
+      "code": "600489",
+      "history_data_through": "2026-08-20",
+      "reference_price": 27.03,
+      "ma5": 25.33,
+      "ma10": 25.23,
+      "ma20": 23.67,
+      "five_day_pct": 8.47,
+      "watch_zone": "23.67—25.33",
+      "provider_volume_ratio": null,
+      "completed_day_volume_ratio_5d": 1.7,
+      "history_source": "akshare_sina",
+      "history_price_adjustment": "qfq"
+    },
+    "000725": {
+      "code": "000725",
+      "history_data_through": "2026-08-20",
+      "reference_price": 5.9,
+      "ma5": 6.05,
+      "ma10": 5.99,
+      "ma20": 5.84,
+      "five_day_pct": 1.55,
+      "watch_zone": "5.84—6.05",
+      "provider_volume_ratio": null,
+      "completed_day_volume_ratio_5d": null,
+      "history_source": "akshare_eastmoney",
+      "history_price_adjustment": "qfq"
+    }
+  }
+}
