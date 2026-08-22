@@ -1394,3 +1394,55 @@
   Python compilation, critical flake8, workflow YAML parsing, and
   `git diff --check` also pass locally. Latest-head GitHub CI must be green
   before PR #19 can become Ready or merge.
+
+## Tushare `rt_k` Phase 1 license/security boundary (2026-08-20)
+
+- Branch `agent/tushare-rt-k-phase1` was created from official `main`
+  `01b8c5337ee52c23cceb532a08f3367911aa1d48` after PR #19. Repository
+  inspection confirmed this project is still a Public Fork.
+- Public Draft PR #20 remains isolated from production and contains no Token,
+  complete `rt_k` response, real paid-market fixture, raw paid snapshot, live
+  acceptance workflow, or production Secret injection. The separate
+  standalone Private collector has a Repository Secret configured and completed
+  one owner-only `600000.SH` after-close read-only call on 2026-08-20; no
+  intraday acceptance has been performed, and no Private response or Artifact
+  was copied into this Public repository.
+- The retained code is an isolated, uncredentialed `rt_k` provider contract
+  plus explicitly synthetic offline tests. It is not imported by the Market
+  Screener, Daily Stock, research, scheduler, or any workflow. Existing V2.1,
+  PR #14/#18/#19 behavior, public fallbacks, Cloudflare, idempotency, production
+  times, `market_snapshot.json`, caches, logs, and Artifact rules are unchanged.
+- The strict public input gate accepts only one to five comma-separated codes
+  matching `^[0-9]{6}\.(SH|SZ)$`. It strips surrounding whitespace only and
+  rejects empty items, lowercase/wrong suffixes, malformed codes, duplicates,
+  and more than five codes before reading the Secret or making a provider call.
+- The Private collector and Public model remain separated. Public publication
+  of realtime prices or derived paid-data output requires a separate licensing
+  decision; PR #20 itself stays Draft, unmerged, undeployed, and unable to read
+  a Secret or call live `rt_k`.
+- Offline verification passed 105 tests: 53 adapter/public-boundary cases and
+  52 existing screener/snapshot/manifest/fallback regressions. This includes 22
+  new exact-input and zero-call ordering cases plus three adjusted existing
+  adapter cases. Changed Python files compile; changed-file flake8 and
+  `git diff --check` pass. The
+  local Windows AI-assets check retains the pre-existing `CLAUDE.md` symlink
+  limitation; authoritative Linux PR CI must validate that unchanged asset.
+- Commit `8009de5b4aaac85e27d4ff7487128c6f9e15de7a` is frozen as the
+  next-trading-day intraday acceptance baseline. Current status is
+  **Offline PASS / Awaiting intraday acceptance**; PR #20 remains Draft.
+- A standalone offline validator reads only the two sanitized Private
+  acceptance JSON files and optional run logs. It checks the exact Artifact
+  allowlist/schema, single-stock identity, normalized-column evidence,
+  shares/yuan units, Asia/Shanghai ordering and 180-second freshness,
+  intraday/quality status, hashes, redaction status, file size, and sensitive
+  or raw-data patterns. It emits machine JSON on stdout and a human checklist
+  on stderr, performs no network access, imports no Provider, reads no Secret,
+  and writes no file.
+- Verification passes 132 tests: the frozen 105-test baseline plus 27 new
+  synthetic validator cases covering PASS, schema/type/time/state/unit errors,
+  missing/extra/oversized Artifacts, simulated credential/raw-response leaks,
+  CLI output, and a network-call spy fixed at zero. Python compilation,
+  changed-file flake8, and `git diff --check` pass.
+- The next authorized acceptance window remains 09:35-09:40 Asia/Shanghai for
+  `600000.SH` only. Offline tooling does not authorize or perform that run;
+  real intraday acceptance remains pending.
