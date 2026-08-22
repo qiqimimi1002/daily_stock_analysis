@@ -1,6 +1,6 @@
 # Project Status
 
-> Last updated: 2026-08-21 (Asia/Shanghai)
+> Last updated: 2026-08-22 (Asia/Shanghai)
 >
 > Codex workflow rule: read this file before substantial project work and
 > update it after every completed material task. Complete safe in-scope work
@@ -104,6 +104,30 @@
 - Final PR CI Run `32496790703` passed: backend-gate reported 5288 passed,
   1 skipped, 4 deselected and 534 subtests passed; Docker, AI governance and
   Change Detection passed, while Web and desktop jobs were path-rule skips.
+
+## Prospective shared-batch capture phase 1 (2026-08-22)
+
+- Baseline: `main@1191e01adab1e917ab735ca384ae79a76595d4d1`; research
+  branch: `codex/prospective-shared-batch-phase1`. This stage changes research
+  code, a standalone script, synthetic tests and research documentation only.
+- One Private input bundle must cover the exact V2.1 Universe and one verified
+  61-session T-1 window. Existing Baostock-primary/AKShare-Sina-cross raw
+  history, dual-source calendar and corporate-action contracts are rerun before
+  archival. Short-term v1 and Phase 2A receive the same evidence hash; neither
+  frozen model formula is changed or executed.
+- `request_at`, every source `fetched_at`, `market_data_at` and `captured_at`
+  must be same-day Asia/Shanghai observations in no-lookahead order. Backfill,
+  T bars, adjusted prices, incomplete/conflicting sources and future-known or
+  incomplete company-action evidence fail closed.
+- Successful Private batches are unique by signal date and written atomically.
+  Identical reruns are idempotent; different, corrupt or incomplete existing
+  content is never overwritten. Public output contains only versions, times,
+  counts, reason/status fields and hashes, never stock lists, raw bars or action
+  rows.
+- Phase 1 deliberately has no provider acquisition, scheduler, production
+  workflow or real-data run. Continuous real collection remains conditional on
+  an authorized Private acquisition process supplying complete same-day,
+  licensed evidence. Historical backfill and old-result reuse remain forbidden.
 
 ## Market Screener slow-request diagnostics (2026-08-20)
 
