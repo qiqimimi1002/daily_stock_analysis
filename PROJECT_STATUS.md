@@ -54,8 +54,11 @@
   switching and network-call allowlisting. Real Public Run #59 and explicit
   fixture modes both passed browser QA at desktop and mobile widths with no
   browser errors. PR #29 remains Open/Draft; its GitHub status checks are the
-  authoritative CI record. Draft PR #28 remains Open/Draft at
-  `cca437f42688e12aca81bfed680631abb400a6f4` and is unchanged by this work.
+  authoritative CI record. Draft PR #28 remains Open/Draft and advanced on its
+  own independent work line from the initial readback
+  `cca437f42688e12aca81bfed680631abb400a6f4` to the final readback
+  `36ef35f3ee12fc3894db185a9f208be72acdab44`; this Dashboard work did not push
+  to or edit that branch.
 
 ## Short-term v1 first-stage research model (2026-08-21)
 
