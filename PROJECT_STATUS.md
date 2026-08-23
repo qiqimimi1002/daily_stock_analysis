@@ -108,8 +108,11 @@
 ## Prospective shared-batch capture phase 1 (2026-08-22)
 
 - Baseline: `main@1191e01adab1e917ab735ca384ae79a76595d4d1`; research
-  branch: `codex/prospective-shared-batch-phase1`. This stage changes research
-  code, a standalone script, synthetic tests and research documentation only.
+  branch: `codex/prospective-shared-batch-phase1`; implementation commit:
+  `569e2db56b8414a11cfd1b7f9bb602441cb0aca8`; Draft PR
+  [#27](https://github.com/qiqimimi1002/daily_stock_analysis/pull/27).
+  This stage changes research code, a standalone script, synthetic tests and
+  research documentation only.
 - One Private input bundle must cover the exact V2.1 Universe and one verified
   61-session T-1 window. Existing Baostock-primary/AKShare-Sina-cross raw
   history, dual-source calendar and corporate-action contracts are rerun before
@@ -128,6 +131,12 @@
   workflow or real-data run. Continuous real collection remains conditional on
   an authorized Private acquisition process supplying complete same-day,
   licensed evidence. Historical backfill and old-result reuse remain forbidden.
+- Local verification: all changed Python files pass py_compile and flake8; the
+  focused calendar/raw-history/corporate-action/Short-term/Phase 2A/race/archive/
+  outcome regression reports 218 passed and 1 skipped, including 19 new
+  collector contract tests. A full local run was blocked during collection by
+  Windows-inaccessible pytest basetemp directories under `testpaths = .`; no
+  product test failed, and GitHub CI is the authoritative full gate.
 
 ## Market Screener slow-request diagnostics (2026-08-20)
 
