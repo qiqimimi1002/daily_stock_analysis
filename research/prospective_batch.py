@@ -319,7 +319,7 @@ def _corporate_action_observation(
             symbol=item.get("symbol") or symbol,
             query_start=item.get("query_start"),
             query_end=item.get("query_end"),
-            query_status=item.get("query_status", "success"),
+            query_status=item.get("query_status"),
             query_result=item.get("query_result"),
             events=events,
         )

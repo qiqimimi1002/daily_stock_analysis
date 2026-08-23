@@ -217,9 +217,15 @@ class CorporateActionContractTests(unittest.TestCase):
             self._evaluate(cross=cross)
 
     def test_failed_no_event_query_is_not_evidence(self):
-        with self.assertRaisesRegex(CorporateActionContractError, "complete successfully"):
+        with self.assertRaisesRegex(CorporateActionContractError, "explicit"):
             self._no_event_observation(
                 "akshare.stock_dividend_cninfo.snapshot", query_status="failed"
+            )
+
+    def test_no_event_query_success_must_be_explicit(self):
+        with self.assertRaisesRegex(CorporateActionContractError, "explicit"):
+            self._no_event_observation(
+                "akshare.stock_dividend_cninfo.snapshot", query_status=None
             )
 
     def test_no_event_interval_mismatch_fails_closed(self):

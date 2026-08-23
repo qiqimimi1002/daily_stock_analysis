@@ -271,7 +271,7 @@ class CorporateActionObservation:
         symbol: str | None = None,
         query_start: date | str | None = None,
         query_end: date | str | None = None,
-        query_status: str = QUERY_STATUS_SUCCESS,
+        query_status: str | None = None,
         query_result: str | None = None,
     ) -> "CorporateActionObservation":
         source = str(source_id or "").strip()
@@ -281,11 +281,6 @@ class CorporateActionObservation:
         fetched = _time(fetched_at, field="fetched_at")
         if as_of > fetched:
             raise CorporateActionContractError("source_data_as_of cannot follow fetched_at")
-        status = str(query_status or "").strip()
-        if status != QUERY_STATUS_SUCCESS:
-            raise CorporateActionContractError(
-                "corporate-action query must complete successfully"
-            )
         normalized = tuple(events)
         keys = tuple((item.effective_date, item.action_type, item.semantic_sha256) for item in normalized)
         if keys != tuple(sorted(keys)):
@@ -301,6 +296,16 @@ class CorporateActionObservation:
         if result not in {QUERY_RESULT_EVENTS, QUERY_RESULT_NO_EVENT}:
             raise CorporateActionContractError(
                 "query_result must explicitly be events or no_event"
+            )
+        status = str(query_status or "").strip()
+        if result == QUERY_RESULT_NO_EVENT and status != QUERY_STATUS_SUCCESS:
+            raise CorporateActionContractError(
+                "no_event requires explicit query_status=success"
+            )
+        status = status or QUERY_STATUS_SUCCESS
+        if status != QUERY_STATUS_SUCCESS:
+            raise CorporateActionContractError(
+                "corporate-action query must complete successfully"
             )
         code = str(symbol or "").strip()
         if normalized:
