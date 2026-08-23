@@ -109,8 +109,10 @@
 
 - Baseline: `main@1191e01adab1e917ab735ca384ae79a76595d4d1`; research
   branch: `codex/prospective-shared-batch-phase1`; implementation commit:
-  `569e2db56b8414a11cfd1b7f9bb602441cb0aca8`; Draft PR
-  [#27](https://github.com/qiqimimi1002/daily_stock_analysis/pull/27).
+  `569e2db56b8414a11cfd1b7f9bb602441cb0aca8`. PR
+  [#27](https://github.com/qiqimimi1002/daily_stock_analysis/pull/27) passed
+  final acceptance, was marked Ready and squash-merged as
+  `359f3b7025f809ce84269a4788fd1e3fab4fdf4f`.
   This stage changes research code, a standalone script, synthetic tests and
   research documentation only.
 - One Private input bundle must cover the exact V2.1 Universe and one verified
@@ -136,7 +138,10 @@
   outcome regression reports 218 passed and 1 skipped, including 19 new
   collector contract tests. A full local run was blocked during collection by
   Windows-inaccessible pytest basetemp directories under `testpaths = .`; no
-  product test failed, and GitHub CI is the authoritative full gate.
+  product test failed. Final CI Run `32632054766` passed with 5307 passed,
+  1 skipped, 4 deselected and 534 subtests passed; Docker, AI governance and
+  Change Detection passed, while Web and desktop jobs were path-rule skips.
+  Phase 1 is merged but still does not provide unattended real acquisition.
 
 ## Market Screener slow-request diagnostics (2026-08-20)
 
