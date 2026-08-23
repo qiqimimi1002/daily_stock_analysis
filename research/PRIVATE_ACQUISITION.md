@@ -19,31 +19,38 @@ The request itself is Private and must be created on signal date T after the
 acquisition request starts. It contains:
 
 ```text
-schema_version = private-acquisition-request-v1
+schema_version = private-acquisition-request-v2
 signal_date
 request_at
 private_archive_policy
+  universe = private_only_no_redistribution
   raw_history = private_only_no_redistribution
   corporate_actions = private_only_no_redistribution
   provider_terms_reviewed_for_private_capture = true
-universe
-  contract_version, config_hash, sorted stock_codes, snapshot_sha256
+universe_source
+  schema/model/source IDs, source_data_as_of, fetched_at, generated_at
+  current production V2.1 config and config_sha256
+  full same-day Private spot_rows, row_count and spot_content_sha256
 corporate_actions[stock_code]
-  primary/cross source IDs, source_data_as_of, fetched_at, events and known_at
+  primary/cross source IDs, source_data_as_of and fetched_at
+  either matched real events/known_at or explicit successful no_event queries
 ```
 
-The Universe hash covers exactly its contract version, current V2.1 config
-hash and sorted stock codes. The corporate-action map must cover the same
-codes exactly. These two inputs are not reacquired by this command: the current
-accepted corporate-action contract has no safe fallback and does not treat an
-empty provider response as reviewed-clear evidence. Inventing an empty event,
-shrinking the Universe or silently declaring a no-event result would weaken
-the frozen contract, so the command fails closed instead.
+The production Public result does not retain the full source snapshot or full
+eligible set, so it cannot safely reconstruct this input. A Private upstream
+must provide the same full spot snapshot used immediately before screening.
+The acquisition path normalizes that snapshot, verifies its stable content
+hash and the unchanged default V2.1 config, then reuses the existing V2.1
+hard-filter adapter. It fetches history for exactly that one sorted code set,
+rechecks V2.1's history eligibility, and binds the source-manifest hash and
+Universe snapshot hash into both models' shared evidence. No module may rebuild
+or shrink the set independently.
 
-Consequently, this phase is ready to acquire and freeze raw-history pairs only
-when an authorized same-day Private upstream has already supplied the exact
-V2.1 Universe snapshot and complete dual-source, reviewed-clear corporate-
-action evidence. It is not yet an unattended end-to-end collector.
+`no_event` is not an empty fallback. Both independent action sources must state
+that their query succeeded, name the same symbol, cover the exact raw-history
+interval and return no event record. Only then is the symbol `reviewed_clear`.
+Matched real events remain `review_required`; a failed source, event/no-event
+disagreement, interval mismatch or future source state fails closed.
 
 ## Time and data flow
 
@@ -51,7 +58,8 @@ For a verified trading date T:
 
 ```text
 Private request begins on T
-  -> same-day Universe/action evidence is bound to the request
+  -> same-day full Private spot snapshot is verified and classified by V2.1
+  -> one Universe/hash is bound to both models and all action checks
   -> dual-source calendar is fetched with no fallback
   -> cutoff = verified previous completed trading date (always before T)
   -> exact last 61 sessions are fetched from both raw sources per symbol
@@ -94,3 +102,6 @@ publish an earlier success as the current attempt.
 The raw-history and corporate-action source decisions remain **CONDITIONAL
 PASS**. The explicit policy assertion records the operator's authorization for
 Private storage; it does not create or broaden upstream redistribution rights.
+There is still no scheduler or unattended provider acquisition. The next gate
+is one explicitly authorized, prospective, Private-only single-day acceptance
+run; no historical backfill is permitted.
