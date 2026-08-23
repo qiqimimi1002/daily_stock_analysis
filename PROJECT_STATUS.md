@@ -1,6 +1,6 @@
 # Project Status
 
-> Last updated: 2026-08-22 (Asia/Shanghai)
+> Last updated: 2026-08-23 (Asia/Shanghai)
 >
 > Codex workflow rule: read this file before substantial project work and
 > update it after every completed material task. Complete safe in-scope work
@@ -142,6 +142,39 @@
   1 skipped, 4 deselected and 534 subtests passed; Docker, AI governance and
   Change Detection passed, while Web and desktop jobs were path-rule skips.
   Phase 1 is merged but still does not provide unattended real acquisition.
+
+## Private acquisition phase 1 (2026-08-23)
+
+- Baseline: `main@af87ad6a5660c028359ae6e37f76936ccc8ed825`; research
+  branch: `codex/private-acquisition-phase1`. Scope is limited to a manual,
+  explicit-network research coordinator, synthetic tests and documentation.
+- A same-day Private request fixes the exact V2.1 Universe and hash, explicit
+  Private-only provider-terms boundary, and complete dual-source reviewed
+  corporate-action evidence. The command then fetches one verified
+  Baostock/AKShare-Sina calendar and one Baostock-primary/AKShare-Sina-cross
+  raw-unadjusted 61-session T-1 pair per Universe symbol. It performs no
+  fallback, retry, history backfill, model run or production action.
+- The merged prospective collector remains the only writer. It reruns every
+  frozen calendar/raw-history/corporate-action contract, binds one
+  `shared_evidence_sha256` to both models, atomically creates a date-unique
+  Private archive and emits only the existing sanitized Public manifest.
+  Identical reruns return `exists`; changed, corrupt or incomplete same-day
+  evidence is never overwritten or replaced by an old success.
+- The raw-history and corporate-action decisions remain **CONDITIONAL PASS**.
+  The accepted corporate-action contract requires non-empty dual-source event
+  evidence and has no reviewed-clear empty-event representation. This phase
+  therefore does not invent a no-event sentinel or shrink the Universe: a
+  complete same-day Private Universe/action upstream remains required before
+  a real batch can succeed. There is still no unattended end-to-end collector
+  or scheduler.
+- Public CI remains offline and uses fictional fixtures. No real batch, raw
+  market row, company-action detail, provider response or Secret is committed.
+  Short-term v1, Phase 2A, V2.1, `src/`, workflows, production providers,
+  Cloudflare, scheduler and Secret/Tushare boundaries are unchanged.
+- Local verification passes 13 acquisition tests and 19 existing shared-batch
+  tests. The focused Phase 1/2A/2B, unified-race, archive and outcomes
+  regression reports 262 passed and 1 skipped. Changed Python files pass
+  py_compile and flake8, and the full diff passes `git diff --check`.
 
 ## Market Screener slow-request diagnostics (2026-08-20)
 

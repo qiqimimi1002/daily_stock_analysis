@@ -482,6 +482,14 @@ binds the same immutable evidence hash to Short-term v1 and Phase 2A. It does
 not fetch providers, run either model, schedule collection or permit historical
 backfill. Only a sanitized manifest may cross the Public boundary.
 
+The explicit raw-history acquisition coordinator is documented in
+[`../PRIVATE_ACQUISITION.md`](../PRIVATE_ACQUISITION.md). It requires a
+same-day Private V2.1 Universe plus complete reviewed corporate-action
+evidence, fetches the fixed calendar and raw-history pairs with explicit
+network opt-in, and delegates the only write to the immutable shared-batch
+collector. It adds no scheduler or production path and cannot convert an empty
+corporate-action response into reviewed-clear evidence.
+
 ## Verification
 
 ```bash
