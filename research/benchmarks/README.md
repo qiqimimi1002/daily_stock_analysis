@@ -473,6 +473,15 @@ evidence. Its committed result is therefore `insufficient_evidence` with zero
 evaluable samples, not a model-performance claim. Benchmark 20d remains
 pending until its unified execution chain is implemented separately.
 
+## Prospective shared-batch capture
+
+The phase-1 Private collector is documented in
+[`../PROSPECTIVE_BATCH.md`](../PROSPECTIVE_BATCH.md). It validates one complete
+T-1, raw-unadjusted, dual-source and corporate-action evidence bundle, then
+binds the same immutable evidence hash to Short-term v1 and Phase 2A. It does
+not fetch providers, run either model, schedule collection or permit historical
+backfill. Only a sanitized manifest may cross the Public boundary.
+
 ## Verification
 
 ```bash
