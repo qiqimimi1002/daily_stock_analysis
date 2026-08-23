@@ -23,6 +23,9 @@ from research.benchmarks.trade_calendar import VerifiedTradeCalendar
 CORPORATE_ACTION_SCHEMA_VERSION = "phase2b-corporate-action-v1"
 CORPORATE_ACTION_CALCULATION_VERSION = "raw-price-action-overlay-v1"
 ACCEPTANCE_STATUS = "conditional_pass"
+QUERY_STATUS_SUCCESS = "success"
+QUERY_RESULT_EVENTS = "events"
+QUERY_RESULT_NO_EVENT = "no_event"
 ACTION_TYPES = {
     "cash_dividend",
     "stock_dividend_or_transfer",
@@ -249,6 +252,11 @@ class CorporateActionObservation:
     source_id: str
     source_data_as_of: datetime
     fetched_at: datetime
+    symbol: str
+    query_start: date | None
+    query_end: date | None
+    query_status: str
+    query_result: str
     events: Tuple[CorporateActionEvent, ...]
     content_sha256: str
 
@@ -260,6 +268,11 @@ class CorporateActionObservation:
         source_data_as_of: datetime | str,
         fetched_at: datetime | str,
         events: Sequence[CorporateActionEvent],
+        symbol: str | None = None,
+        query_start: date | str | None = None,
+        query_end: date | str | None = None,
+        query_status: str = QUERY_STATUS_SUCCESS,
+        query_result: str | None = None,
     ) -> "CorporateActionObservation":
         source = str(source_id or "").strip()
         if not source:
@@ -268,6 +281,11 @@ class CorporateActionObservation:
         fetched = _time(fetched_at, field="fetched_at")
         if as_of > fetched:
             raise CorporateActionContractError("source_data_as_of cannot follow fetched_at")
+        status = str(query_status or "").strip()
+        if status != QUERY_STATUS_SUCCESS:
+            raise CorporateActionContractError(
+                "corporate-action query must complete successfully"
+            )
         normalized = tuple(events)
         keys = tuple((item.effective_date, item.action_type, item.semantic_sha256) for item in normalized)
         if keys != tuple(sorted(keys)):
@@ -275,15 +293,68 @@ class CorporateActionObservation:
         identities = tuple((item.effective_date, item.action_type) for item in normalized)
         if len(set(identities)) != len(identities):
             raise CorporateActionContractError("events cannot contain duplicate identities")
+        result = str(
+            query_result
+            if query_result is not None
+            else (QUERY_RESULT_EVENTS if normalized else "")
+        ).strip()
+        if result not in {QUERY_RESULT_EVENTS, QUERY_RESULT_NO_EVENT}:
+            raise CorporateActionContractError(
+                "query_result must explicitly be events or no_event"
+            )
+        code = str(symbol or "").strip()
+        if normalized:
+            event_symbols = {item.symbol for item in normalized}
+            if len(event_symbols) != 1:
+                raise CorporateActionContractError(
+                    "one observation must cover one symbol"
+                )
+            event_symbol = next(iter(event_symbols))
+            if code and code != event_symbol:
+                raise CorporateActionContractError(
+                    "observation symbol conflicts with events"
+                )
+            code = event_symbol
+            if result != QUERY_RESULT_EVENTS:
+                raise CorporateActionContractError(
+                    "no_event observation cannot contain event records"
+                )
+        elif result != QUERY_RESULT_NO_EVENT:
+            raise CorporateActionContractError(
+                "events query result requires event records"
+            )
+        if not _SYMBOL_RE.fullmatch(code):
+            raise CorporateActionContractError("symbol must contain six digits")
+        start = _date(query_start, field="query_start", nullable=True)
+        end = _date(query_end, field="query_end", nullable=True)
+        if result == QUERY_RESULT_NO_EVENT:
+            if start is None or end is None:
+                raise CorporateActionContractError(
+                    "no_event requires an explicit query interval"
+                )
+            if start > end:
+                raise CorporateActionContractError(
+                    "query_start cannot follow query_end"
+                )
         payload = {
             "events": [item.evidence_dict() for item in normalized],
+            "query_end": end.isoformat() if end else None,
+            "query_result": result,
+            "query_start": start.isoformat() if start else None,
+            "query_status": status,
             "source_data_as_of": as_of.isoformat(timespec="seconds"),
             "source_id": source,
+            "symbol": code,
         }
         return cls(
             source_id=source,
             source_data_as_of=as_of,
             fetched_at=fetched,
+            symbol=code,
+            query_start=start,
+            query_end=end,
+            query_status=status,
+            query_result=result,
             events=normalized,
             content_sha256=hashlib.sha256(canonical_json_bytes(payload)).hexdigest(),
         )
@@ -378,16 +449,43 @@ def evaluate_corporate_actions(
         or calendar.cross_source_data_as_of > market_time
     ):
         raise CorporateActionContractError("calendar evidence must exist before market_data_at")
-    if not primary.events or not cross.events:
-        raise CorporateActionContractError("both action sources must return evidence")
+    bars = tuple(raw_bars)
+    dates = tuple(item.trade_date for item in bars)
+    if not dates or dates != tuple(sorted(set(dates))):
+        raise CorporateActionContractError("raw bars must be non-empty, unique and sorted")
+    if primary.symbol != cross.symbol:
+        raise CorporateActionContractError("corporate-action symbol conflict")
+    if primary.query_result != cross.query_result:
+        raise CorporateActionContractError(
+            "corporate-action source conflict or missing event"
+        )
 
-    left = tuple(item.semantic_sha256 for item in primary.events)
-    right = tuple(item.semantic_sha256 for item in cross.events)
-    if left != right:
-        raise CorporateActionContractError("corporate-action source conflict or missing event")
-    events = primary.events
-    if len({item.symbol for item in events}) != 1:
-        raise CorporateActionContractError("one acceptance manifest must cover one symbol")
+    no_event = primary.query_result == QUERY_RESULT_NO_EVENT
+    if no_event:
+        expected_interval = (dates[0], dates[-1])
+        primary_interval = (primary.query_start, primary.query_end)
+        cross_interval = (cross.query_start, cross.query_end)
+        if primary_interval != cross_interval:
+            raise CorporateActionContractError(
+                "no_event query intervals must match"
+            )
+        if primary_interval != expected_interval:
+            raise CorporateActionContractError(
+                "no_event query interval must cover the raw-history window"
+            )
+        events: Tuple[CorporateActionEvent, ...] = ()
+        review_status = "reviewed_clear"
+    else:
+        if not primary.events or not cross.events:
+            raise CorporateActionContractError("both action sources must return evidence")
+        left = tuple(item.semantic_sha256 for item in primary.events)
+        right = tuple(item.semantic_sha256 for item in cross.events)
+        if left != right:
+            raise CorporateActionContractError(
+                "corporate-action source conflict or missing event"
+            )
+        events = primary.events
+        review_status = "review_required"
     calendar_dates = set(calendar.trading_dates)
     for event in events:
         for label, value in (
@@ -401,10 +499,6 @@ def evaluate_corporate_actions(
             if value is not None and value not in calendar_dates:
                 raise CorporateActionContractError(f"{label} must use frozen trade calendar")
 
-    bars = tuple(raw_bars)
-    dates = tuple(item.trade_date for item in bars)
-    if dates != tuple(sorted(set(dates))):
-        raise CorporateActionContractError("raw bars must be unique and sorted")
     inactive_dates = {item.trade_date for item in bars if not item.is_trading}
     for event in events:
         if event.action_type != "suspension_resumption":
@@ -449,12 +543,16 @@ def evaluate_corporate_actions(
             "source_id": primary.source_id,
         },
         "public_payload_policy": "metadata_and_hashes_only_no_raw_event_or_market_rows",
+        "query_end": primary.query_end.isoformat() if primary.query_end else None,
+        "query_result": primary.query_result,
+        "query_start": primary.query_start.isoformat() if primary.query_start else None,
+        "review_status": review_status,
         "revision_boundary": "current_snapshot_no_historical_vintage_prospective_capture_required",
         "schema_version": CORPORATE_ACTION_SCHEMA_VERSION,
         "suspended_date_count": len(inactive_dates),
         "suspended_dates": [item.isoformat() for item in sorted(inactive_dates)],
         "suspension_price_policy": "inactive_provider_ohlc_discarded_no_forward_fill",
-        "symbol": events[0].symbol,
+        "symbol": primary.symbol,
     }
     manifest_hash = hashlib.sha256(canonical_json_bytes(manifest)).hexdigest()
     return CorporateActionAcceptance(

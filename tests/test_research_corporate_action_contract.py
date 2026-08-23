@@ -87,6 +87,21 @@ class CorporateActionContractTests(unittest.TestCase):
         values.update(overrides)
         return CorporateActionObservation.create(**values)
 
+    def _no_event_observation(self, source_id, **overrides):
+        values = {
+            "source_id": source_id,
+            "source_data_as_of": "2026-01-09T09:10:00+08:00",
+            "fetched_at": "2026-01-09T09:11:00+08:00",
+            "symbol": "600519",
+            "query_start": "2026-01-05",
+            "query_end": "2026-01-06",
+            "query_status": "success",
+            "query_result": "no_event",
+            "events": [],
+        }
+        values.update(overrides)
+        return CorporateActionObservation.create(**values)
+
     def _bar(self, trade_date, *, trading=True, carried=False):
         if not trading:
             price = "25.7" if carried else ""
@@ -122,6 +137,7 @@ class CorporateActionContractTests(unittest.TestCase):
     def test_cash_dividend_pair_passes_with_hash_only_manifest(self):
         result = self._evaluate()
         self.assertEqual(result.manifest["acceptance_status"], ACCEPTANCE_STATUS)
+        self.assertEqual(result.manifest["review_status"], "review_required")
         self.assertEqual(result.manifest["action_types"], ["cash_dividend"])
         self.assertNotIn("events", result.manifest)
         self.assertNotIn(b"24.5", result.serialize())
@@ -176,8 +192,58 @@ class CorporateActionContractTests(unittest.TestCase):
         self.assertEqual(result.manifest["suspension_price_policy"], "inactive_provider_ohlc_discarded_no_forward_fill")
 
     def test_missing_cross_event_fails_closed(self):
-        with self.assertRaisesRegex(CorporateActionContractError, "both action sources"):
+        with self.assertRaisesRegex(CorporateActionContractError, "explicitly"):
             self._evaluate(cross_events=[])
+
+    def test_two_successful_no_event_queries_are_reviewed_clear(self):
+        result = self._evaluate(
+            primary=self._no_event_observation(
+                "akshare.stock_dividend_cninfo.snapshot"
+            ),
+            cross=self._no_event_observation(
+                "akshare.stock_history_dividend_detail.sina.snapshot"
+            ),
+        )
+        self.assertEqual(result.manifest["review_status"], "reviewed_clear")
+        self.assertEqual(result.manifest["query_result"], "no_event")
+        self.assertEqual(result.manifest["action_count"], 0)
+        self.assertNotIn("events", result.manifest)
+
+    def test_event_and_no_event_conflict_fails_closed(self):
+        cross = self._no_event_observation(
+            "akshare.stock_history_dividend_detail.sina.snapshot"
+        )
+        with self.assertRaisesRegex(CorporateActionContractError, "source conflict"):
+            self._evaluate(cross=cross)
+
+    def test_failed_no_event_query_is_not_evidence(self):
+        with self.assertRaisesRegex(CorporateActionContractError, "complete successfully"):
+            self._no_event_observation(
+                "akshare.stock_dividend_cninfo.snapshot", query_status="failed"
+            )
+
+    def test_no_event_interval_mismatch_fails_closed(self):
+        primary = self._no_event_observation(
+            "akshare.stock_dividend_cninfo.snapshot"
+        )
+        cross = self._no_event_observation(
+            "akshare.stock_history_dividend_detail.sina.snapshot",
+            query_end="2026-01-07",
+        )
+        with self.assertRaisesRegex(CorporateActionContractError, "intervals must match"):
+            self._evaluate(primary=primary, cross=cross)
+
+    def test_no_event_future_source_snapshot_fails_closed(self):
+        primary = self._no_event_observation(
+            "akshare.stock_dividend_cninfo.snapshot",
+            source_data_as_of="2026-01-09T10:01:00+08:00",
+            fetched_at="2026-01-09T10:02:00+08:00",
+        )
+        cross = self._no_event_observation(
+            "akshare.stock_history_dividend_detail.sina.snapshot"
+        )
+        with self.assertRaisesRegex(CorporateActionContractError, "before market_data_at"):
+            self._evaluate(primary=primary, cross=cross)
 
     def test_date_conflict_fails_closed(self):
         conflicting = self._event(ex_date="2026-01-07")

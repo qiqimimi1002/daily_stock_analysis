@@ -22,6 +22,21 @@ The later raw-history and corporate-action source gates are both conditional
 research baselines. Corporate actions remain a separate overlay on immutable
 raw prices; they do not introduce adjusted bars or production behavior.
 
+Private acquisition accepts a same-day, Private-only full-market spot snapshot
+from an existing production spot provider and reuses the frozen V2.1 hard-filter
+adapter to create one stable Universe. The snapshot/config/source manifest and
+resulting code list are hash-bound to the same immutable batch consumed by
+Short-term v1 and Phase 2A; the Public manifest exposes only hashes and counts.
+The production Public result is not used as a substitute because it does not
+retain the complete full-market snapshot or full eligible code set.
+
+An empty corporate-action result is evidence only when both independent sources
+explicitly report a successful `no_event` query for the same symbol and exact
+raw-history interval. That path is `reviewed_clear` without a fabricated event.
+An event/no-event disagreement, failed source, interval mismatch, future source
+state, or incomplete proof remains fail-closed; real matched events remain
+`review_required` under the existing **CONDITIONAL PASS** boundary.
+
 This first V2.2 stage records the V2.1 observation list exactly as it existed
 when the signal was generated. It does not recalculate candidates and does not
 calculate forward returns, drawdowns, win rates, or trading points.

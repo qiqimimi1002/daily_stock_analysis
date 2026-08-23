@@ -148,9 +148,12 @@
 - Baseline: `main@af87ad6a5660c028359ae6e37f76936ccc8ed825`; research
   branch: `codex/private-acquisition-phase1`. Scope is limited to a manual,
   explicit-network research coordinator, synthetic tests and documentation.
-- A same-day Private request fixes the exact V2.1 Universe and hash, explicit
-  Private-only provider-terms boundary, and complete dual-source reviewed
-  corporate-action evidence. The command then fetches one verified
+- A same-day Private request now freezes a full-market spot snapshot from an
+  existing production spot provider and reuses the existing V2.1 hard-filter
+  adapter to derive the exact Universe. The full config, source timestamps,
+  row count, normalized snapshot hash, source-manifest hash, Universe codes and
+  Universe snapshot hash are bound into the one shared batch. The command then
+  fetches one verified
   Baostock/AKShare-Sina calendar and one Baostock-primary/AKShare-Sina-cross
   raw-unadjusted 61-session T-1 pair per Universe symbol. It performs no
   fallback, retry, history backfill, model run or production action.
@@ -161,20 +164,26 @@
   Identical reruns return `exists`; changed, corrupt or incomplete same-day
   evidence is never overwritten or replaced by an old success.
 - The raw-history and corporate-action decisions remain **CONDITIONAL PASS**.
-  The accepted corporate-action contract requires non-empty dual-source event
-  evidence and has no reviewed-clear empty-event representation. This phase
-  therefore does not invent a no-event sentinel or shrink the Universe: a
-  complete same-day Private Universe/action upstream remains required before
-  a real batch can succeed. There is still no unattended end-to-end collector
-  or scheduler.
+  Corporate-action observations can now express an explicit successful
+  `no_event` query. `reviewed_clear` requires two independent successful
+  queries for the same symbol and exact raw-history interval; it contains no
+  fabricated event. A source failure, event/no-event disagreement, interval or
+  time conflict remains fail-closed, while matched real events remain
+  `review_required`. Universe and action evidence must cover the same complete
+  code set; no module may rebuild or shrink it. There is still no unattended
+  end-to-end collector or scheduler.
 - Public CI remains offline and uses fictional fixtures. No real batch, raw
   market row, company-action detail, provider response or Secret is committed.
   Short-term v1, Phase 2A, V2.1, `src/`, workflows, production providers,
   Cloudflare, scheduler and Secret/Tushare boundaries are unchanged.
-- Local verification passes 13 acquisition tests and 19 existing shared-batch
-  tests. The focused Phase 1/2A/2B, unified-race, archive and outcomes
-  regression reports 262 passed and 1 skipped. Changed Python files pass
-  py_compile and flake8, and the full diff passes `git diff --check`.
+- The two previously identified P1 prerequisites (legitimate dual-source
+  no-event review and Private V2.1 Universe acquisition) are closed at the
+  offline contract level. No real full-Universe request or restricted data was
+  used; the next gate is one explicitly authorized, Private-only prospective
+  single-day acceptance run. Local focused contract tests pass 70/70; the
+  Phase 1/2A/2B, Short-term, race, archive and outcomes regression passes
+  270 with 1 skipped. Changed Python files pass py_compile and flake8. Draft
+  PR #28 remains unmerged.
 
 ## Market Screener slow-request diagnostics (2026-08-20)
 

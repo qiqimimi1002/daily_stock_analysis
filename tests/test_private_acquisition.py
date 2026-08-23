@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from dataclasses import asdict
 from datetime import datetime
 import hashlib
 import json
@@ -15,7 +16,6 @@ from research.benchmarks.trade_calendar import (
     CalendarSourceObservation,
     VerifiedTradeCalendar,
 )
-from research.benchmarks.universe import UNIVERSE_CONTRACT_VERSION, universe_config_hash
 from research.private_acquisition import (
     ACQUISITION_REQUEST_SCHEMA_VERSION,
     PRIVATE_ARCHIVE_POLICY,
@@ -23,10 +23,12 @@ from research.private_acquisition import (
     acquire_private_shared_batch,
 )
 from research.prospective_batch import (
+    PRIVATE_UNIVERSE_SOURCE_SCHEMA_VERSION,
     ProspectiveBatchConflictError,
     ProspectiveBatchError,
     _raw_observation,
 )
+from src.services.market_screener import ScreeningConfig
 from tests.test_prospective_batch_contract import (
     CUTOFF,
     RAW_DATES,
@@ -41,28 +43,72 @@ OBSERVED_AT = datetime(2026, 3, 4, 9, 31, 2, tzinfo=SHANGHAI_TZ)
 
 def _request() -> dict:
     bundle = _bundle()
-    universe = {
-        "config_hash": universe_config_hash(),
-        "contract_version": UNIVERSE_CONTRACT_VERSION,
-        "stock_codes": list(SYMBOLS),
-    }
-    universe["snapshot_sha256"] = hashlib.sha256(
-        canonical_json_bytes(universe)
-    ).hexdigest()
+    spot_rows = [
+        {
+            "amount": 300_000_000,
+            "close": 10.0,
+            "code": code,
+            "name": f"测试{code}",
+            "pct_change": 0.0,
+            "prev_close": 10.0,
+            "turnover": 2.0,
+            "volume": 30_000_000,
+        }
+        for code in SYMBOLS
+    ]
+    canonical_spot = [
+        {
+            "code": row["code"],
+            "name": row["name"],
+            "close": row["close"],
+            "pct_change": row["pct_change"],
+            "volume": row["volume"],
+            "amount": row["amount"],
+            "turnover": row["turnover"],
+        }
+        for row in spot_rows
+    ]
+    config = asdict(ScreeningConfig())
+    actions = {}
+    for code in SYMBOLS:
+        actions[code] = deepcopy(bundle["symbols"][code]["corporate_actions"])
+        for role in ("primary", "cross"):
+            actions[code][role].update(
+                events=[],
+                query_end=CUTOFF,
+                query_result="no_event",
+                query_start=RAW_DATES[0],
+                query_status="success",
+                symbol=code,
+            )
     return {
-        "corporate_actions": {
-            code: deepcopy(bundle["symbols"][code]["corporate_actions"])
-            for code in SYMBOLS
-        },
+        "corporate_actions": actions,
         "private_archive_policy": {
             "corporate_actions": PRIVATE_ARCHIVE_POLICY,
             "provider_terms_reviewed_for_private_capture": True,
             "raw_history": PRIVATE_ARCHIVE_POLICY,
+            "universe": PRIVATE_ARCHIVE_POLICY,
         },
         "request_at": bundle["request_at"],
         "schema_version": ACQUISITION_REQUEST_SCHEMA_VERSION,
         "signal_date": SIGNAL_DATE.isoformat(),
-        "universe": universe,
+        "universe_source": {
+            "config": config,
+            "config_sha256": hashlib.sha256(
+                canonical_json_bytes(config)
+            ).hexdigest(),
+            "fetched_at": "2026-03-04T08:11:00+08:00",
+            "generated_at": "2026-03-04T08:12:00+08:00",
+            "model_version": "V2.1",
+            "row_count": len(spot_rows),
+            "schema_version": PRIVATE_UNIVERSE_SOURCE_SCHEMA_VERSION,
+            "source_data_as_of": "2026-03-04T08:10:00+08:00",
+            "source_id": "akshare_eastmoney",
+            "spot_content_sha256": hashlib.sha256(
+                canonical_json_bytes(canonical_spot)
+            ).hexdigest(),
+            "spot_rows": spot_rows,
+        },
     }
 
 
@@ -161,6 +207,18 @@ def test_success_acquires_one_t_minus_one_pair_per_shared_universe_symbol(tmp_pa
     bindings = result.capture.public_manifest["model_bindings"]
     assert len({row["batch_id"] for row in bindings.values()}) == 1
     assert len({row["shared_evidence_sha256"] for row in bindings.values()}) == 1
+    assert "universe_source_manifest_sha256" in result.capture.public_manifest
+    private = json.loads(
+        (result.capture.archive_dir / "private-batch.json").read_text(encoding="utf-8")
+    )
+    assert (
+        private["evidence"]["universe"]["source_manifest"]["manifest_sha256"]
+        == result.capture.public_manifest["universe_source_manifest_sha256"]
+    )
+    assert all(
+        row["corporate_action_acceptance"]["review_status"] == "reviewed_clear"
+        for row in private["evidence"]["symbols"].values()
+    )
 
 
 def test_network_requires_explicit_opt_in_before_any_source_call(tmp_path) -> None:
@@ -212,7 +270,9 @@ def test_same_day_content_change_is_rejected_without_overwrite(tmp_path) -> None
     changed = _request()
     for code in SYMBOLS:
         for role in ("primary", "cross"):
-            changed["corporate_actions"][code][role]["events"][0]["cash_per_share"] = "0.6"
+            changed["corporate_actions"][code][role]["fetched_at"] = (
+                "2026-03-04T09:09:00+08:00"
+            )
     with pytest.raises(ProspectiveBatchConflictError):
         _acquire(tmp_path, request=changed)
     assert (first.capture.archive_dir / "private-batch.json").read_bytes() == original
@@ -267,7 +327,37 @@ def test_public_manifest_is_redacted(tmp_path) -> None:
 
 def test_universe_hash_mismatch_fails_before_network(tmp_path) -> None:
     request = _request()
-    request["universe"]["snapshot_sha256"] = "0" * 64
+    request["universe_source"]["spot_content_sha256"] = "0" * 64
+    fetch_calendar, fetch_raw, calls = _sources()
+    with pytest.raises(PrivateAcquisitionError) as exc_info:
+        _acquire(
+            tmp_path,
+            request=request,
+            calendar_fetcher=fetch_calendar,
+            raw_history_fetcher=fetch_raw,
+        )
+    assert exc_info.value.reason_code == "universe_contract_failed"
+    assert calls == {"calendar": 0, "raw": []}
+
+
+def test_old_universe_snapshot_fails_before_network(tmp_path) -> None:
+    request = _request()
+    request["universe_source"]["source_data_as_of"] = "2026-03-03T15:00:00+08:00"
+    fetch_calendar, fetch_raw, calls = _sources()
+    with pytest.raises(PrivateAcquisitionError) as exc_info:
+        _acquire(
+            tmp_path,
+            request=request,
+            calendar_fetcher=fetch_calendar,
+            raw_history_fetcher=fetch_raw,
+        )
+    assert exc_info.value.reason_code == "universe_time_contract_failed"
+    assert calls == {"calendar": 0, "raw": []}
+
+
+def test_incomplete_universe_snapshot_fails_before_network(tmp_path) -> None:
+    request = _request()
+    request["universe_source"]["row_count"] += 1
     fetch_calendar, fetch_raw, calls = _sources()
     with pytest.raises(PrivateAcquisitionError) as exc_info:
         _acquire(
@@ -303,6 +393,9 @@ def test_non_trading_signal_date_fails_before_raw_fetch(tmp_path) -> None:
 def test_post_close_run_still_refuses_signal_date_bar(tmp_path) -> None:
     request = _request()
     request["request_at"] = "2026-03-04T15:01:00+08:00"
+    request["universe_source"]["source_data_as_of"] = "2026-03-04T15:02:00+08:00"
+    request["universe_source"]["fetched_at"] = "2026-03-04T15:03:00+08:00"
+    request["universe_source"]["generated_at"] = "2026-03-04T15:04:00+08:00"
     fetch_calendar, fetch_raw, calls = _sources()
     with pytest.raises(PrivateAcquisitionError) as exc_info:
         _acquire(
