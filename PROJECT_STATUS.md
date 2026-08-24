@@ -1,6 +1,39 @@
 # Project Status
 
-> Last updated: 2026-08-22 (Asia/Shanghai)
+## Qlib Alpha158 + DoubleEnsemble research shadow (2026-08-24)
+
+- Baseline: `origin/main@af87ad6a5660c028359ae6e37f76936ccc8ed825`;
+  branch: `codex/qlib-alpha158-doubleensemble`. This is an independent
+  research-only integration. It does not replace V2.1 or touch production
+  screening, Signal Monitor, notifications, scheduler, Cloudflare, workflows,
+  Tushare/Private real-time boundaries, PR #28, or PR #29.
+- Uses `pyqlib==0.9.7`, official `Alpha158`, official `DEnsembleModel`, and the
+  exact official Alpha158/DoubleEnsemble model kwargs with no tuning or search.
+  Qlib's MIT notice is retained in `THIRD_PARTY_NOTICES.md`.
+- Historical raw-unadjusted daily inputs cover `2023-09-01..2026-08-21`; the
+  verified calendar extends to `2026-08-24`. The provider contains 3,046
+  eligible instruments, 2,256,450 rows, and the Shanghai/Shenzhen main-board
+  prefixes only, excluding ST/*ST, suspended, ChiNext, STAR, and BSE.
+- Strict chronological segments: train `2024-01-02..2024-12-25`, validation
+  `2025-01-02..2025-06-25`, test `2025-07-01..2026-08-21`, with a two-session
+  label embargo. Candidate date T uses only completed T-1 data.
+- Alpha158 completed all 158 features. DoubleEnsemble produced 844,501 test
+  predictions and non-empty Top-5 batches on 280/280 test dates. Latest
+  example for `2026-08-24` uses cutoff `2026-08-21`.
+- After 30 bps, mean net 1d/3d/5d/10d returns are
+  `1.2057%/1.6382%/1.6412%/1.5079%`; mean HS300 excess is
+  `1.1471%/1.4563%/1.3223%/0.9025%`. Against frozen V2.1, mean net deltas are
+  `+1.5467/+1.6910/+1.5435/+1.1297` percentage points.
+- Evidence is **INSUFFICIENT EVIDENCE**: the historical backfill uses a
+  current-active universe, lacks point-in-time constituent/name vintage and
+  immutable dual-source coverage, and Pytdx rows lack historical turnover for
+  the V2.1 baseline. The 3d/5d/10d net medians are negative and 10d maximum
+  drawdown is 92.1676%. Proceed, if accepted, only to a real prospective
+  research shadow; do not promote to production.
+- Frozen aggregate evidence:
+  `research/results/qlib_alpha158_doubleensemble_oos_2026-08-24.json`.
+
+> Last updated: 2026-08-24 (Asia/Shanghai)
 >
 > Codex workflow rule: read this file before substantial project work and
 > update it after every completed material task. Complete safe in-scope work
