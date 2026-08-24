@@ -3,8 +3,11 @@
 ## Qlib Alpha158 + DoubleEnsemble research shadow (2026-08-24)
 
 - Baseline: `origin/main@af87ad6a5660c028359ae6e37f76936ccc8ed825`;
-  branch: `codex/qlib-alpha158-doubleensemble`. This is an independent
-  research-only integration. It does not replace V2.1 or touch production
+  branch: `codex/qlib-alpha158-doubleensemble`; implementation commit
+  `24fa7973454dc2d75f9c107b508801d52f3eb217`; Draft PR
+  [#30](https://github.com/qiqimimi1002/daily_stock_analysis/pull/30).
+  This is an independent research-only integration. It does not replace V2.1
+  or touch production
   screening, Signal Monitor, notifications, scheduler, Cloudflare, workflows,
   Tushare/Private real-time boundaries, PR #28, or PR #29.
 - Uses `pyqlib==0.9.7`, official `Alpha158`, official `DEnsembleModel`, and the
