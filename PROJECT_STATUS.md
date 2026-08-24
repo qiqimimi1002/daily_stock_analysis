@@ -1,6 +1,6 @@
 # Project Status
 
-> Last updated: 2026-08-23 (Asia/Shanghai)
+> Last updated: 2026-08-24 (Asia/Shanghai)
 >
 > Codex workflow rule: read this file before substantial project work and
 > update it after every completed material task. Complete safe in-scope work
@@ -59,6 +59,12 @@
   `cca437f42688e12aca81bfed680631abb400a6f4` to the final readback
   `36ef35f3ee12fc3894db185a9f208be72acdab44`; this Dashboard work did not push
   to or edit that branch.
+- The 2026-08-24 minimal UI correction no longer infers a non-trading day when
+  today's result is not yet published. The page instead shows the most recent
+  published result, maps engineering reason codes to short Chinese labels, and
+  describes Public data sources without exposing long Raw URLs. The adapter
+  retains the original reason codes, and no calendar or market request was
+  added.
 
 ## Short-term v1 first-stage research model (2026-08-21)
 

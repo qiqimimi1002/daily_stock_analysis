@@ -9,6 +9,7 @@ import {
   readDashboardData,
   screeningUrls,
 } from '../data-adapter.mjs';
+import { reasonLabel, sourceLabel, stateLabel } from '../presentation.mjs';
 
 const manifest = (overrides = {}) => ({
   trade_date: '2026-08-21', run_number: 59, status: 'success', screening_outcome: 'success',
@@ -137,10 +138,29 @@ test('fixture mode is explicit and makes no network call', async () => {
   assert.equal(output.screening.candidates.every(({ code }) => code.startsWith('DEMO-')), true);
 });
 
+test('presentation maps engineering states and reason codes to concise Chinese', () => {
+  assert.equal(reasonLabel('public_short_term_candidate_rank_unavailable'), '暂无公开排名');
+  assert.equal(reasonLabel('public_candidate_outcome_unavailable'), '暂无数据');
+  assert.equal(reasonLabel('outcome_20d_not_mature', 'pending'), '未到期');
+  assert.equal(reasonLabel('unknown_pending_reason', 'pending'), '未到期');
+  assert.equal(stateLabel('partial_success'), '部分完成');
+  assert.equal(stateLabel('verified'), '已校验');
+});
+
+test('presentation replaces Raw URLs with ordinary source descriptions', () => {
+  const screening = sourceLabel('https://raw.githubusercontent.com/qiqimimi1002/daily_stock_analysis/screening-results/latest/manifest.json');
+  const research = sourceLabel('https://raw.githubusercontent.com/qiqimimi1002/daily_stock_analysis/main/research/results/example.json');
+  assert.equal(screening, 'Public screening-results 已发布结果');
+  assert.equal(research, '脱敏 research/results 研究结果');
+  assert.equal(screening.includes('https://'), false);
+  assert.equal(research.includes('raw.githubusercontent.com'), false);
+});
+
 test('static implementation has no backend, provider, workflow, model or screening trigger calls', async () => {
   const source = await Promise.all([
     readFile(new URL('../app.mjs', import.meta.url), 'utf8'),
     readFile(new URL('../data-adapter.mjs', import.meta.url), 'utf8'),
+    readFile(new URL('../presentation.mjs', import.meta.url), 'utf8'),
   ]).then((parts) => parts.join('\n').toLowerCase());
   for (const forbidden of ['/api/', 'tushare', 'akshare', 'baostock', 'workflow_dispatch', 'screen_market', 'run_screen', 'calculate_model', 'generate_universe', '../src/']) {
     assert.equal(source.includes(forbidden), false, forbidden);
