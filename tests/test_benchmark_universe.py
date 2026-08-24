@@ -5,7 +5,11 @@ import unittest
 
 import pandas as pd
 
-from research.benchmarks.universe import UniverseStatus, evaluate_v21_universe
+from research.benchmarks.universe import (
+    UniverseStatus,
+    evaluate_v21_universe,
+    v21_hard_filter_codes,
+)
 from src.services.market_screener import ScreeningConfig, apply_spot_filters
 
 
@@ -25,6 +29,22 @@ def _row(code: str, name: str = "测试股份", **overrides) -> dict:
 
 
 class BenchmarkUniverseTests(unittest.TestCase):
+    def test_private_adapter_reuses_complete_v2_1_hard_filter(self) -> None:
+        frame = pd.DataFrame(
+            [_row("600100"), _row("000100"), _row("300100")]
+        )
+        expected = v21_hard_filter_codes(frame)
+        decisions = evaluate_v21_universe(
+            frame,
+            history_rows_by_code={code: 61 for code in expected},
+        )
+        actual = tuple(
+            item.stock_code
+            for item in decisions
+            if item.status is UniverseStatus.ELIGIBLE
+        )
+        self.assertEqual(actual, expected)
+
     def test_main_board_rows_use_v2_1_hard_filter_as_eligibility_truth(self) -> None:
         frame = pd.DataFrame(
             [

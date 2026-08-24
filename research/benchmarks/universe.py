@@ -92,6 +92,29 @@ def _is_finite_number(value: Any) -> bool:
         return False
 
 
+def v21_hard_filter_codes(
+    spot_frame: pd.DataFrame,
+    *,
+    config: Optional[ScreeningConfig] = None,
+) -> Tuple[str, ...]:
+    """Return the complete, stable V2.1 hard-filter code set for one snapshot."""
+
+    selected_config = config or ScreeningConfig()
+    normalized = normalize_spot_frame(spot_frame)
+    if normalized["code"].duplicated().any():
+        raise ValueError("universe input must contain one row per stock_code")
+    full_universe_config = replace(
+        selected_config,
+        preselect_limit=max(
+            selected_config.preselect_limit,
+            selected_config.top_n,
+            len(normalized),
+        ),
+    )
+    filtered = apply_spot_filters(spot_frame, full_universe_config)
+    return tuple(sorted(set(filtered["code"].astype(str))))
+
+
 def evaluate_v21_universe(
     spot_frame: pd.DataFrame,
     *,
@@ -110,16 +133,7 @@ def evaluate_v21_universe(
     if normalized["code"].duplicated().any():
         raise ValueError("universe input must contain one row per stock_code")
 
-    full_universe_config = replace(
-        selected_config,
-        preselect_limit=max(
-            selected_config.preselect_limit,
-            selected_config.top_n,
-            len(normalized),
-        ),
-    )
-    filtered = apply_spot_filters(spot_frame, full_universe_config)
-    hard_filter_codes = set(filtered["code"].astype(str))
+    hard_filter_codes = set(v21_hard_filter_codes(spot_frame, config=selected_config))
 
     decisions = []
     numeric_fields = ("close", "pct_change", "volume", "amount", "turnover")

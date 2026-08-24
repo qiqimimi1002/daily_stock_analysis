@@ -61,6 +61,7 @@ CALCULATION_VERSION = "shared-evidence-capture-v1"
 REQUIRED_HISTORY_OBSERVATIONS = 61
 PUBLIC_PAYLOAD_POLICY = "metadata_hashes_counts_status_reason_codes_only"
 MODEL_CONSUMERS = (SHORT_TERM_MODEL, LOW_VOLATILITY_MODEL)
+PRIVATE_UNIVERSE_SOURCE_SCHEMA_VERSION = "private-v21-universe-source-v1"
 _CODE_RE = re.compile(r"^[0-9]{6}$")
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
@@ -315,6 +316,11 @@ def _corporate_action_observation(
             source_id=item.get("source_id"),
             source_data_as_of=item.get("source_data_as_of"),
             fetched_at=item.get("fetched_at"),
+            symbol=item.get("symbol") or symbol,
+            query_start=item.get("query_start"),
+            query_end=item.get("query_end"),
+            query_status=item.get("query_status"),
+            query_result=item.get("query_result"),
             events=events,
         )
     except CorporateActionContractError as exc:
@@ -345,8 +351,13 @@ def _action_observation_payload(value: CorporateActionObservation) -> Dict[str, 
         "content_sha256": value.content_sha256,
         "events": [item.evidence_dict() for item in value.events],
         "fetched_at": value.fetched_at.isoformat(timespec="seconds"),
+        "query_end": value.query_end.isoformat() if value.query_end else None,
+        "query_result": value.query_result,
+        "query_start": value.query_start.isoformat() if value.query_start else None,
+        "query_status": value.query_status,
         "source_data_as_of": value.source_data_as_of.isoformat(timespec="seconds"),
         "source_id": value.source_id,
+        "symbol": value.symbol,
     }
 
 
@@ -504,11 +515,90 @@ def _validated_content(
             "universe_contract_failed", "V2.1 Universe config hash mismatch"
         )
     codes = _stock_codes(universe.get("stock_codes"))
+    source_manifest_value = universe.get("source_manifest")
+    source_manifest = None
+    if source_manifest_value is not None:
+        source_manifest_item = _mapping(
+            source_manifest_value, field="universe.source_manifest"
+        )
+        source_manifest_source = {
+            key: source_manifest_item.get(key)
+            for key in (
+                "config_sha256",
+                "fetched_at",
+                "generated_at",
+                "model_version",
+                "row_count",
+                "schema_version",
+                "source_data_as_of",
+                "source_id",
+                "spot_content_sha256",
+                "universe_config_hash",
+            )
+        }
+        if (
+            source_manifest_source["schema_version"]
+            != PRIVATE_UNIVERSE_SOURCE_SCHEMA_VERSION
+            or source_manifest_source["model_version"] != "V2.1"
+            or source_manifest_source["universe_config_hash"]
+            != expected_config_hash
+            or not isinstance(source_manifest_source["row_count"], int)
+            or isinstance(source_manifest_source["row_count"], bool)
+            or source_manifest_source["row_count"] < len(codes)
+        ):
+            raise ProspectiveBatchError(
+                "universe_contract_failed", "Private Universe source manifest is invalid"
+            )
+        for key in ("config_sha256", "spot_content_sha256"):
+            _sha256(
+                source_manifest_source[key],
+                field=f"universe.source_manifest.{key}",
+            )
+        source_as_of = _time(
+            source_manifest_source["source_data_as_of"],
+            field="universe.source_manifest.source_data_as_of",
+        )
+        source_fetched = _time(
+            source_manifest_source["fetched_at"],
+            field="universe.source_manifest.fetched_at",
+        )
+        source_generated = _time(
+            source_manifest_source["generated_at"],
+            field="universe.source_manifest.generated_at",
+        )
+        if not (
+            source_as_of <= source_fetched
+            and request_at <= source_fetched <= source_generated <= market_data_at
+            and source_as_of.date()
+            == source_fetched.date()
+            == source_generated.date()
+            == signal_date
+        ):
+            raise ProspectiveBatchError(
+                "time_contract_failed", "Private Universe source times are invalid"
+            )
+        expected_manifest_hash = _content_sha256(source_manifest_source)
+        if (
+            _sha256(
+                source_manifest_item.get("manifest_sha256"),
+                field="universe.source_manifest.manifest_sha256",
+            )
+            != expected_manifest_hash
+        ):
+            raise ProspectiveBatchError(
+                "universe_contract_failed", "Private Universe source manifest hash mismatch"
+            )
+        source_manifest = {
+            **source_manifest_source,
+            "manifest_sha256": expected_manifest_hash,
+        }
     universe_snapshot = {
         "config_hash": expected_config_hash,
         "contract_version": UNIVERSE_CONTRACT_VERSION,
         "stock_codes": list(codes),
     }
+    if source_manifest is not None:
+        universe_snapshot["source_manifest"] = source_manifest
     universe_snapshot_hash = _content_sha256(universe_snapshot)
 
     calendar = _calendar(
@@ -612,6 +702,10 @@ def _validated_content(
         "universe_contract_version": UNIVERSE_CONTRACT_VERSION,
         "universe_snapshot_sha256": universe_snapshot_hash,
     }
+    if source_manifest is not None:
+        public_summary["universe_source_manifest_sha256"] = source_manifest[
+            "manifest_sha256"
+        ]
     return private_payload, public_summary
 
 

@@ -1,6 +1,6 @@
 # Project Status
 
-> Last updated: 2026-08-22 (Asia/Shanghai)
+> Last updated: 2026-08-24 (Asia/Shanghai)
 >
 > Codex workflow rule: read this file before substantial project work and
 > update it after every completed material task. Complete safe in-scope work
@@ -142,6 +142,66 @@
   1 skipped, 4 deselected and 534 subtests passed; Docker, AI governance and
   Change Detection passed, while Web and desktop jobs were path-rule skips.
   Phase 1 is merged but still does not provide unattended real acquisition.
+
+## Private acquisition phase 1 (2026-08-23)
+
+- Baseline: `main@af87ad6a5660c028359ae6e37f76936ccc8ed825`; research
+  branch: `codex/private-acquisition-phase1`. Scope is limited to a manual,
+  explicit-network research coordinator, synthetic tests and documentation.
+- A same-day Private request now freezes a full-market spot snapshot from an
+  existing production spot provider and reuses the existing V2.1 hard-filter
+  adapter to derive the exact Universe. The full config, source timestamps,
+  row count, normalized snapshot hash, source-manifest hash, Universe codes and
+  Universe snapshot hash are bound into the one shared batch. The command then
+  fetches one verified
+  Baostock/AKShare-Sina calendar and one Baostock-primary/AKShare-Sina-cross
+  raw-unadjusted 61-session T-1 pair per Universe symbol. It performs no
+  fallback, retry, history backfill, model run or production action.
+- The merged prospective collector remains the only writer. It reruns every
+  frozen calendar/raw-history/corporate-action contract, binds one
+  `shared_evidence_sha256` to both models, atomically creates a date-unique
+  Private archive and emits only the existing sanitized Public manifest.
+  Identical reruns return `exists`; changed, corrupt or incomplete same-day
+  evidence is never overwritten or replaced by an old success.
+- The raw-history and corporate-action decisions remain **CONDITIONAL PASS**.
+  Corporate-action observations can now express an explicit successful
+  `no_event` query. `reviewed_clear` requires two independent successful
+  queries for the same symbol and exact raw-history interval; it contains no
+  fabricated event. A source failure, event/no-event disagreement, interval or
+  time conflict remains fail-closed, while matched real events remain
+  `review_required`. Universe and action evidence must cover the same complete
+  code set; no module may rebuild or shrink it. There is still no unattended
+  end-to-end collector or scheduler.
+- Public CI remains offline and uses fictional fixtures. No real batch, raw
+  market row, company-action detail, provider response or Secret is committed.
+  Short-term v1, Phase 2A, V2.1, `src/`, workflows, production providers,
+  Cloudflare, scheduler and Secret/Tushare boundaries are unchanged.
+- 2026-08-24 was `NOT_EXECUTED / missed_prospective_window`, reason
+  `PRIVATE_UPSTREAM_NOT_TRIGGERED`: no same-day Private request or immutable
+  archive existed before the 10:00 production screening. The date must not be
+  counted in model win-rate, return or benchmark evidence, and no backfill is
+  permitted.
+- The Draft PR now adds only the missing manual upstream command. Before the
+  formal screening it calls the production primary full-market spot endpoint
+  without fallback, freezes the complete spot rows and explicit V2.1
+  Universe/hash, obtains exact-interval CNINFO/Sina corporate-action evidence
+  with explicit successful `no_event`, and writes the repository-external
+  `private-acquisition-request-v2` exactly once. The existing acquisition
+  remains the sole history/calendar/shared-batch path.
+- Both manual commands require explicit network opt-in and a caller-supplied
+  Asia/Shanghai deadline. Reaching 10:00, a source/query failure, incomplete or
+  conflicting evidence, an explicit Universe/hash mismatch, a changed same-day
+  request, or an archive conflict fails closed. There is still no scheduler,
+  production integration or real batch; the next gate is one controlled
+  2026-08-25 run started between 09:40 and 09:50 and completed before 10:00.
+- The two previously identified P1 prerequisites (legitimate dual-source
+  no-event review and Private V2.1 Universe acquisition) are closed at the
+  offline contract level. No real full-Universe request or restricted data was
+  used; the next gate is one explicitly authorized, Private-only prospective
+  single-day acceptance run. The current request/acquisition and related
+  Phase 1/2A/2B, Short-term, race, archive, V2.1, outcomes and Public-workflow
+  regression passes 275/275. Changed Python files pass py_compile, flake8 and
+  diff-check. Draft PR #28 remains unmerged.
 
 ## Market Screener slow-request diagnostics (2026-08-20)
 

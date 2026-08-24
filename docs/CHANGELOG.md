@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - [修复] 统一赛马框架将数据内容截止时间限制在决策快照之前，并以逻辑信号ID配合精确快照哈希避免重跑重复计数。
 - [新功能] 冻结Low Volatility 60日项目基准的公式、61收盘价历史契约、公司行为审查、Universe身份及离线确定性测试，不运行真实全市场信号。
 - [新功能] 新增研究专用的前瞻式共同样本采集合同，以私有不可变归档和公开脱敏 manifest 为 Short-term v1 与 Phase 2A 固定同一批证据。
+- [新功能] 新增研究专用的显式 Private acquisition 入口，冻结同日完整 V2.1 Universe，支持双源明确 no-event 审核，并采集 T-1 未复权日线交由共同 batch 不可变归档。
+- [修复] 为研究专用 Private acquisition 增加筛选前显式请求准备入口、完整 Universe/hash 绑定和 10:00 截止门，避免未触发上游时静默错过 prospective 样本。
 
 ## [3.28.0] - 2026-07-26
 
