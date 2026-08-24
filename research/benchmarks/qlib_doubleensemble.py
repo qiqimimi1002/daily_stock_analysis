@@ -515,12 +515,12 @@ def build_qlib_provider(
     return manifest
 
 
-def fit_and_predict(
+def fit_model_and_predict(
     *,
     provider_uri: Path,
     splits: TimeSplits,
-) -> tuple[pd.Series, dict[str, Any]]:
-    """Fit official Alpha158 + DoubleEnsemble and predict only the test segment."""
+) -> tuple[Any, pd.Series, dict[str, Any]]:
+    """Fit the official model once and return it with test predictions."""
 
     try:
         import qlib
@@ -598,7 +598,86 @@ def fit_and_predict(
         "segments": splits.to_dict(),
         "test_feature_non_null_rate": round(float(test_features.notna().mean().mean()), 8),
     }
+    return model, predictions, run_manifest
+
+
+def fit_and_predict(
+    *,
+    provider_uri: Path,
+    splits: TimeSplits,
+) -> tuple[pd.Series, dict[str, Any]]:
+    """Fit official Alpha158 + DoubleEnsemble and predict only the test segment."""
+
+    _, predictions, run_manifest = fit_model_and_predict(
+        provider_uri=provider_uri,
+        splits=splits,
+    )
     return predictions, run_manifest
+
+
+def predict_with_frozen_model(
+    *,
+    model: Any,
+    provider_uri: Path,
+    data_as_of: date,
+) -> tuple[pd.Series, dict[str, Any]]:
+    """Run one-day Alpha158 inference without fitting or changing the model."""
+
+    try:
+        import qlib
+        from qlib.constant import REG_CN
+        from qlib.contrib.data.handler import Alpha158
+        from qlib.data.dataset import DatasetH
+        from qlib.data.dataset.handler import DataHandlerLP
+    except ImportError as exc:
+        raise QlibDoubleEnsembleError("pyqlib==0.9.7 is required") from exc
+    if qlib.__version__ != QLIB_PACKAGE_VERSION:
+        raise QlibDoubleEnsembleError(
+            f"Qlib version must be {QLIB_PACKAGE_VERSION}, got {qlib.__version__}"
+        )
+    provider_uri = Path(provider_uri).resolve()
+    manifest_path = provider_uri / "metadata" / "manifest.json"
+    if not manifest_path.is_file():
+        raise QlibDoubleEnsembleError("Qlib provider manifest is missing")
+    provider_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if provider_manifest.get("model_config_sha256") != model_config_sha256():
+        raise QlibDoubleEnsembleError("Qlib provider model config hash mismatch")
+    cutoff = data_as_of.isoformat()
+    calendar = (provider_uri / "calendars" / "day.txt").read_text(
+        encoding="utf-8"
+    ).splitlines()
+    if cutoff not in calendar:
+        raise QlibDoubleEnsembleError("data_as_of is absent from trading calendar")
+
+    qlib.init(provider_uri=str(provider_uri), region=REG_CN)
+    handler = Alpha158(
+        instruments="all",
+        start_time=cutoff,
+        end_time=cutoff,
+    )
+    dataset = DatasetH(handler=handler, segments={"infer": (cutoff, cutoff)})
+    features = dataset.prepare(
+        "infer", col_set="feature", data_key=DataHandlerLP.DK_I
+    )
+    if features.shape[1] != EXPECTED_ALPHA158_FEATURE_COUNT:
+        raise QlibDoubleEnsembleError(
+            f"Alpha158 generated {features.shape[1]} features, expected 158"
+        )
+    predictions = model.predict(dataset, segment="infer")
+    predictions.name = "doubleensemble_score"
+    finite = pd.to_numeric(predictions, errors="coerce").map(math.isfinite)
+    if predictions.empty or not finite.all():
+        raise QlibDoubleEnsembleError(
+            "frozen DoubleEnsemble produced empty or non-finite scores"
+        )
+    return predictions, {
+        "alpha158_complete": True,
+        "alpha158_feature_count": int(features.shape[1]),
+        "data_as_of": cutoff,
+        "feature_non_null_rate": round(float(features.notna().mean().mean()), 8),
+        "prediction_count": int(len(predictions)),
+        "qlib_version": qlib.__version__,
+    }
 
 
 def build_candidate_batches(

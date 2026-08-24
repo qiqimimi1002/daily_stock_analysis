@@ -1,0 +1,38 @@
+{
+  "as_of": "2026-08-24",
+  "attempted_at": "2026-08-24T16:52:10+08:00",
+  "artifact": {
+    "model_directory_created": false,
+    "model_sha256": null,
+    "status": "not_frozen"
+  },
+  "expected_candidates_file_sha256": "b8d9492eaba9d743d3b92b553f4731f993cdf7e288b90f76780db69a9ae958d1",
+  "local_failure_receipt_file_sha256": "74c21435dbbf0c236693e48adb2790641392272a9e48361d12bbfa12e2599424",
+  "local_failure_receipt_manifest_sha256": "6a383d6b633a5d6927d57e2be0427e65701fe871e430ec819c26a29dde5252a5",
+  "model_config_sha256": "a6c0e054f774ab2bc1424d1568b7877a8a5ac38659e558a2c04c689c24d37d75",
+  "model_version": "qlib-0.9.7-alpha158-doubleensemble-official-v1",
+  "provider_file_count": 22356,
+  "qlib_version": "0.9.7",
+  "random_seed": 0,
+  "replay": {
+    "actual_score_differences_persisted": false,
+    "identity_check_status": "not_complete",
+    "reason_code": "score_exceeds_tolerance",
+    "score_absolute_tolerance": 1e-10,
+    "status": "failed_closed",
+    "trade_date": "2026-08-24"
+  },
+  "segments": {
+    "test_end": "2026-08-21",
+    "test_start": "2025-07-01",
+    "train_end": "2024-12-25",
+    "train_start": "2024-01-02",
+    "valid_end": "2025-06-25",
+    "valid_start": "2025-01-02"
+  },
+  "shadow": {
+    "archive_created": false,
+    "status": "disabled_after_replay_failure"
+  },
+  "training_input_sha256": "ced59a13647e48d06925128b11bc1909e6f119956902a391fb65a10b92dcdb8c"
+}
