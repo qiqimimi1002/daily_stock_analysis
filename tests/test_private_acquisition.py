@@ -22,6 +22,7 @@ from research.private_acquisition import (
     PrivateAcquisitionError,
     acquire_private_shared_batch,
 )
+from research.benchmarks.universe import UNIVERSE_CONTRACT_VERSION, universe_config_hash
 from research.prospective_batch import (
     PRIVATE_UNIVERSE_SOURCE_SCHEMA_VERSION,
     ProspectiveBatchConflictError,
@@ -92,6 +93,14 @@ def _request() -> dict:
         "request_at": bundle["request_at"],
         "schema_version": ACQUISITION_REQUEST_SCHEMA_VERSION,
         "signal_date": SIGNAL_DATE.isoformat(),
+        "universe": {
+            "config_hash": universe_config_hash(),
+            "content_sha256": hashlib.sha256(
+                canonical_json_bytes(list(SYMBOLS))
+            ).hexdigest(),
+            "contract_version": UNIVERSE_CONTRACT_VERSION,
+            "stock_codes": list(SYMBOLS),
+        },
         "universe_source": {
             "config": config,
             "config_sha256": hashlib.sha256(
@@ -338,6 +347,46 @@ def test_universe_hash_mismatch_fails_before_network(tmp_path) -> None:
         )
     assert exc_info.value.reason_code == "universe_contract_failed"
     assert calls == {"calendar": 0, "raw": []}
+
+
+def test_explicit_universe_must_match_same_spot_snapshot(tmp_path) -> None:
+    request = _request()
+    request["universe"]["content_sha256"] = "0" * 64
+    fetch_calendar, fetch_raw, calls = _sources()
+    with pytest.raises(PrivateAcquisitionError) as exc_info:
+        _acquire(
+            tmp_path,
+            request=request,
+            calendar_fetcher=fetch_calendar,
+            raw_history_fetcher=fetch_raw,
+        )
+    assert exc_info.value.reason_code == "universe_contract_failed"
+    assert calls == {"calendar": 0, "raw": []}
+
+
+def test_deadline_miss_refuses_archive(tmp_path) -> None:
+    fetch_calendar, fetch_raw, _ = _sources()
+    values = iter(
+        (
+            datetime(2026, 3, 4, 9, 30, 0, tzinfo=SHANGHAI_TZ),
+            datetime(2026, 3, 4, 9, 59, 58, tzinfo=SHANGHAI_TZ),
+            datetime(2026, 3, 4, 9, 59, 59, tzinfo=SHANGHAI_TZ),
+            datetime(2026, 3, 4, 10, 0, 0, tzinfo=SHANGHAI_TZ),
+        )
+    )
+    with pytest.raises(PrivateAcquisitionError) as exc_info:
+        acquire_private_shared_batch(
+            _request(),
+            private_root=tmp_path / "private",
+            public_manifest_path=tmp_path / "public.json",
+            allow_network=True,
+            deadline_at="2026-03-04T10:00:00+08:00",
+            calendar_fetcher=fetch_calendar,
+            raw_history_fetcher=fetch_raw,
+            clock=lambda: next(values),
+        )
+    assert exc_info.value.reason_code == "prospective_deadline_missed"
+    assert not (tmp_path / "private").exists()
 
 
 def test_old_universe_snapshot_fails_before_network(tmp_path) -> None:

@@ -41,6 +41,11 @@ def main() -> int:
     parser.add_argument("--private-root", type=Path, required=True)
     parser.add_argument("--public-manifest", type=Path)
     parser.add_argument(
+        "--deadline-at",
+        required=True,
+        help="Asia/Shanghai timestamp before which the archive must be completed.",
+    )
+    parser.add_argument(
         "--allow-network",
         action="store_true",
         help="Required explicit opt-in; offline tests never set it.",
@@ -56,6 +61,7 @@ def main() -> int:
             private_root=private_root,
             public_manifest_path=args.public_manifest,
             allow_network=args.allow_network,
+            deadline_at=args.deadline_at,
         )
     except (PrivateAcquisitionError, ProspectiveBatchError) as exc:
         reason = getattr(exc, "reason_code", "acquisition_failed")

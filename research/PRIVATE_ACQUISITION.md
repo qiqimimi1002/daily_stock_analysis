@@ -16,7 +16,12 @@ production provider/fallback path. Network access requires `--allow-network`.
 ## Private acquisition request
 
 The request itself is Private and must be created on signal date T after the
-acquisition request starts. It contains:
+acquisition request starts. `scripts/research_private_request.py` is the
+minimal explicit upstream: it calls only the production primary full-market
+spot endpoint (no spot fallback), freezes the normalized snapshot, derives the
+V2.1 hard-filter Universe, fetches the verified calendar needed to establish
+the 61-session interval, and obtains one complete CNINFO-primary/Sina-cross
+corporate-action pair per Universe symbol. It contains:
 
 ```text
 schema_version = private-acquisition-request-v2
@@ -31,6 +36,8 @@ universe_source
   schema/model/source IDs, source_data_as_of, fetched_at, generated_at
   current production V2.1 config and config_sha256
   full same-day Private spot_rows, row_count and spot_content_sha256
+universe
+  contract/config hashes, full sorted stock_codes and Universe content hash
 corporate_actions[stock_code]
   primary/cross source IDs, source_data_as_of and fetched_at
   either matched real events/known_at or explicit successful no_event queries
@@ -78,18 +85,40 @@ successful batch.
 
 ## Command
 
+For 2026-08-25, start between 09:40 and 09:50 Asia/Shanghai. Both commands are
+explicit network operations and must complete before the formal 10:00
+screening. The first command creates the date-unique request; only after it
+prints `PASS` may the second command consume that exact file:
+
 ```powershell
+python scripts/research_private_request.py `
+  --signal-date 2026-08-25 `
+  --request D:\private-research\requests\2026-08-25.json `
+  --deadline-at 2026-08-25T10:00:00+08:00 `
+  --confirm-private-provider-terms-reviewed `
+  --allow-network
+
 python scripts/research_private_acquisition.py `
-  --request D:\private-research\requests\2026-08-24.json `
+  --request D:\private-research\requests\2026-08-25.json `
   --private-root D:\private-research\immutable-batches `
-  --public-manifest research\runtime\prospective-2026-08-24.json `
+  --public-manifest D:\private-research\public-manifests\2026-08-25.json `
+  --deadline-at 2026-08-25T10:00:00+08:00 `
   --allow-network
 ```
 
-The request and Private root must be outside the repository. Raw provider rows,
-stock codes and corporate-action details never appear in stdout or the Public
-manifest. A failure prints only a stable reason code. No real provider call is
-made by Public CI; all tests use fictional injected sources.
+The request and Private root must be outside the repository. A request is
+written only after the full spot, explicit Universe/hash, calendar interval
+and every dual-source corporate-action query have succeeded. A byte-identical
+repeat returns `exists`; different same-day content is a conflict and is never
+overwritten. Raw provider rows, stock codes and corporate-action details never
+appear in stdout or the Public manifest. A failure prints only a stable reason
+code. No real provider call is made by Public CI; all tests use fictional
+injected sources.
+
+The acquisition command also enforces `--deadline-at` immediately before the
+archive writer. If either command reaches 10:00, no new successful request or
+archive is produced. A failed request preparation must not be replaced with a
+post-screening fetch, and no older request or archive may stand in for T.
 
 ## Immutability and retries
 
@@ -102,6 +131,10 @@ publish an earlier success as the current attempt.
 The raw-history and corporate-action source decisions remain **CONDITIONAL
 PASS**. The explicit policy assertion records the operator's authorization for
 Private storage; it does not create or broaden upstream redistribution rights.
-There is still no scheduler or unattended provider acquisition. The next gate
-is one explicitly authorized, prospective, Private-only single-day acceptance
-run; no historical backfill is permitted.
+There is still no scheduler or unattended provider acquisition. On 2026-08-24
+the result was `NOT_EXECUTED / missed_prospective_window` with reason
+`PRIVATE_UPSTREAM_NOT_TRIGGERED`; no request or archive existed before formal
+screening, so that date is excluded from all model win-rate and return
+statistics. The next gate is the explicitly controlled 2026-08-25
+prospective, Private-only single-day acceptance run; no historical backfill is
+permitted.

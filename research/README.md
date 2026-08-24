@@ -30,6 +30,13 @@ Short-term v1 and Phase 2A; the Public manifest exposes only hashes and counts.
 The production Public result is not used as a substitute because it does not
 retain the complete full-market snapshot or full eligible code set.
 
+The manual upstream command `scripts/research_private_request.py` prepares
+that request before formal screening from the production primary spot endpoint
+and the accepted dual-source corporate-action interfaces. It writes only to an
+operator-selected repository-external path, requires explicit network and
+Private-terms confirmation, has no fallback or scheduler, and fails without a
+request if the prospective deadline is reached.
+
 An empty corporate-action result is evidence only when both independent sources
 explicitly report a successful `no_event` query for the same symbol and exact
 raw-history interval. That path is `reviewed_clear` without a fabricated event.

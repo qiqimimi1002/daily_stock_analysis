@@ -134,6 +134,43 @@ def _content_sha256(value: Any) -> str:
     return hashlib.sha256(canonical_json_bytes(value)).hexdigest()
 
 
+def canonical_private_spot_rows(frame: pd.DataFrame) -> list[dict[str, Any]]:
+    """Normalize one full-market spot frame exactly as the request validator does."""
+
+    try:
+        normalized = normalize_spot_frame(frame)
+    except (TypeError, ValueError) as exc:
+        raise PrivateAcquisitionError(
+            "universe_contract_failed", "Private full-market spot snapshot is invalid"
+        ) from exc
+    if normalized["code"].duplicated().any():
+        raise PrivateAcquisitionError(
+            "universe_contract_failed", "Universe snapshot contains duplicate codes"
+        )
+    rows = []
+    for row in normalized.sort_values("code", kind="stable").to_dict("records"):
+        code = str(row["code"])
+        name = str(row["name"]).strip()
+        numeric = {
+            key: row[key]
+            for key in ("close", "pct_change", "volume", "amount", "turnover")
+        }
+        if (
+            not _CODE_RE.fullmatch(code)
+            or not name
+            or any(not math.isfinite(float(item)) for item in numeric.values())
+        ):
+            raise PrivateAcquisitionError(
+                "universe_contract_failed", "Universe snapshot has invalid required fields"
+            )
+        rows.append({"code": code, "name": name, **numeric})
+    if not rows:
+        raise PrivateAcquisitionError(
+            "universe_contract_failed", "Universe snapshot cannot be empty"
+        )
+    return rows
+
+
 def _validated_universe_source(
     value: Any,
     *,
@@ -192,37 +229,8 @@ def _validated_universe_source(
         raise PrivateAcquisitionError(
             "universe_contract_failed", "Private full-market spot_rows must be an array"
         )
-    try:
-        normalized = normalize_spot_frame(pd.DataFrame(list(rows_value)))
-    except (TypeError, ValueError) as exc:
-        raise PrivateAcquisitionError(
-            "universe_contract_failed", "Private full-market spot snapshot is invalid"
-        ) from exc
-    if normalized["code"].duplicated().any():
-        raise PrivateAcquisitionError(
-            "universe_contract_failed", "Universe snapshot contains duplicate codes"
-        )
-    canonical_rows = []
-    for row in normalized.sort_values("code", kind="stable").to_dict("records"):
-        code = str(row["code"])
-        name = str(row["name"]).strip()
-        numeric = {
-            key: row[key]
-            for key in ("close", "pct_change", "volume", "amount", "turnover")
-        }
-        if (
-            not _CODE_RE.fullmatch(code)
-            or not name
-            or any(
-                not math.isfinite(float(item))
-                for item in numeric.values()
-            )
-        ):
-            raise PrivateAcquisitionError(
-                "universe_contract_failed", "Universe snapshot has invalid required fields"
-            )
-        canonical_rows.append({"code": code, "name": name, **numeric})
-    if not canonical_rows or source.get("row_count") != len(canonical_rows):
+    canonical_rows = canonical_private_spot_rows(pd.DataFrame(list(rows_value)))
+    if source.get("row_count") != len(canonical_rows):
         raise PrivateAcquisitionError(
             "universe_contract_failed", "Universe snapshot row count is incomplete"
         )
@@ -307,6 +315,19 @@ def _validated_request(
         observed_at=observed_at,
     )
 
+    request_universe = _mapping(value.get("universe"), field="universe")
+    requested_codes = _codes(request_universe.get("stock_codes"))
+    if (
+        request_universe.get("contract_version") != UNIVERSE_CONTRACT_VERSION
+        or request_universe.get("config_hash") != universe_config_hash()
+        or request_universe.get("content_sha256") != _content_sha256(list(codes))
+        or requested_codes != codes
+    ):
+        raise PrivateAcquisitionError(
+            "universe_contract_failed",
+            "explicit Private Universe/hash must match the same spot snapshot",
+        )
+
     actions = _mapping(value.get("corporate_actions"), field="corporate_actions")
     if tuple(sorted(str(code) for code in actions)) != codes:
         raise PrivateAcquisitionError(
@@ -340,6 +361,7 @@ def acquire_private_shared_batch(
     public_manifest_path: Path | str | None = None,
     allow_network: bool = False,
     observed_at: datetime | str | None = None,
+    deadline_at: datetime | str | None = None,
     calendar_fetcher: CalendarFetcher = fetch_verified_trade_calendar,
     raw_history_fetcher: RawHistoryFetcher = fetch_raw_history_pair,
     clock: Clock | None = None,
@@ -350,6 +372,13 @@ def acquire_private_shared_batch(
     observed = _time(
         observed_at if observed_at is not None else now(), field="observed_at"
     )
+    deadline = (
+        _time(deadline_at, field="deadline_at") if deadline_at is not None else None
+    )
+    if deadline is not None and observed >= deadline:
+        raise PrivateAcquisitionError(
+            "prospective_deadline_missed", "acquisition must start before the deadline"
+        )
     source = _mapping(request, field="request")
     signal_date, request_at, spot_frame, codes, source_manifest, actions = _validated_request(
         source, observed_at=observed
@@ -438,6 +467,11 @@ def acquire_private_shared_batch(
         if observed_at is not None
         else _time(now(), field="observed_at")
     )
+    if deadline is not None and final_observed_at >= deadline:
+        raise PrivateAcquisitionError(
+            "prospective_deadline_missed",
+            "no archive may be created at or after the formal screening deadline",
+        )
     bundle = {
         "calendar": calendar.to_dict(),
         "captured_at": captured_at.isoformat(timespec="seconds"),

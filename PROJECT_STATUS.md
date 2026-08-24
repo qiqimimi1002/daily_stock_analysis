@@ -1,6 +1,6 @@
 # Project Status
 
-> Last updated: 2026-08-23 (Asia/Shanghai)
+> Last updated: 2026-08-24 (Asia/Shanghai)
 >
 > Codex workflow rule: read this file before substantial project work and
 > update it after every completed material task. Complete safe in-scope work
@@ -176,14 +176,32 @@
   market row, company-action detail, provider response or Secret is committed.
   Short-term v1, Phase 2A, V2.1, `src/`, workflows, production providers,
   Cloudflare, scheduler and Secret/Tushare boundaries are unchanged.
+- 2026-08-24 was `NOT_EXECUTED / missed_prospective_window`, reason
+  `PRIVATE_UPSTREAM_NOT_TRIGGERED`: no same-day Private request or immutable
+  archive existed before the 10:00 production screening. The date must not be
+  counted in model win-rate, return or benchmark evidence, and no backfill is
+  permitted.
+- The Draft PR now adds only the missing manual upstream command. Before the
+  formal screening it calls the production primary full-market spot endpoint
+  without fallback, freezes the complete spot rows and explicit V2.1
+  Universe/hash, obtains exact-interval CNINFO/Sina corporate-action evidence
+  with explicit successful `no_event`, and writes the repository-external
+  `private-acquisition-request-v2` exactly once. The existing acquisition
+  remains the sole history/calendar/shared-batch path.
+- Both manual commands require explicit network opt-in and a caller-supplied
+  Asia/Shanghai deadline. Reaching 10:00, a source/query failure, incomplete or
+  conflicting evidence, an explicit Universe/hash mismatch, a changed same-day
+  request, or an archive conflict fails closed. There is still no scheduler,
+  production integration or real batch; the next gate is one controlled
+  2026-08-25 run started between 09:40 and 09:50 and completed before 10:00.
 - The two previously identified P1 prerequisites (legitimate dual-source
   no-event review and Private V2.1 Universe acquisition) are closed at the
   offline contract level. No real full-Universe request or restricted data was
   used; the next gate is one explicitly authorized, Private-only prospective
-  single-day acceptance run. Local focused contract tests pass 70/70; the
-  Phase 1/2A/2B, Short-term, race, archive and outcomes regression passes
-  270 with 1 skipped. Changed Python files pass py_compile and flake8. Draft
-  PR #28 remains unmerged.
+  single-day acceptance run. The current request/acquisition and related
+  Phase 1/2A/2B, Short-term, race, archive, V2.1, outcomes and Public-workflow
+  regression passes 275/275. Changed Python files pass py_compile, flake8 and
+  diff-check. Draft PR #28 remains unmerged.
 
 ## Market Screener slow-request diagnostics (2026-08-20)
 
