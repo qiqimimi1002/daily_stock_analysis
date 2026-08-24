@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - [修复] 统一赛马框架将数据内容截止时间限制在决策快照之前，并以逻辑信号ID配合精确快照哈希避免重跑重复计数。
 - [新功能] 冻结Low Volatility 60日项目基准的公式、61收盘价历史契约、公司行为审查、Universe身份及离线确定性测试，不运行真实全市场信号。
 - [新功能] 新增研究专用的前瞻式共同样本采集合同，以私有不可变归档和公开脱敏 manifest 为 Short-term v1 与 Phase 2A 固定同一批证据。
+- [新功能] 新增 Dashboard v0.1 只读选股结果驾驶舱，展示 Public 今日候选、历史 Outcome 状态和脱敏模型成绩，并以显式 fixture 验收空数据、pending 与 failure 界面。
+- [修复] Dashboard v0.1 不再把尚未发布的今日结果误判为非交易日，并将工程状态码和 Raw URL 收敛为简洁中文展示。
 
 ## [3.28.0] - 2026-07-26
 

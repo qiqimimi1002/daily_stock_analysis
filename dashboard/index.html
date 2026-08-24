@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Daily Stock Analysis 只读选股结果驾驶舱" />
+    <title>选股结果驾驶舱 · Dashboard v0.1</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="hero shell">
+      <div>
+        <p class="eyebrow">Dashboard v0.1 · Static · Read only</p>
+        <h1>选股结果驾驶舱</h1>
+        <p class="lead">只读取已发布的 Public / 脱敏结果，不抓行情、不筛股、不计算模型，也不触发生产任务。</p>
+      </div>
+      <span class="pill pill-info">只读展示层</span>
+    </header>
+
+    <main class="shell stack">
+      <div id="fixture-banner" class="notice notice-fixture hidden" role="alert">
+        <strong>虚构 fixture 模式</strong>
+        <span>股票、日期与非空 Outcome 数值均为 UI 示例，不代表真实候选或模型成绩。</span>
+      </div>
+      <div id="global-error" class="notice notice-error hidden" role="alert"></div>
+
+      <section aria-labelledby="today-heading">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">01 · Today screening</p>
+            <h2 id="today-heading">今日筛选</h2>
+            <p>“今日”以最新已发布交易日为准，并始终显示来源时间。</p>
+          </div>
+          <button id="refresh-button" type="button">重新读取 Public 结果</button>
+        </div>
+        <div id="date-notice" class="notice hidden"></div>
+        <div id="summary-cards" class="summary-grid" aria-live="polite"></div>
+        <div id="candidate-list" class="candidate-grid"></div>
+        <p id="screening-source" class="source"></p>
+      </section>
+
+      <section aria-labelledby="history-heading">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">02 · Historical outcomes</p>
+            <h2 id="history-heading">历史表现</h2>
+            <p>按交易日读取 Public 历史候选；Outcome 只展示已发布聚合值，未成熟即 pending。</p>
+          </div>
+        </div>
+        <form id="history-form" class="date-form">
+          <label for="history-date">交易日</label>
+          <input id="history-date" name="history-date" type="date" required />
+          <button type="submit">读取该日</button>
+        </form>
+        <div class="notice">
+          <strong>真实 Public Outcome 边界</strong>
+          <span>当前仓库没有合规的逐候选 Outcome 公共数据集；真实 1d/3d/5d/10d 显示 unavailable，20d 明确 pending，不从行情补算。</span>
+        </div>
+        <div id="history-list" class="stack-sm" aria-live="polite"></div>
+      </section>
+
+      <section aria-labelledby="models-heading">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">03 · Model scorecard</p>
+            <h2 id="models-heading">模型成绩</h2>
+            <p>Short-term v1 与 Phase 2A 使用统一布局；样本不足时不生成胜率或模拟成绩。</p>
+          </div>
+        </div>
+        <div id="research-notice" class="notice"></div>
+        <div id="model-list" class="stack-sm" aria-live="polite"></div>
+        <p id="research-source" class="source"></p>
+      </section>
+
+      <footer class="boundary">
+        <strong>数据边界</strong>
+        <span>页面只接收适配器白名单字段。Private Universe、OHLCV、amount、公司行为明细和原始证据不会进入前端输出。</span>
+      </footer>
+    </main>
+    <script type="module" src="./app.mjs"></script>
+  </body>
+</html>

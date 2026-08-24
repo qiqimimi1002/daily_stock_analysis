@@ -1,6 +1,6 @@
 # Project Status
 
-> Last updated: 2026-08-22 (Asia/Shanghai)
+> Last updated: 2026-08-24 (Asia/Shanghai)
 >
 > Codex workflow rule: read this file before substantial project work and
 > update it after every completed material task. Complete safe in-scope work
@@ -22,6 +22,49 @@
   `agent/v2-2-outcomes`; its current CI checks pass. This work is separate from
   the screening-result publication change below and was not modified here.
 - Do not use or merge the abandoned branch `v2-1-market-scoring`.
+
+## Dashboard v0.1 read-only results cockpit (2026-08-23)
+
+- Independent baseline: `origin/main@af87ad6a5660c028359ae6e37f76936ccc8ed825`;
+  branch: `codex/dashboard-v0.1`; implementation commit
+  `91c70415a42521630913badb723841daf835b771`; independent Draft PR
+  [#29](https://github.com/qiqimimi1002/daily_stock_analysis/pull/29).
+  This work was created from the latest `main`, not from Draft PR #28, and does
+  not make that PR a dependency.
+- `dashboard/index.html` is an independent responsive static page with three
+  read-only areas: latest published V2.1 candidates, per-date historical
+  Outcome status, and a common Short-term v1 / Phase 2A research scorecard. It
+  has no desktop-client integration, authentication API, backend, database,
+  build step, or deployment change; any simple static file server can preview
+  it locally.
+- The adapter uses explicit allowlists and only reads published
+  `screening-results` manifest/screening JSON plus the sanitized unified-race
+  research result. It does not expose market snapshots, OHLCV, amount, raw
+  Universe rows, corporate-action details, or other private evidence, and it
+  does not trigger screening, market-data, model, provider, or production code.
+- The repository currently has no compliant Public per-candidate Outcome data
+  or Short-term v1 per-candidate rank. Those fields therefore remain
+  `unavailable`; 20d remains `pending`, and zero-sample model metrics remain
+  `N/A` under the real `INSUFFICIENT EVIDENCE` status.
+- Synthetic UI data is available only through the explicit
+  `?fixture=dashboard-v0.1` URL, uses a 2099 date and DEMO codes, and is marked
+  prominently as fictional. It is never a silent fallback for failed Public
+  reads.
+- All 13 dependency-free Node adapter/boundary tests pass, including date
+  switching and network-call allowlisting. Real Public Run #59 and explicit
+  fixture modes both passed browser QA at desktop and mobile widths with no
+  browser errors. PR #29 remains Open/Draft; its GitHub status checks are the
+  authoritative CI record. Draft PR #28 remains Open/Draft and advanced on its
+  own independent work line from the initial readback
+  `cca437f42688e12aca81bfed680631abb400a6f4` to the final readback
+  `36ef35f3ee12fc3894db185a9f208be72acdab44`; this Dashboard work did not push
+  to or edit that branch.
+- The 2026-08-24 minimal UI correction no longer infers a non-trading day when
+  today's result is not yet published. The page instead shows the most recent
+  published result, maps engineering reason codes to short Chinese labels, and
+  describes Public data sources without exposing long Raw URLs. The adapter
+  retains the original reason codes, and no calendar or market request was
+  added.
 
 ## Short-term v1 first-stage research model (2026-08-21)
 
