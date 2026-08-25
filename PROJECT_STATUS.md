@@ -35,25 +35,36 @@
   research shadow; do not promote to production.
 - Frozen aggregate evidence:
   `research/results/qlib_alpha158_doubleensemble_oos_2026-08-24.json`.
-- A minimal manual frozen-model/prospective-shadow entry is implemented with
-  exact T-1 validation, Top-5/under-3-to-zero behavior, immutable hashes,
-  same-input idempotency, and conflict/tamper fail-closed tests. It does not
-  retrain during daily inference and is not connected to any workflow.
-- The only authorized exact-configuration replay finished on 2026-08-24 but
-  at least one score exceeded the predeclared absolute tolerance `1e-10`.
-  Therefore no model artifact and no prospective sample were created. The
-  local immutable failure receipt records input hash
-  `ced59a13647e48d06925128b11bc1909e6f119956902a391fb65a10b92dcdb8c`
-  plus receipt file hash
-  `74c21435dbbf0c236693e48adb2790641392272a9e48361d12bbfa12e2599424`
-  (semantic manifest hash
-  `6a383d6b633a5d6927d57e2be0427e65701fe871e430ec819c26a29dde5252a5`).
-  The committed evidence is
-  `research/results/qlib_doubleensemble_freeze_replay_2026-08-24.json`.
-  Both CLI entries now reject before training/inference; another replay is
-  prohibited. **Prospective readiness: NO (FAIL-CLOSED).**
+- The formally numbered model
+  `qlib-alpha158-doubleensemble-prospective-v1` was trained exactly once on
+  2026-08-25 with the unchanged official configuration, seed, provider hash,
+  and approved time segments. It was immediately saved under
+  `research/runtime/qlib/frozen-doubleensemble-prospective-v1`; model SHA-256
+  is `0336cdcd8adc29dd8810db2901e0b1cd765c5fd988b3bf8226996fd1545ae71e`.
+- Acceptance independently loaded that same disk artifact twice and produced
+  the exact same inference hash
+  `05144d2612c76acbd9a7a21cab4da1fa27d1b6f8ee57261b830756852fc05e3f`
+  both times. Artifact semantic manifest hash is
+  `f282bd287fbdc07b06aa493955364ea46b6dd42616a5cdc512a28cd0288fe0ae`.
+  This identity is pinned by both CLI entries, so a different self-consistent
+  local model/manifest is rejected.
+  Re-running `freeze-model` with a nonexistent Provider returned the existing
+  accepted artifact, proving it does not fit or read training input again.
+- Daily `shadow` has exact T-1 validation, Top-5/under-3-to-zero behavior,
+  immutable hashes, same-input idempotency, and conflict/tamper fail-closed
+  protection. It only loads prospective-v1 and is not connected to a workflow.
+  The 2026-08-24 acceptance batch is not counted as a prospective sample. The
+  local Provider currently ends at 2026-08-21 with calendar through 2026-08-24,
+  so the first real daily sample awaits the normal existing-data refresh to
+  the completed T-1 session. **Model/software readiness: YES; prospective
+  sample count: 0.**
+- The lost first model was not reproduced. Its separate 2026-08-24 replay
+  failure remains preserved for audit and was superseded only by explicit
+  authorization to create the newly numbered prospective-v1 artifact.
+- Frozen prospective-v1 evidence:
+  `research/results/qlib_doubleensemble_prospective_v1_2026-08-25.json`.
 
-> Last updated: 2026-08-24 (Asia/Shanghai)
+> Last updated: 2026-08-25 (Asia/Shanghai)
 >
 > Codex workflow rule: read this file before substantial project work and
 > update it after every completed material task. Complete safe in-scope work

@@ -12,11 +12,8 @@ from typing import Any
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-REPLAY_FAILURE_EVIDENCE = (
-    REPO_ROOT
-    / "research"
-    / "results"
-    / "qlib_doubleensemble_freeze_replay_2026-08-24.json"
+PROSPECTIVE_V1_MANIFEST_SHA256 = (
+    "f282bd287fbdc07b06aa493955364ea46b6dd42616a5cdc512a28cd0288fe0ae"
 )
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
@@ -122,17 +119,13 @@ def run(args: argparse.Namespace) -> None:
 
 
 def freeze_model(args: argparse.Namespace) -> None:
-    """Perform the single approved replay and freeze the fitted model."""
+    """Train and freeze the single approved prospective-v1 model."""
 
-    if REPLAY_FAILURE_EVIDENCE.is_file():
-        raise RuntimeError(
-            "the approved one-time replay is recorded as failed; retraining is prohibited"
-        )
     result = freeze_model_artifact(
         provider_uri=args.provider,
         artifact_dir=args.artifact,
-        expected_candidates_path=args.expected_candidates,
         generated_at=args.generated_at,
+        expected_manifest_sha256=PROSPECTIVE_V1_MANIFEST_SHA256,
     )
     print(json.dumps(result, ensure_ascii=False, sort_keys=True))
 
@@ -140,10 +133,6 @@ def freeze_model(args: argparse.Namespace) -> None:
 def shadow(args: argparse.Namespace) -> None:
     """Load the frozen model and immutably archive one prospective day."""
 
-    if REPLAY_FAILURE_EVIDENCE.is_file():
-        raise RuntimeError(
-            "prospective shadow is disabled because the frozen-model replay failed"
-        )
     result = run_prospective_shadow(
         provider_uri=args.provider,
         artifact_dir=args.artifact,
@@ -151,6 +140,7 @@ def shadow(args: argparse.Namespace) -> None:
         trade_date=args.trade_date,
         data_as_of=args.data_as_of,
         generated_at=args.generated_at,
+        expected_model_manifest_sha256=PROSPECTIVE_V1_MANIFEST_SHA256,
     )
     print(json.dumps(result, ensure_ascii=False, sort_keys=True))
 
@@ -186,7 +176,6 @@ def parser() -> argparse.ArgumentParser:
     freeze_parser = subparsers.add_parser("freeze-model")
     freeze_parser.add_argument("--provider", required=True, type=Path)
     freeze_parser.add_argument("--artifact", required=True, type=Path)
-    freeze_parser.add_argument("--expected-candidates", required=True, type=Path)
     freeze_parser.add_argument("--generated-at")
     freeze_parser.set_defaults(func=freeze_model)
 

@@ -32,7 +32,14 @@
   },
   "shadow": {
     "archive_created": false,
-    "status": "disabled_after_replay_failure"
+    "status": "not_used_by_prospective_v1"
+  },
+  "subsequent_disposition": {
+    "authorized_at": "2026-08-25",
+    "lost_model_reproduction_retried": false,
+    "replacement_evidence": "research/results/qlib_doubleensemble_prospective_v1_2026-08-25.json",
+    "replacement_model_version": "qlib-alpha158-doubleensemble-prospective-v1",
+    "status": "superseded_by_explicit_new_numbered_model_authorization"
   },
   "training_input_sha256": "ced59a13647e48d06925128b11bc1909e6f119956902a391fb65a10b92dcdb8c"
 }

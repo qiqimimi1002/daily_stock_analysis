@@ -5,7 +5,6 @@ from __future__ import annotations
 from datetime import date, datetime
 import hashlib
 import json
-import math
 import os
 from pathlib import Path
 import pickle
@@ -31,11 +30,13 @@ from research.benchmarks.schema import canonical_json_bytes
 
 
 SHANGHAI_TZ = ZoneInfo("Asia/Shanghai")
-FROZEN_SCHEMA_VERSION = "qlib-doubleensemble-frozen-model-v1"
-REPLAY_FAILURE_SCHEMA_VERSION = "qlib-doubleensemble-replay-failure-v1"
+FROZEN_SCHEMA_VERSION = "qlib-doubleensemble-frozen-model-v2"
+TRAINING_ATTEMPT_SCHEMA_VERSION = "qlib-doubleensemble-training-attempt-v1"
+TRAINING_RECORD_SCHEMA_VERSION = "qlib-doubleensemble-training-record-v1"
 SHADOW_SCHEMA_VERSION = "qlib-doubleensemble-prospective-shadow-v1"
-REPLAY_TRADE_DATE = date(2026, 8, 24)
-REPLAY_SCORE_ABS_TOLERANCE = 1e-10
+FROZEN_MODEL_VERSION = "qlib-alpha158-doubleensemble-prospective-v1"
+ACCEPTANCE_TRADE_DATE = date(2026, 8, 24)
+ACCEPTANCE_DATA_AS_OF = date(2026, 8, 21)
 APPROVED_SPLITS = TimeSplits.create(
     train_start="2024-01-02",
     train_end="2024-12-25",
@@ -52,14 +53,6 @@ class QlibShadowError(ValueError):
 
 class QlibShadowConflictError(QlibShadowError):
     """Raised when immutable model or daily content differs."""
-
-
-class QlibReplayMismatchError(QlibShadowError):
-    """Raised when the one permitted replay differs from its frozen baseline."""
-
-    def __init__(self, message: str, *, reason_code: str) -> None:
-        super().__init__(message)
-        self.reason_code = reason_code
 
 
 def _sha256_bytes(value: bytes) -> str:
@@ -180,205 +173,43 @@ def _load_manifest(path: Path) -> dict[str, Any]:
     return value
 
 
-def _expected_batch(path: Path | str, trade_date: date) -> tuple[dict[str, Any], str]:
-    source = Path(path)
+def _training_attempt_path(artifact_dir: Path) -> Path:
+    return artifact_dir.with_name(f"{artifact_dir.name}.training-attempt.json")
+
+
+def _write_training_attempt(path: Path, value: Mapping[str, Any]) -> dict[str, Any]:
+    attempt = _manifest_with_hash(value)
     try:
-        raw = source.read_bytes()
-        batches = json.loads(raw.decode("utf-8"))
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise QlibShadowError("expected candidate artifact cannot be read") from exc
-    if not isinstance(batches, list):
-        raise QlibShadowError("expected candidate artifact must be a list")
-    matches = [item for item in batches if item.get("trade_date") == trade_date.isoformat()]
-    if len(matches) != 1 or not isinstance(matches[0], dict):
-        raise QlibShadowError("expected replay trade date must appear exactly once")
-    return matches[0], _sha256_bytes(raw)
+        with path.open("xb") as handle:
+            handle.write(_strict_json_bytes(attempt))
+    except FileExistsError:
+        raise QlibShadowConflictError(
+            "prospective-v1 training was already attempted; retraining is prohibited"
+        ) from None
+    return attempt
 
 
-def _replay_evidence(
-    expected: Mapping[str, Any],
-    actual: Mapping[str, Any],
-) -> dict[str, Any]:
-    expected_rows = expected.get("candidates")
-    actual_rows = actual.get("candidates")
-    if not isinstance(expected_rows, list) or not isinstance(actual_rows, list):
-        raise QlibReplayMismatchError(
-            "replay candidates must be lists",
-            reason_code="invalid_candidate_shape",
-        )
-    if len(expected_rows) != len(actual_rows):
-        raise QlibReplayMismatchError(
-            "frozen-model replay candidate count differs",
-            reason_code="candidate_count_differs",
-        )
-    comparisons = []
-    for expected_row, actual_row in zip(expected_rows, actual_rows):
-        expected_identity = (
-            str(expected_row.get("stock_code")),
-            int(expected_row.get("model_rank")),
-        )
-        actual_identity = (
-            str(actual_row.get("stock_code")),
-            int(actual_row.get("model_rank")),
-        )
-        if expected_identity != actual_identity:
-            raise QlibReplayMismatchError(
-                "frozen-model replay code or rank differs",
-                reason_code="code_or_rank_differs",
-            )
-        expected_score = float(expected_row.get("doubleensemble_score"))
-        actual_score = float(actual_row.get("doubleensemble_score"))
-        difference = abs(expected_score - actual_score)
-        if not math.isfinite(difference) or difference > REPLAY_SCORE_ABS_TOLERANCE:
-            raise QlibReplayMismatchError(
-                "frozen-model replay score exceeds tolerance",
-                reason_code="score_exceeds_tolerance",
-            )
-        comparisons.append(
-            {
-                "code": actual_identity[0],
-                "rank": actual_identity[1],
-                "expected_score": expected_score,
-                "actual_score": actual_score,
-                "absolute_difference": difference,
-            }
-        )
-    return {
-        "candidate_count": len(comparisons),
-        "comparisons": comparisons,
-        "score_absolute_tolerance": REPLAY_SCORE_ABS_TOLERANCE,
-        "status": "matched",
-        "trade_date": REPLAY_TRADE_DATE.isoformat(),
-    }
-
-
-def _replay_failure_path(artifact_dir: Path) -> Path:
-    return artifact_dir.with_name(f"{artifact_dir.name}.replay-failed.json")
-
-
-def _load_replay_failure(path: Path) -> dict[str, Any]:
-    failure = _load_manifest(path)
-    if failure.get("schema_version") != REPLAY_FAILURE_SCHEMA_VERSION:
-        raise QlibShadowConflictError("replay-failure schema differs")
-    if failure.get("status") != "failed_closed":
-        raise QlibShadowConflictError("replay-failure status differs")
-    return failure
-
-
-def record_replay_failure(
-    *,
-    provider_uri: Path | str,
-    artifact_dir: Path | str,
-    expected_candidates_path: Path | str,
-    reason_code: str,
-    attempted_at: datetime | str | None = None,
-) -> dict[str, Any]:
-    """Write the immutable receipt that prohibits a second training replay."""
-
-    target = Path(artifact_dir).resolve()
-    failure_path = _replay_failure_path(target)
-    if target.exists():
-        raise QlibShadowConflictError("model artifact already exists")
-    if failure_path.exists():
-        return _load_replay_failure(failure_path)
-    _, expected_file_hash = _expected_batch(
-        expected_candidates_path, REPLAY_TRADE_DATE
-    )
-    provider_hash, provider_file_count = provider_tree_sha256(provider_uri)
-    failure = _manifest_with_hash(
-        {
-            "attempted_at": _generated_at(attempted_at).isoformat(timespec="seconds"),
-            "expected_candidates_file_sha256": expected_file_hash,
-            "model_config_sha256": model_config_sha256(),
-            "model_version": MODEL_CONFIG_VERSION,
-            "provider_file_count": provider_file_count,
-            "qlib_version": QLIB_PACKAGE_VERSION,
-            "random_seed": RANDOM_SEED,
-            "reason_code": str(reason_code),
-            "replay_trade_date": REPLAY_TRADE_DATE.isoformat(),
-            "schema_version": REPLAY_FAILURE_SCHEMA_VERSION,
-            "score_absolute_tolerance": REPLAY_SCORE_ABS_TOLERANCE,
-            "segments": APPROVED_SPLITS.to_dict(),
-            "status": "failed_closed",
-            "training_input_sha256": provider_hash,
-        }
-    )
-    failure_path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = failure_path.with_name(f".{failure_path.name}.{os.getpid()}.tmp")
-    temporary.write_bytes(_strict_json_bytes(failure))
+def _load_artifact_model(target: Path, expected_sha256: str) -> Any:
+    model_bytes = (target / "model.pkl").read_bytes()
+    if _sha256_bytes(model_bytes) != expected_sha256:
+        raise QlibShadowConflictError("frozen model file hash mismatch")
     try:
-        os.rename(temporary, failure_path)
-    except OSError:
-        temporary.unlink(missing_ok=True)
-        if failure_path.exists():
-            return _load_replay_failure(failure_path)
-        raise
-    return failure
-
-
-def verify_frozen_model_artifact(
-    artifact_dir: Path | str,
-) -> tuple[Any, dict[str, Any]]:
-    """Verify all hashes before loading the local frozen model pickle."""
-
-    target = Path(artifact_dir).resolve()
-    failure_path = _replay_failure_path(target)
-    if failure_path.exists():
-        _load_replay_failure(failure_path)
-        raise QlibShadowError(
-            "frozen model is unavailable because the one-time replay failed"
-        )
-    manifest = _load_manifest(target / "manifest.json")
-    _verify_exact_files(
-        target,
-        manifest=manifest,
-        expected_names={"manifest.json", "model.pkl", "replay.json"},
-    )
-    if manifest.get("schema_version") != FROZEN_SCHEMA_VERSION:
-        raise QlibShadowConflictError("frozen-model schema differs")
-    if manifest.get("model_version") != MODEL_CONFIG_VERSION:
-        raise QlibShadowConflictError("frozen-model version differs")
-    if manifest.get("qlib_version") != QLIB_PACKAGE_VERSION:
-        raise QlibShadowConflictError("frozen-model Qlib version differs")
-    if manifest.get("model_config_sha256") != model_config_sha256():
-        raise QlibShadowConflictError("frozen-model config hash differs")
-    if manifest.get("segments") != APPROVED_SPLITS.to_dict():
-        raise QlibShadowConflictError("frozen-model time segments differ")
-    try:
-        model = pickle.loads((target / "model.pkl").read_bytes())
+        return pickle.loads(model_bytes)
     except Exception as exc:
         raise QlibShadowConflictError("frozen model cannot be loaded") from exc
-    return model, manifest
 
 
-def freeze_model_artifact(
+def _acceptance_inference(
     *,
-    provider_uri: Path | str,
-    artifact_dir: Path | str,
-    expected_candidates_path: Path | str,
-    generated_at: datetime | str | None = None,
+    target: Path,
+    model_file_sha256: str,
+    provider: Path,
 ) -> dict[str, Any]:
-    """Replay the approved fit once, verify 2026-08-24, then freeze atomically."""
-
-    target = Path(artifact_dir).resolve()
-    failure_path = _replay_failure_path(target)
-    if failure_path.exists():
-        _load_replay_failure(failure_path)
-        raise QlibShadowError(
-            "one-time frozen-model replay previously failed; retraining is prohibited"
-        )
-    if target.exists():
-        _, manifest = verify_frozen_model_artifact(target)
-        return {"status": "exists", "artifact_dir": str(target), **manifest}
-
-    provider = Path(provider_uri).resolve()
-    expected, expected_file_hash = _expected_batch(
-        expected_candidates_path, REPLAY_TRADE_DATE
-    )
-    provider_hash, provider_file_count = provider_tree_sha256(provider)
-    model, predictions, run_manifest = fit_model_and_predict(
+    model = _load_artifact_model(target, model_file_sha256)
+    predictions, inference = predict_with_frozen_model(
+        model=model,
         provider_uri=provider,
-        splits=APPROVED_SPLITS,
+        data_as_of=ACCEPTANCE_DATA_AS_OF,
     )
     calendar = (provider / "calendars" / "day.txt").read_text(
         encoding="utf-8"
@@ -388,14 +219,141 @@ def freeze_model_artifact(
         provider_uri=provider,
         calendar=calendar,
     )
-    actual_matches = [
-        item for item in batches if item["trade_date"] == REPLAY_TRADE_DATE.isoformat()
+    matches = [
+        item
+        for item in batches
+        if item["trade_date"] == ACCEPTANCE_TRADE_DATE.isoformat()
     ]
-    if len(actual_matches) != 1:
-        raise QlibShadowError("replay output must contain 2026-08-24 exactly once")
-    replay = _replay_evidence(expected, actual_matches[0])
-    replay["expected_candidates_file_sha256"] = expected_file_hash
-    replay_bytes = _strict_json_bytes(replay)
+    if (
+        len(matches) != 1
+        or matches[0]["data_cutoff_date"] != ACCEPTANCE_DATA_AS_OF.isoformat()
+    ):
+        raise QlibShadowError(
+            "frozen-model acceptance did not produce exactly one T-1 batch"
+        )
+    return {"candidate_batch": matches[0], "inference": inference}
+
+
+def verify_frozen_model_artifact(
+    artifact_dir: Path | str,
+    *,
+    expected_manifest_sha256: str | None = None,
+) -> tuple[Any, dict[str, Any]]:
+    """Verify all hashes before loading the local frozen model pickle."""
+
+    target = Path(artifact_dir).resolve()
+    manifest = _load_manifest(target / "manifest.json")
+    if (
+        expected_manifest_sha256 is not None
+        and manifest.get("manifest_sha256") != expected_manifest_sha256
+    ):
+        raise QlibShadowConflictError("frozen-model pinned identity differs")
+    _verify_exact_files(
+        target,
+        manifest=manifest,
+        expected_names={
+            "acceptance.json",
+            "manifest.json",
+            "model.pkl",
+            "training.json",
+        },
+    )
+    if manifest.get("schema_version") != FROZEN_SCHEMA_VERSION:
+        raise QlibShadowConflictError("frozen-model schema differs")
+    if manifest.get("model_version") != FROZEN_MODEL_VERSION:
+        raise QlibShadowConflictError("frozen-model version differs")
+    if manifest.get("qlib_version") != QLIB_PACKAGE_VERSION:
+        raise QlibShadowConflictError("frozen-model Qlib version differs")
+    if manifest.get("model_config_sha256") != model_config_sha256():
+        raise QlibShadowConflictError("frozen-model config hash differs")
+    if manifest.get("segments") != APPROVED_SPLITS.to_dict():
+        raise QlibShadowConflictError("frozen-model time segments differ")
+    if manifest.get("status") != "accepted":
+        raise QlibShadowConflictError("frozen-model status differs")
+    training = _load_manifest(target / "training.json")
+    acceptance = _load_manifest(target / "acceptance.json")
+    attempt = _load_manifest(_training_attempt_path(target))
+    if manifest.get("training_manifest_sha256") != training["manifest_sha256"]:
+        raise QlibShadowConflictError("training manifest identity differs")
+    if manifest.get("training_attempt_sha256") != attempt["manifest_sha256"]:
+        raise QlibShadowConflictError("training attempt identity differs")
+    if (
+        manifest.get("acceptance_manifest_sha256")
+        != acceptance["manifest_sha256"]
+    ):
+        raise QlibShadowConflictError("acceptance manifest identity differs")
+    if training.get("model_version") != FROZEN_MODEL_VERSION:
+        raise QlibShadowConflictError("training model version differs")
+    if training.get("status") != "trained_once":
+        raise QlibShadowConflictError("training status differs")
+    if attempt.get("status") != "started":
+        raise QlibShadowConflictError("training attempt status differs")
+    if acceptance.get("status") != "matched":
+        raise QlibShadowConflictError("same-artifact acceptance did not pass")
+    if (
+        acceptance.get("first_inference_sha256")
+        != acceptance.get("second_inference_sha256")
+    ):
+        raise QlibShadowConflictError("same-artifact inference hashes differ")
+    model = _load_artifact_model(target, manifest["files"]["model.pkl"])
+    return model, manifest
+
+
+def freeze_model_artifact(
+    *,
+    provider_uri: Path | str,
+    artifact_dir: Path | str,
+    generated_at: datetime | str | None = None,
+    expected_manifest_sha256: str | None = None,
+) -> dict[str, Any]:
+    """Train prospective-v1 once, save it, then verify two loads infer identically."""
+
+    target = Path(artifact_dir).resolve()
+    if target.exists():
+        try:
+            _, manifest = verify_frozen_model_artifact(
+                target,
+                expected_manifest_sha256=expected_manifest_sha256,
+            )
+        except QlibShadowError as exc:
+            raise QlibShadowConflictError(
+                "prospective-v1 artifact is incomplete; retraining is prohibited"
+            ) from exc
+        return {
+            "operation_status": "exists",
+            "artifact_dir": str(target),
+            **manifest,
+        }
+
+    provider = Path(provider_uri).resolve()
+    provider_hash, provider_file_count = provider_tree_sha256(provider)
+    created_at = _generated_at(generated_at).isoformat(timespec="seconds")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    attempt_path = _training_attempt_path(target)
+    if attempt_path.exists():
+        _load_manifest(attempt_path)
+        raise QlibShadowError(
+            "prospective-v1 training was already attempted; retraining is prohibited"
+        )
+    attempt = _write_training_attempt(
+        attempt_path,
+        {
+            "attempted_at": created_at,
+            "model_config_sha256": model_config_sha256(),
+            "model_version": FROZEN_MODEL_VERSION,
+            "provider_file_count": provider_file_count,
+            "qlib_version": QLIB_PACKAGE_VERSION,
+            "random_seed": RANDOM_SEED,
+            "schema_version": TRAINING_ATTEMPT_SCHEMA_VERSION,
+            "segments": APPROVED_SPLITS.to_dict(),
+            "status": "started",
+            "training_input_sha256": provider_hash,
+        },
+    )
+    model, _, run_manifest = fit_model_and_predict(
+        provider_uri=provider,
+        splits=APPROVED_SPLITS,
+    )
     try:
         model_bytes = pickle.dumps(model, protocol=pickle.HIGHEST_PROTOCOL)
     except Exception as exc:
@@ -403,54 +361,115 @@ def freeze_model_artifact(
     provider_manifest = json.loads(
         (provider / "metadata" / "manifest.json").read_text(encoding="utf-8")
     )
-    created_at = _generated_at(generated_at).isoformat(timespec="seconds")
-    manifest = _manifest_with_hash(
+    model_file_sha256 = _sha256_bytes(model_bytes)
+    training = _manifest_with_hash(
         {
             "created_at": created_at,
-            "files": {
-                "model.pkl": _sha256_bytes(model_bytes),
-                "replay.json": _sha256_bytes(replay_bytes),
-            },
+            "model_file_sha256": model_file_sha256,
             "model_config": model_config_payload(),
             "model_config_sha256": model_config_sha256(),
-            "model_version": MODEL_CONFIG_VERSION,
+            "model_version": FROZEN_MODEL_VERSION,
             "provider_file_count": provider_file_count,
             "provider_manifest_sha256": provider_manifest.get("manifest_sha256"),
             "qlib_version": QLIB_PACKAGE_VERSION,
             "random_seed": RANDOM_SEED,
-            "replay": {
-                "candidate_count": replay["candidate_count"],
-                "score_absolute_tolerance": REPLAY_SCORE_ABS_TOLERANCE,
-                "status": "matched",
-                "trade_date": REPLAY_TRADE_DATE.isoformat(),
-            },
             "run_manifest": run_manifest,
-            "schema_version": FROZEN_SCHEMA_VERSION,
+            "schema_version": TRAINING_RECORD_SCHEMA_VERSION,
             "segments": APPROVED_SPLITS.to_dict(),
+            "status": "trained_once",
+            "training_attempt_sha256": attempt["manifest_sha256"],
             "training_input_sha256": provider_hash,
         }
     )
-    manifest_bytes = _strict_json_bytes(manifest)
-    target.parent.mkdir(parents=True, exist_ok=True)
+    training_bytes = _strict_json_bytes(training)
     temporary = Path(tempfile.mkdtemp(prefix=f".{target.name}-", dir=target.parent))
     try:
         (temporary / "model.pkl").write_bytes(model_bytes)
-        (temporary / "replay.json").write_bytes(replay_bytes)
-        (temporary / "manifest.json").write_bytes(manifest_bytes)
+        (temporary / "training.json").write_bytes(training_bytes)
         try:
             os.rename(temporary, target)
         except OSError:
-            if target.exists():
-                verify_frozen_model_artifact(target)
-                shutil.rmtree(temporary, ignore_errors=True)
-                raise QlibShadowConflictError(
-                    "frozen-model path appeared during one-time training"
-                )
-            raise
+            shutil.rmtree(temporary, ignore_errors=True)
+            raise QlibShadowConflictError(
+                "prospective-v1 artifact path appeared during one-time training"
+            ) from None
     except Exception:
         shutil.rmtree(temporary, ignore_errors=True)
         raise
-    return {"status": "created", "artifact_dir": str(target), **manifest}
+
+    first = _acceptance_inference(
+        target=target,
+        model_file_sha256=model_file_sha256,
+        provider=provider,
+    )
+    second = _acceptance_inference(
+        target=target,
+        model_file_sha256=model_file_sha256,
+        provider=provider,
+    )
+    first_hash = _content_sha256(first)
+    second_hash = _content_sha256(second)
+    if first_hash != second_hash or canonical_json_bytes(first) != canonical_json_bytes(
+        second
+    ):
+        raise QlibShadowConflictError(
+            "same frozen artifact produced inconsistent repeated inference"
+        )
+    acceptance = _manifest_with_hash(
+        {
+            "candidate_batch": first["candidate_batch"],
+            "candidate_count": len(first["candidate_batch"].get("candidates", [])),
+            "comparison": "exact_canonical_json",
+            "data_as_of": ACCEPTANCE_DATA_AS_OF.isoformat(),
+            "first_inference_sha256": first_hash,
+            "inference": first["inference"],
+            "model_file_sha256": model_file_sha256,
+            "repeated_load_count": 2,
+            "second_inference_sha256": second_hash,
+            "status": "matched",
+            "trade_date": ACCEPTANCE_TRADE_DATE.isoformat(),
+        }
+    )
+    acceptance_bytes = _strict_json_bytes(acceptance)
+    manifest = _manifest_with_hash(
+        {
+            "acceptance_manifest_sha256": acceptance["manifest_sha256"],
+            "created_at": created_at,
+            "files": {
+                "acceptance.json": _sha256_bytes(acceptance_bytes),
+                "model.pkl": model_file_sha256,
+                "training.json": _sha256_bytes(training_bytes),
+            },
+            "model_config_sha256": model_config_sha256(),
+            "model_config_version": MODEL_CONFIG_VERSION,
+            "model_version": FROZEN_MODEL_VERSION,
+            "qlib_version": QLIB_PACKAGE_VERSION,
+            "schema_version": FROZEN_SCHEMA_VERSION,
+            "segments": APPROVED_SPLITS.to_dict(),
+            "status": "accepted",
+            "training_attempt_sha256": attempt["manifest_sha256"],
+            "training_input_sha256": provider_hash,
+            "training_manifest_sha256": training["manifest_sha256"],
+        }
+    )
+    try:
+        with (target / "acceptance.json").open("xb") as handle:
+            handle.write(acceptance_bytes)
+        with (target / "manifest.json").open("xb") as handle:
+            handle.write(_strict_json_bytes(manifest))
+    except OSError as exc:
+        raise QlibShadowConflictError(
+            "prospective-v1 acceptance files cannot be written immutably"
+        ) from exc
+    verify_frozen_model_artifact(
+        target,
+        expected_manifest_sha256=expected_manifest_sha256,
+    )
+    return {
+        "operation_status": "created",
+        "artifact_dir": str(target),
+        **manifest,
+    }
 
 
 def _validate_t_minus_one(
@@ -493,6 +512,7 @@ def _shadow_payload(
     generated_at: datetime,
     input_content_sha256: str,
     model_manifest_sha256: str,
+    model_version: str,
     provider_content_sha256: str,
     inference: Mapping[str, Any],
 ) -> dict[str, Any]:
@@ -503,7 +523,7 @@ def _shadow_payload(
             "code": str(row["stock_code"]),
             "data_as_of": data_as_of.isoformat(),
             "generated_at": generated,
-            "model_version": MODEL_CONFIG_VERSION,
+            "model_version": model_version,
             "name": row.get("stock_name"),
             "rank": int(row["model_rank"]),
             "score": float(row["doubleensemble_score"]),
@@ -517,7 +537,7 @@ def _shadow_payload(
         "data_as_of": data_as_of.isoformat(),
         "inference": dict(inference),
         "input_content_sha256": input_content_sha256,
-        "model_version": MODEL_CONFIG_VERSION,
+        "model_version": model_version,
         "status": status,
         "trade_date": trade_date.isoformat(),
     }
@@ -574,6 +594,7 @@ def run_prospective_shadow(
     trade_date: date | str,
     data_as_of: date | str,
     generated_at: datetime | str | None = None,
+    expected_model_manifest_sha256: str | None = None,
 ) -> dict[str, Any]:
     """Load one frozen model, infer T from T-1 only, and archive immutably."""
 
@@ -585,7 +606,10 @@ def run_prospective_shadow(
         trade_date=signal_day,
         data_as_of=cutoff,
     )
-    model, model_manifest = verify_frozen_model_artifact(artifact_dir)
+    model, model_manifest = verify_frozen_model_artifact(
+        artifact_dir,
+        expected_manifest_sha256=expected_model_manifest_sha256,
+    )
     provider_hash, provider_file_count = provider_tree_sha256(provider)
     input_identity = {
         "data_as_of": cutoff.isoformat(),
@@ -630,6 +654,7 @@ def run_prospective_shadow(
         generated_at=archive_time,
         input_content_sha256=input_hash,
         model_manifest_sha256=model_manifest["manifest_sha256"],
+        model_version=model_manifest["model_version"],
         provider_content_sha256=provider_hash,
         inference=inference,
     )

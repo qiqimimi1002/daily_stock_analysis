@@ -3,17 +3,13 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import pickle
-from types import SimpleNamespace
 
 import pandas as pd
 import pytest
 
 import research.benchmarks.qlib_shadow as shadow
-import scripts.research_qlib_doubleensemble as cli
 from research.benchmarks.qlib_doubleensemble import (
-    MODEL_CONFIG_VERSION,
     QLIB_PACKAGE_VERSION,
-    build_candidate_batches,
     model_config_sha256,
 )
 
@@ -56,11 +52,12 @@ def _patch_inference(monkeypatch, scores: list[float] | None = None) -> None:
     monkeypatch.setattr(
         shadow,
         "verify_frozen_model_artifact",
-        lambda artifact: (
+        lambda artifact, **kwargs: (
             object(),
             {
                 "files": {"model.pkl": "b" * 64},
                 "manifest_sha256": "c" * 64,
+                "model_version": shadow.FROZEN_MODEL_VERSION,
             },
         ),
     )
@@ -196,24 +193,57 @@ def test_shadow_requires_exact_previous_trading_session(tmp_path, monkeypatch):
 
 
 def _write_fake_frozen_artifact(target: Path) -> None:
+    target.parent.mkdir(parents=True, exist_ok=True)
     target.mkdir(parents=True)
     model_bytes = pickle.dumps({"frozen": True})
-    replay_bytes = b"{}\n"
+    model_hash = shadow._sha256_bytes(model_bytes)
+    attempt = shadow._manifest_with_hash(
+        {
+            "schema_version": shadow.TRAINING_ATTEMPT_SCHEMA_VERSION,
+            "status": "started",
+        }
+    )
+    training = shadow._manifest_with_hash(
+        {
+            "model_file_sha256": model_hash,
+            "model_version": shadow.FROZEN_MODEL_VERSION,
+            "schema_version": shadow.TRAINING_RECORD_SCHEMA_VERSION,
+            "status": "trained_once",
+        }
+    )
+    acceptance = shadow._manifest_with_hash(
+        {
+            "first_inference_sha256": "d" * 64,
+            "second_inference_sha256": "d" * 64,
+            "status": "matched",
+        }
+    )
+    training_bytes = shadow._strict_json_bytes(training)
+    acceptance_bytes = shadow._strict_json_bytes(acceptance)
     manifest = shadow._manifest_with_hash(
         {
+            "acceptance_manifest_sha256": acceptance["manifest_sha256"],
             "files": {
-                "model.pkl": shadow._sha256_bytes(model_bytes),
-                "replay.json": shadow._sha256_bytes(replay_bytes),
+                "acceptance.json": shadow._sha256_bytes(acceptance_bytes),
+                "model.pkl": model_hash,
+                "training.json": shadow._sha256_bytes(training_bytes),
             },
             "model_config_sha256": model_config_sha256(),
-            "model_version": MODEL_CONFIG_VERSION,
+            "model_version": shadow.FROZEN_MODEL_VERSION,
             "qlib_version": QLIB_PACKAGE_VERSION,
             "schema_version": shadow.FROZEN_SCHEMA_VERSION,
             "segments": shadow.APPROVED_SPLITS.to_dict(),
+            "status": "accepted",
+            "training_attempt_sha256": attempt["manifest_sha256"],
+            "training_manifest_sha256": training["manifest_sha256"],
         }
     )
+    shadow._training_attempt_path(target).write_bytes(
+        shadow._strict_json_bytes(attempt)
+    )
     (target / "model.pkl").write_bytes(model_bytes)
-    (target / "replay.json").write_bytes(replay_bytes)
+    (target / "training.json").write_bytes(training_bytes)
+    (target / "acceptance.json").write_bytes(acceptance_bytes)
     (target / "manifest.json").write_bytes(shadow._strict_json_bytes(manifest))
 
 
@@ -228,9 +258,9 @@ def test_existing_frozen_artifact_never_calls_fit(tmp_path, monkeypatch):
     result = shadow.freeze_model_artifact(
         provider_uri=tmp_path / "missing-provider",
         artifact_dir=target,
-        expected_candidates_path=tmp_path / "missing-candidates.json",
     )
-    assert result["status"] == "exists"
+    assert result["operation_status"] == "exists"
+    assert result["status"] == "accepted"
 
 
 def test_frozen_artifact_tamper_fails_closed(tmp_path):
@@ -241,115 +271,113 @@ def test_frozen_artifact_tamper_fails_closed(tmp_path):
         shadow.verify_frozen_model_artifact(target)
 
 
-def test_one_time_freeze_requires_matching_replay(tmp_path, monkeypatch):
+def test_pinned_model_identity_fails_closed(tmp_path):
+    target = tmp_path / "frozen"
+    _write_fake_frozen_artifact(target)
+    with pytest.raises(shadow.QlibShadowConflictError, match="pinned identity"):
+        shadow.verify_frozen_model_artifact(
+            target,
+            expected_manifest_sha256="0" * 64,
+        )
+
+
+def test_training_attempt_cannot_be_overwritten(tmp_path):
+    path = tmp_path / "prospective-v1.training-attempt.json"
+    first = shadow._write_training_attempt(path, {"status": "first"})
+    original = path.read_bytes()
+    with pytest.raises(shadow.QlibShadowConflictError, match="already attempted"):
+        shadow._write_training_attempt(path, {"status": "second"})
+    assert path.read_bytes() == original
+    assert first["status"] == "first"
+
+
+def test_prospective_v1_trains_once_and_accepts_two_identical_loads(
+    tmp_path, monkeypatch
+):
     provider = _provider(tmp_path)
     predictions = _predictions()
-    expected = build_candidate_batches(
-        predictions=predictions,
-        provider_uri=provider,
-        calendar=["2026-08-21", "2026-08-24"],
-    )
-    expected_path = tmp_path / "candidates.json"
-    expected_path.write_text(json.dumps(expected), encoding="utf-8")
-    monkeypatch.setattr(
-        shadow,
-        "fit_model_and_predict",
-        lambda **kwargs: (
+    calls = {"fit": 0, "predict": 0}
+
+    def fit_once(**kwargs):
+        calls["fit"] += 1
+        return (
             {"frozen": True},
             predictions,
             {"qlib_version": QLIB_PACKAGE_VERSION},
-        ),
+        )
+
+    def infer_loaded(**kwargs):
+        calls["predict"] += 1
+        return predictions, {"qlib_version": QLIB_PACKAGE_VERSION}
+
+    monkeypatch.setattr(
+        shadow,
+        "fit_model_and_predict",
+        fit_once,
     )
+    monkeypatch.setattr(shadow, "predict_with_frozen_model", infer_loaded)
     target = tmp_path / "frozen"
     result = shadow.freeze_model_artifact(
         provider_uri=provider,
         artifact_dir=target,
-        expected_candidates_path=expected_path,
         generated_at="2026-08-24T16:00:00+08:00",
     )
     model, manifest = shadow.verify_frozen_model_artifact(target)
-    assert result["status"] == "created"
+    existing = shadow.freeze_model_artifact(
+        provider_uri=tmp_path / "missing-provider",
+        artifact_dir=target,
+    )
+    acceptance = json.loads((target / "acceptance.json").read_text(encoding="utf-8"))
+    assert result["operation_status"] == "created"
+    assert existing["operation_status"] == "exists"
+    assert result["status"] == "accepted"
     assert model == {"frozen": True}
-    assert manifest["replay"]["status"] == "matched"
+    assert manifest["model_version"] == shadow.FROZEN_MODEL_VERSION
+    assert acceptance["status"] == "matched"
+    assert acceptance["first_inference_sha256"] == acceptance["second_inference_sha256"]
+    assert calls == {"fit": 1, "predict": 2}
     assert manifest["training_input_sha256"] == shadow.provider_tree_sha256(provider)[0]
 
 
-def test_one_time_freeze_mismatch_writes_no_model(tmp_path, monkeypatch):
+def test_inconsistent_same_artifact_inference_leaves_model_but_blocks_retraining(
+    tmp_path, monkeypatch
+):
     provider = _provider(tmp_path)
-    expected = build_candidate_batches(
-        predictions=_predictions(),
-        provider_uri=provider,
-        calendar=["2026-08-21", "2026-08-24"],
-    )
-    expected_path = tmp_path / "candidates.json"
-    expected_path.write_text(json.dumps(expected), encoding="utf-8")
+    calls = {"fit": 0, "predict": 0}
+
+    def fit_once(**kwargs):
+        calls["fit"] += 1
+        return {"frozen": True}, _predictions(), {}
+
+    def inconsistent_inference(**kwargs):
+        calls["predict"] += 1
+        scores = None if calls["predict"] == 1 else [1.0, 2.0, 2.0, 8.0, 3.0, 0.0]
+        return _predictions(scores), {}
+
     monkeypatch.setattr(
         shadow,
         "fit_model_and_predict",
-        lambda **kwargs: (
-            {"frozen": True},
-            _predictions([1.0, 2.0, 2.0, 8.0, 3.0, 0.0]),
-            {"qlib_version": QLIB_PACKAGE_VERSION},
-        ),
+        fit_once,
     )
+    monkeypatch.setattr(shadow, "predict_with_frozen_model", inconsistent_inference)
     target = tmp_path / "frozen"
-    with pytest.raises(shadow.QlibShadowError, match="score exceeds tolerance"):
+    with pytest.raises(shadow.QlibShadowError, match="inconsistent repeated"):
         shadow.freeze_model_artifact(
             provider_uri=provider,
             artifact_dir=target,
-            expected_candidates_path=expected_path,
         )
-    assert not target.exists()
-
-
-def test_replay_failure_receipt_prohibits_second_fit(tmp_path, monkeypatch):
-    provider = _provider(tmp_path)
-    predictions = _predictions()
-    expected = build_candidate_batches(
-        predictions=predictions,
-        provider_uri=provider,
-        calendar=["2026-08-21", "2026-08-24"],
-    )
-    expected_path = tmp_path / "candidates.json"
-    expected_path.write_text(json.dumps(expected), encoding="utf-8")
-    target = tmp_path / "frozen"
-    receipt = shadow.record_replay_failure(
-        provider_uri=provider,
-        artifact_dir=target,
-        expected_candidates_path=expected_path,
-        reason_code="score_exceeds_tolerance",
-        attempted_at="2026-08-24T16:52:10+08:00",
-    )
+    assert (target / "model.pkl").is_file()
+    assert (target / "training.json").is_file()
+    assert not (target / "manifest.json").exists()
+    assert shadow._training_attempt_path(target).is_file()
 
     def forbidden_fit(**kwargs):
-        raise AssertionError("a failed replay must never be repeated")
+        raise AssertionError("incomplete prospective-v1 must never retrain")
 
     monkeypatch.setattr(shadow, "fit_model_and_predict", forbidden_fit)
-    with pytest.raises(shadow.QlibShadowError, match="retraining is prohibited"):
+    with pytest.raises(shadow.QlibShadowError, match="incomplete"):
         shadow.freeze_model_artifact(
             provider_uri=provider,
             artifact_dir=target,
-            expected_candidates_path=expected_path,
         )
-    with pytest.raises(shadow.QlibShadowError, match="one-time replay failed"):
-        shadow.verify_frozen_model_artifact(target)
-    assert receipt["status"] == "failed_closed"
-    assert receipt["reason_code"] == "score_exceeds_tolerance"
-    assert not target.exists()
-
-
-@pytest.mark.parametrize(
-    ("entry", "message"),
-    [
-        (cli.freeze_model, "retraining is prohibited"),
-        (cli.shadow, "prospective shadow is disabled"),
-    ],
-)
-def test_committed_replay_failure_disables_cli_before_work(
-    tmp_path, monkeypatch, entry, message
-):
-    evidence = tmp_path / "replay-failed.json"
-    evidence.write_text("{}", encoding="utf-8")
-    monkeypatch.setattr(cli, "REPLAY_FAILURE_EVIDENCE", evidence)
-    with pytest.raises(RuntimeError, match=message):
-        entry(SimpleNamespace())
+    assert calls == {"fit": 1, "predict": 2}

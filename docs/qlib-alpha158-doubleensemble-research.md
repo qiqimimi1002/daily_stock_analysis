@@ -96,39 +96,54 @@ The research CLI also contains two deliberately manual commands:
 ```bash
 python scripts/research_qlib_doubleensemble.py freeze-model \
   --provider research/runtime/qlib/provider \
-  --artifact research/runtime/qlib/frozen-doubleensemble-v1 \
-  --expected-candidates research/runtime/qlib/result/candidates.json
+  --artifact research/runtime/qlib/frozen-doubleensemble-prospective-v1
 
 python scripts/research_qlib_doubleensemble.py shadow \
   --provider research/runtime/qlib/provider \
-  --artifact research/runtime/qlib/frozen-doubleensemble-v1 \
-  --archive-root research/runtime/qlib/prospective-shadow \
+  --artifact research/runtime/qlib/frozen-doubleensemble-prospective-v1 \
+  --archive-root research/runtime/qlib/prospective-shadow-v1 \
   --trade-date YYYY-MM-DD --data-as-of YYYY-MM-DD
 ```
 
 `freeze-model` uses only the approved segments, Qlib 0.9.7, random seed 0,
-and the unchanged official configuration. A valid artifact is created
-atomically only after the 2026-08-24 code/rank replay and every score pass the
-declared absolute tolerance of `1e-10`. A failure receipt prohibits another
-fit. `shadow` contains no fit call: it verifies and loads that artifact, checks
-that `data-as-of` is exactly the completed T-1 trading session, and archives
-only `result.json` plus a hash manifest. Same-input reruns verify and return the
+and the unchanged official configuration. Before fit it writes an immutable
+training-attempt receipt. The single fit then immediately saves `model.pkl`
+and `training.json`; an interruption or incomplete artifact permanently blocks
+another fit. Acceptance separately loads that same on-disk model twice and
+requires the complete inference/candidate payloads to have identical canonical
+JSON hashes. It does not compare against, or attempt to reproduce, a separately
+trained historical model.
+
+The formally numbered `qlib-alpha158-doubleensemble-prospective-v1` artifact
+was trained once on 2026-08-25 and passed two-load acceptance for trade date
+2026-08-24 using completed data through 2026-08-21. Both inference hashes are
+`05144d2612c76acbd9a7a21cab4da1fa27d1b6f8ee57261b830756852fc05e3f`.
+The model file SHA-256 is
+`0336cdcd8adc29dd8810db2901e0b1cd765c5fd988b3bf8226996fd1545ae71e`.
+The artifact is stored under
+`research/runtime/qlib/frozen-doubleensemble-prospective-v1`; public acceptance
+evidence is
+`research/results/qlib_doubleensemble_prospective_v1_2026-08-25.json`.
+Both CLI entries pin the accepted artifact manifest hash
+`f282bd287fbdc07b06aa493955364ea46b6dd42616a5cdc512a28cd0288fe0ae`;
+a different or rewritten manifest fails closed even if it is internally
+self-consistent.
+
+`shadow` contains no fit call: it verifies and loads that artifact, checks that
+`data-as-of` is exactly the completed T-1 trading session, and archives only
+`result.json` plus a hash manifest. Same-input reruns verify and return the
 first result; input, output, or file conflicts preserve the original and fail
 closed. Fewer than three finite scores produces zero candidates. No outcome is
 pre-filled; the existing Outcome Engine can evaluate naturally matured days
-later.
+later. The acceptance batch is not labelled as a prospective sample because
+it was generated after its trade date. The first real sample requires the
+existing provider and calendar to be refreshed through that run's completed
+T-1 session; no Tushare or new acquisition path is added here.
 
-The one permitted real replay on 2026-08-24 did **not** pass: at least one
-score exceeded `1e-10`. The implementation rejected it before serializing or
-archiving the model. It did not persist rejected predictions, so the exact
-score delta is intentionally unavailable and no second replay is authorized.
-The committed failure evidence is
-`research/results/qlib_doubleensemble_freeze_replay_2026-08-24.json`; the
-private receipt is
-`research/runtime/qlib/frozen-doubleensemble-v1.replay-failed.json`.
-Consequently the `freeze-model` and `shadow` CLI commands now reject before
-training or inference. No prospective archive exists, and this branch is not
-ready to accumulate next-trading-day shadow samples.
+The earlier attempt to reproduce the lost first-run scores remains a separate
+historical failure in
+`research/results/qlib_doubleensemble_freeze_replay_2026-08-24.json`. It was
+not retried and is not the identity of prospective-v1.
 
 ## Frozen sample-out evidence (2026-08-24)
 
