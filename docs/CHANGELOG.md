@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 > For user-friendly release highlights, see the [GitHub Releases](https://github.com/ZhuLinsen/daily_stock_analysis/releases) page.
 
 ## [Unreleased]
+
+- [改进] 为 Qlib 收盘后全市场 Baostock 刷新增有界超时、逐股进度日志和 fail-closed staging 断点续跑
 <!-- 新条目格式：- [类型] 描述（类型取值：新功能/改进/修复/文档/测试/chore）-->
 <!-- 每条独立一行追加到本段末尾，无需分类标题，合并时冲突最小 -->
 - [新功能] 新增 research-only Microsoft Qlib Alpha158 + DoubleEnsemble 离线候选与严格时间隔离样本外评估，不接入生产筛选或交易链路。

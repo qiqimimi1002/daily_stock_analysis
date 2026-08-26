@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import socket
 import subprocess
 import tempfile
 import time as clock
@@ -51,10 +52,31 @@ DAILY_READY_SCHEMA_VERSION = "qlib-doubleensemble-nightly-ready-v1"
 PRIVATE_REPOSITORY = "qiqimimi1002/daily-stock-tushare-private"
 PRIVATE_WORKFLOW = "tushare-readonly-acceptance.yml"
 PRIVATE_CONFIRMATION = "PERSONAL_PRIVATE_READ_ONLY"
+REFRESH_STATE_SCHEMA_VERSION = "qlib-raw-refresh-state-v1"
+BAOSTOCK_REQUEST_TIMEOUT_SECONDS = 15.0
+BAOSTOCK_MAX_ATTEMPTS = 2
+BAOSTOCK_MAX_FAILURES = 5
+STOCK_PROGRESS_INTERVAL = 50
 
 
 class QlibDailyError(QlibShadowError):
     """Raised when the manual daily preparation contract is not satisfied."""
+
+
+class _BaostockSocketGuard:
+    """Keep Baostock's receive loop bounded when the peer closes the socket."""
+
+    def __init__(self, wrapped: Any):
+        self.wrapped = wrapped
+
+    def recv(self, *args: Any, **kwargs: Any) -> bytes:
+        value = self.wrapped.recv(*args, **kwargs)
+        if value == b"":
+            raise ConnectionError("Baostock socket closed before response terminator")
+        return value
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self.wrapped, name)
 
 
 def _canonical_date(value: date | str, *, field: str) -> date:
@@ -120,6 +142,44 @@ def _file_sha256(path: Path) -> str:
         while chunk := handle.read(1024 * 1024):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _atomic_write_bytes(path: Path, value: bytes) -> None:
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    try:
+        temporary.write_bytes(value)
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def _write_refresh_state(path: Path, value: Mapping[str, Any]) -> None:
+    _atomic_write_bytes(path, _strict_json_bytes(value))
+
+
+def _append_refresh_event(
+    staging: Path,
+    event: Mapping[str, Any],
+    event_sink: Callable[[Mapping[str, Any]], None] | None,
+) -> None:
+    payload = {
+        "observed_at": datetime.now(SHANGHAI_TZ).isoformat(timespec="milliseconds"),
+        "pid": os.getpid(),
+        **dict(event),
+    }
+    with (staging / "refresh-events.jsonl").open("a", encoding="utf-8") as handle:
+        handle.write(
+            json.dumps(
+                payload,
+                ensure_ascii=False,
+                sort_keys=True,
+                allow_nan=False,
+            )
+            + "\n"
+        )
+        handle.flush()
+    if event_sink is not None:
+        event_sink(payload)
 
 
 def _source_target(runtime_root: Path, completed_date: date) -> Path:
@@ -296,65 +356,260 @@ def _verified_calendar_rows(target: date) -> tuple[pd.DataFrame, dict[str, Any]]
     return pd.DataFrame(rows), verified.to_dict()
 
 
-def _baostock_rows(symbols: Sequence[str], target: date) -> dict[str, dict[str, str]]:
+def _baostock_login(bs: Any, bs_context: Any, timeout_seconds: float) -> None:
+    previous_timeout = socket.getdefaulttimeout()
+    socket.setdefaulttimeout(timeout_seconds)
     try:
-        import baostock as bs
+        login = bs.login()
     except Exception as exc:
-        raise QlibDailyError(f"Baostock import failed: {type(exc).__name__}") from None
-    login = bs.login()
+        raise QlibDailyError(f"Baostock login failed: {type(exc).__name__}") from None
+    finally:
+        socket.setdefaulttimeout(previous_timeout)
     if getattr(login, "error_code", None) != "0":
         raise QlibDailyError("Baostock login failed")
-    rows: dict[str, dict[str, str]] = {}
-    failures: list[str] = []
-    fields = ",".join(RAW_FIELDS)
-    try:
-        for symbol in symbols:
-            result = None
-            for _ in range(3):
-                result = bs.query_history_k_data_plus(
-                    symbol,
-                    fields,
-                    start_date=target.isoformat(),
-                    end_date=target.isoformat(),
-                    frequency="d",
-                    adjustflag="3",
-                )
-                if getattr(result, "error_code", None) == "0":
-                    break
-            if result is None or getattr(result, "error_code", None) != "0":
-                failures.append(symbol)
-                continue
-            actual_fields = tuple(getattr(result, "fields", ()) or ())
-            if actual_fields != RAW_FIELDS:
-                failures.append(symbol)
-                continue
-            values = []
-            while result.next():
-                values.append(dict(zip(actual_fields, result.get_row_data())))
-            if len(values) != 1:
-                failures.append(symbol)
-                continue
-            row = values[0]
-            if (
-                row.get("date") != target.isoformat()
-                or row.get("code") != symbol
-                or row.get("adjustflag") != "3"
-                or row.get("tradestatus") not in {"0", "1"}
-            ):
-                failures.append(symbol)
-                continue
-            rows[symbol] = row
-    finally:
+    active_socket = getattr(bs_context, "default_socket", None)
+    if active_socket is None:
+        raise QlibDailyError("Baostock login did not create a socket")
+    active_socket.settimeout(timeout_seconds)
+    setattr(bs_context, "default_socket", _BaostockSocketGuard(active_socket))
+
+
+def _baostock_disconnect(bs: Any, bs_context: Any, *, logout: bool) -> None:
+    active_socket = getattr(bs_context, "default_socket", None)
+    if logout:
         try:
             bs.logout()
         except Exception:
             pass
+    if active_socket is not None:
+        try:
+            active_socket.close()
+        except Exception:
+            pass
+    setattr(bs_context, "default_socket", None)
+
+
+def _validate_baostock_result(result: Any, symbol: str, target: date) -> dict[str, str]:
+    error_code = getattr(result, "error_code", None)
+    if result is None or error_code != "0":
+        raise QlibDailyError(f"query_error_code={error_code or 'missing'}")
+    actual_fields = tuple(getattr(result, "fields", ()) or ())
+    if actual_fields != RAW_FIELDS:
+        raise QlibDailyError("query_fields_mismatch")
+    values = []
+    while result.next():
+        values.append(dict(zip(actual_fields, result.get_row_data())))
+    terminal_error_code = getattr(result, "error_code", None)
+    if terminal_error_code != "0":
+        raise QlibDailyError(
+            f"query_terminal_error_code={terminal_error_code or 'missing'}"
+        )
+    if len(values) != 1:
+        raise QlibDailyError(f"query_row_count={len(values)}")
+    row = values[0]
+    if (
+        row.get("date") != target.isoformat()
+        or row.get("code") != symbol
+        or row.get("adjustflag") != "3"
+        or row.get("tradestatus") not in {"0", "1"}
+    ):
+        raise QlibDailyError("query_row_contract_mismatch")
+    return row
+
+
+def _baostock_rows(
+    symbols: Sequence[str],
+    target: date,
+    *,
+    on_success: Callable[[str, Mapping[str, str], int, float], None],
+    event_sink: Callable[[Mapping[str, Any]], None] | None = None,
+    request_timeout_seconds: float = BAOSTOCK_REQUEST_TIMEOUT_SECONDS,
+    max_attempts: int = BAOSTOCK_MAX_ATTEMPTS,
+    max_failures: int = BAOSTOCK_MAX_FAILURES,
+    baostock_module: Any | None = None,
+    baostock_context: Any | None = None,
+) -> dict[str, Any]:
+    if request_timeout_seconds <= 0:
+        raise QlibDailyError("Baostock request timeout must be positive")
+    if max_attempts < 1 or max_failures < 1:
+        raise QlibDailyError("Baostock attempt and failure limits must be positive")
+    if not symbols:
+        return {"completed_count": 0, "failure_count": 0, "retry_count": 0}
+    try:
+        if baostock_module is None:
+            import baostock as baostock_module
+        if baostock_context is None:
+            import baostock.common.context as baostock_context
+    except Exception as exc:
+        raise QlibDailyError(f"Baostock import failed: {type(exc).__name__}") from None
+
+    fields = ",".join(RAW_FIELDS)
+    failures: list[str] = []
+    retry_count = 0
+    completed_count = 0
+    _baostock_login(baostock_module, baostock_context, request_timeout_seconds)
+    try:
+        for symbol in symbols:
+            symbol_started = clock.perf_counter()
+            succeeded = False
+            for attempt in range(1, max_attempts + 1):
+                attempt_started = clock.perf_counter()
+                try:
+                    result = baostock_module.query_history_k_data_plus(
+                        symbol,
+                        fields,
+                        start_date=target.isoformat(),
+                        end_date=target.isoformat(),
+                        frequency="d",
+                        adjustflag="3",
+                    )
+                    row = _validate_baostock_result(result, symbol, target)
+                except Exception as exc:
+                    reason = (
+                        str(exc)
+                        if isinstance(exc, QlibDailyError)
+                        else type(exc).__name__
+                    )
+                    duration = round(clock.perf_counter() - attempt_started, 4)
+                    if attempt < max_attempts:
+                        retry_count += 1
+                        if event_sink is not None:
+                            event_sink(
+                                {
+                                    "event": "stock_retry",
+                                    "symbol": symbol,
+                                    "attempt": attempt,
+                                    "duration_seconds": duration,
+                                    "reason": reason,
+                                }
+                            )
+                        _baostock_disconnect(
+                            baostock_module, baostock_context, logout=False
+                        )
+                        _baostock_login(
+                            baostock_module,
+                            baostock_context,
+                            request_timeout_seconds,
+                        )
+                        continue
+                    failures.append(symbol)
+                    if event_sink is not None:
+                        event_sink(
+                            {
+                                "event": "stock_failed",
+                                "symbol": symbol,
+                                "attempts": attempt,
+                                "duration_seconds": round(
+                                    clock.perf_counter() - symbol_started, 4
+                                ),
+                                "reason": reason,
+                            }
+                        )
+                    break
+                completed_count += 1
+                on_success(
+                    symbol,
+                    row,
+                    attempt,
+                    round(clock.perf_counter() - symbol_started, 4),
+                )
+                succeeded = True
+                break
+            if not succeeded:
+                _baostock_disconnect(baostock_module, baostock_context, logout=False)
+                if len(failures) >= max_failures:
+                    break
+                _baostock_login(
+                    baostock_module, baostock_context, request_timeout_seconds
+                )
+    finally:
+        _baostock_disconnect(baostock_module, baostock_context, logout=True)
     if failures:
         raise QlibDailyError(
             "daily refresh failed closed: "
-            f"failure_count={len(failures)}, first_codes={failures[:5]}"
+            f"failure_count={len(failures)}, retry_count={retry_count}, "
+            f"first_codes={failures[:5]}"
         )
-    return rows
+    return {
+        "completed_count": completed_count,
+        "failure_count": 0,
+        "retry_count": retry_count,
+    }
+
+
+def _staging_target(runtime_root: Path, target: date) -> Path:
+    return runtime_root / f".raw-through-{target:%Y%m%d}-staging"
+
+
+def _staged_symbol_entries(
+    staging: Path,
+    *,
+    prior_end: date,
+    target: date,
+) -> tuple[dict[str, tuple[Path, str]], set[str]]:
+    entries: dict[str, tuple[Path, str]] = {}
+    completed: set[str] = set()
+    for path in sorted((staging / "symbols").glob("*.csv")):
+        frame = _read_raw_frame(path)
+        last_row = frame.iloc[-1]
+        symbol = str(last_row.get("code") or "").strip()
+        if not symbol or symbol.split(".")[-1] != path.stem or symbol in entries:
+            raise QlibDailyError(f"staging symbol identity differs: {path.name}")
+        last_date = str(last_row.get("date") or "")
+        if last_date == target.isoformat():
+            if int(frame["date"].eq(target.isoformat()).sum()) != 1:
+                raise QlibDailyError(f"staging target row is duplicated: {path.name}")
+            if (
+                str(last_row.get("price_basis") or "") != "raw_unadjusted"
+                or str(last_row.get("source_id") or "") != RAW_SOURCE_ID
+                or str(last_row.get("tradestatus") or "") not in {"0", "1"}
+            ):
+                raise QlibDailyError(f"staging completed row differs: {path.name}")
+            completed.add(symbol)
+        elif last_date != prior_end.isoformat():
+            raise QlibDailyError(f"staging cutoff differs: {path.name}")
+        entries[symbol] = (path, str(last_row.get("name") or "").strip())
+    return entries, completed
+
+
+def _append_staged_row_atomic(
+    path: Path,
+    *,
+    symbol: str,
+    name: str,
+    row: Mapping[str, str],
+) -> dict[str, str]:
+    output = {
+        "date": row["date"],
+        "code": row["code"],
+        "name": name,
+        "open": row["open"],
+        "high": row["high"],
+        "low": row["low"],
+        "close": row["close"],
+        "preclose": row["preclose"],
+        "volume": row["volume"],
+        "amount": row["amount"],
+        "price_basis": "raw_unadjusted",
+        "source_id": RAW_SOURCE_ID,
+        "turn": row["turn"],
+        "pctChg": row["pctChg"],
+        "tradestatus": row["tradestatus"],
+        "isST": row["isST"],
+    }
+    frame = _read_raw_frame(path)
+    if str(frame.iloc[-1].get("date") or "") >= row["date"]:
+        raise QlibDailyError(f"raw history append is not monotonic: {path.name}")
+    combined = pd.concat([frame, pd.DataFrame([output])], ignore_index=True)
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    try:
+        combined.to_csv(temporary, index=False)
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
+    if symbol != output["code"]:
+        raise QlibDailyError(f"Baostock symbol identity differs: {path.name}")
+    return output
 
 
 def refresh_completed_source(
@@ -362,6 +617,10 @@ def refresh_completed_source(
     runtime_root: Path | str,
     completed_date: date | str,
     observed_at: datetime | None = None,
+    event_sink: Callable[[Mapping[str, Any]], None] | None = None,
+    request_timeout_seconds: float = BAOSTOCK_REQUEST_TIMEOUT_SECONDS,
+    max_attempts: int = BAOSTOCK_MAX_ATTEMPTS,
+    max_failures: int = BAOSTOCK_MAX_FAILURES,
 ) -> dict[str, Any]:
     """Create or verify one immutable raw-through-T full-market snapshot."""
 
@@ -379,14 +638,39 @@ def refresh_completed_source(
         return {
             **inspection,
             "operation_status": "exists",
+            "resumed_symbol_count": 0,
+            "retry_count": 0,
+            "stage_seconds": {},
             "refresh_seconds": round(clock.perf_counter() - started, 4),
         }
 
+    stage_seconds: dict[str, float] = {}
+    stage_started = clock.perf_counter()
     prior = _latest_prior_source(root, target_date)
+    prior_manifest = _load_json(prior / "manifest.json", label="source manifest")
+    prior_end = _canonical_date(prior_manifest.get("collection_end"), field="collection_end")
+    prior_manifest_sha256 = _file_sha256(prior / "manifest.json")
+    stage_seconds["prior_source"] = round(clock.perf_counter() - stage_started, 4)
+
+    stage_started = clock.perf_counter()
     calendar_rows, calendar_evidence = _verified_calendar_rows(target_date)
-    temporary = Path(tempfile.mkdtemp(prefix=f".{target.name}-", dir=root))
-    shutil.rmtree(temporary)
-    try:
+    stage_seconds["verified_calendar"] = round(clock.perf_counter() - stage_started, 4)
+
+    temporary = _staging_target(root, target_date)
+    state_path = temporary / "refresh-state.json"
+    operation_status = "created"
+    stage_started = clock.perf_counter()
+    if temporary.exists():
+        state = _load_json(state_path, label="refresh state")
+        expected_state = {
+            "schema_version": REFRESH_STATE_SCHEMA_VERSION,
+            "target_date": target_date.isoformat(),
+            "prior_manifest_sha256": prior_manifest_sha256,
+        }
+        if any(state.get(key) != value for key, value in expected_state.items()):
+            raise QlibDailyError("existing refresh staging identity differs")
+        operation_status = "resumed"
+    else:
         shutil.copytree(prior, temporary)
         calendar = pd.read_csv(temporary / "calendar.csv", dtype=str)
         calendar = pd.concat([calendar, calendar_rows], ignore_index=True)
@@ -394,33 +678,181 @@ def refresh_completed_source(
             "calendar_date"
         )
         calendar.to_csv(temporary / "calendar.csv", index=False)
-        symbol_files = sorted((temporary / "symbols").glob("*.csv"))
-        symbols = [str(_read_last_raw_row(path)["code"]) for path in symbol_files]
-        fetched = _baostock_rows(symbols, target_date)
-        for path, symbol in zip(symbol_files, symbols):
-            prior_row = _read_last_raw_row(path)
-            if str(prior_row.get("date") or "") >= target_date.isoformat():
-                raise QlibDailyError(f"raw history append is not monotonic: {path.name}")
-            row = fetched[symbol]
-            output = {
-                "date": row["date"],
-                "code": row["code"],
-                "name": str(prior_row.get("name") or "").strip(),
-                "open": row["open"],
-                "high": row["high"],
-                "low": row["low"],
-                "close": row["close"],
-                "preclose": row["preclose"],
-                "volume": row["volume"],
-                "amount": row["amount"],
-                "price_basis": "raw_unadjusted",
-                "source_id": RAW_SOURCE_ID,
-                "turn": row["turn"],
-                "pctChg": row["pctChg"],
-                "tradestatus": row["tradestatus"],
-                "isST": row["isST"],
+        (temporary / "verified-calendar.json").write_bytes(
+            _strict_json_bytes(calendar_evidence)
+        )
+        state = {
+            "schema_version": REFRESH_STATE_SCHEMA_VERSION,
+            "status": "incomplete",
+            "target_date": target_date.isoformat(),
+            "prior_manifest_sha256": prior_manifest_sha256,
+            "expected_symbol_file_count": int(
+                prior_manifest["completed_symbol_file_count"]
+            ),
+            "completed_symbol_count": 0,
+            "failure_count": 0,
+            "retry_count": 0,
+            "last_symbol": None,
+        }
+        _write_refresh_state(state_path, state)
+    stage_seconds["staging_prepare"] = round(clock.perf_counter() - stage_started, 4)
+
+    def emit(event: Mapping[str, Any]) -> None:
+        _append_refresh_event(temporary, event, event_sink)
+
+    emit(
+        {
+            "event": "stage_complete",
+            "stage": "staging_prepare",
+            "duration_seconds": stage_seconds["staging_prepare"],
+            "operation_status": operation_status,
+        }
+    )
+    for stage in ("prior_source", "verified_calendar"):
+        emit(
+            {
+                "event": "stage_complete",
+                "stage": stage,
+                "duration_seconds": stage_seconds[stage],
             }
-            pd.DataFrame([output]).to_csv(path, mode="a", header=False, index=False)
+        )
+
+    try:
+        symbol_files = sorted((temporary / "symbols").glob("*.csv"))
+        expected_files = int(state["expected_symbol_file_count"])
+        if len(symbol_files) != expected_files:
+            raise QlibDailyError("refresh staging symbol coverage differs")
+        entries, completed_symbols = _staged_symbol_entries(
+            temporary,
+            prior_end=prior_end,
+            target=target_date,
+        )
+        resumed_symbol_count = len(completed_symbols)
+        pending_symbols = [symbol for symbol in entries if symbol not in completed_symbols]
+        progress = {
+            "completed": resumed_symbol_count,
+            "retry_count": int(state.get("retry_count") or 0),
+            "failures": int(state.get("failure_count") or 0),
+        }
+        state.update(
+            {
+                "status": "incomplete",
+                "completed_symbol_count": resumed_symbol_count,
+                "failure_count": progress["failures"],
+            }
+        )
+        _write_refresh_state(state_path, state)
+        for symbol in sorted(completed_symbols):
+            path, _ = entries[symbol]
+            emit(
+                {
+                    "event": "stock_resume",
+                    "symbol": symbol,
+                    "row_sha256": _content_sha256(
+                        _read_last_raw_row(path).to_dict()
+                    ),
+                }
+            )
+        emit(
+            {
+                "event": "stage_start",
+                "stage": "baostock_refresh",
+                "total_symbols": len(entries),
+                "resumed_symbols": resumed_symbol_count,
+                "pending_symbols": len(pending_symbols),
+                "request_timeout_seconds": request_timeout_seconds,
+                "max_attempts": max_attempts,
+                "max_failures": max_failures,
+            }
+        )
+
+        def baostock_event(event: Mapping[str, Any]) -> None:
+            if event.get("event") == "stock_retry":
+                progress["retry_count"] += 1
+            elif event.get("event") == "stock_failed":
+                progress["failures"] += 1
+            state.update(
+                {
+                    "retry_count": progress["retry_count"],
+                    "failure_count": progress["failures"],
+                    "last_symbol": event.get("symbol"),
+                }
+            )
+            _write_refresh_state(state_path, state)
+            emit(event)
+
+        def persist_success(
+            symbol: str,
+            row: Mapping[str, str],
+            attempts: int,
+            duration_seconds: float,
+        ) -> None:
+            path, name = entries[symbol]
+            output = _append_staged_row_atomic(
+                path,
+                symbol=symbol,
+                name=name,
+                row=row,
+            )
+            progress["completed"] += 1
+            state.update(
+                {
+                    "completed_symbol_count": progress["completed"],
+                    "retry_count": progress["retry_count"],
+                    "failure_count": progress["failures"],
+                    "last_symbol": symbol,
+                }
+            )
+            _write_refresh_state(state_path, state)
+            emit(
+                {
+                    "event": "stock_complete",
+                    "symbol": symbol,
+                    "attempts": attempts,
+                    "duration_seconds": duration_seconds,
+                    "row_sha256": _content_sha256(output),
+                }
+            )
+            if (
+                progress["completed"] % STOCK_PROGRESS_INTERVAL == 0
+                or progress["completed"] == len(entries)
+            ):
+                emit(
+                    {
+                        "event": "stock_progress",
+                        "completed_symbols": progress["completed"],
+                        "total_symbols": len(entries),
+                        "retry_count": progress["retry_count"],
+                        "failure_count": progress["failures"],
+                    }
+                )
+
+        stage_started = clock.perf_counter()
+        fetch_stats = _baostock_rows(
+            pending_symbols,
+            target_date,
+            on_success=persist_success,
+            event_sink=baostock_event,
+            request_timeout_seconds=request_timeout_seconds,
+            max_attempts=max_attempts,
+            max_failures=max_failures,
+        )
+        stage_seconds["baostock_refresh"] = round(
+            clock.perf_counter() - stage_started, 4
+        )
+        emit(
+            {
+                "event": "stage_complete",
+                "stage": "baostock_refresh",
+                "duration_seconds": stage_seconds["baostock_refresh"],
+                "completed_symbols": progress["completed"],
+                "retry_count": progress["retry_count"],
+                "failure_count": progress["failures"],
+            }
+        )
+        if progress["completed"] != len(entries):
+            raise QlibDailyError("daily refresh is incomplete after bounded requests")
+
         manifest = _load_json(temporary / "manifest.json", label="source manifest")
         manifest.update(
             {
@@ -431,11 +863,39 @@ def refresh_completed_source(
                 "status": "complete",
             }
         )
-        (temporary / "manifest.json").write_bytes(_strict_json_bytes(manifest))
-        (temporary / "verified-calendar.json").write_bytes(
-            _strict_json_bytes(calendar_evidence)
-        )
+        _atomic_write_bytes(temporary / "manifest.json", _strict_json_bytes(manifest))
+        state["status"] = "validation_pending"
+        _write_refresh_state(state_path, state)
+        stage_started = clock.perf_counter()
         inspection = inspect_completed_source(temporary, target_date)
+        stage_seconds["source_validation"] = round(
+            clock.perf_counter() - stage_started, 4
+        )
+        _atomic_write_bytes(
+            temporary / "refresh-report.json",
+            _strict_json_bytes(
+                {
+                    "status": "complete",
+                    "target_date": target_date.isoformat(),
+                    "symbol_file_count": len(symbol_files),
+                    "completed_symbol_count": progress["completed"],
+                    "resumed_symbol_count": resumed_symbol_count,
+                    "failure_count": 0,
+                    "request_failure_count": progress["failures"],
+                    "retry_count": progress["retry_count"],
+                    "stage_seconds": stage_seconds,
+                }
+            ),
+        )
+        state["status"] = "complete"
+        _write_refresh_state(state_path, state)
+        emit(
+            {
+                "event": "stage_complete",
+                "stage": "source_validation",
+                "duration_seconds": stage_seconds["source_validation"],
+            }
+        )
         try:
             os.rename(temporary, target)
         except OSError:
@@ -444,16 +904,40 @@ def refresh_completed_source(
                 return {
                     **existing,
                     "operation_status": "exists",
+                    "resumed_symbol_count": resumed_symbol_count,
+                    "retry_count": progress["retry_count"],
+                    "stage_seconds": stage_seconds,
                     "refresh_seconds": round(clock.perf_counter() - started, 4),
                 }
             raise
         return {
             **inspection,
-            "operation_status": "created",
+            "source_dir": str(target),
+            "operation_status": operation_status,
+            "resumed_symbol_count": resumed_symbol_count,
+            "retry_count": state.get("retry_count", fetch_stats["retry_count"]),
+            "stage_seconds": stage_seconds,
             "refresh_seconds": round(clock.perf_counter() - started, 4),
         }
-    except Exception:
-        shutil.rmtree(temporary, ignore_errors=True)
+    except Exception as exc:
+        if state_path.is_file():
+            try:
+                state = _load_json(state_path, label="refresh state")
+                state["status"] = "incomplete"
+                state["last_error_type"] = type(exc).__name__
+                _write_refresh_state(state_path, state)
+                emit(
+                    {
+                        "event": "stage_failed",
+                        "stage": "raw_refresh",
+                        "error_type": type(exc).__name__,
+                        "completed_symbols": state.get("completed_symbol_count", 0),
+                        "retry_count": state.get("retry_count", 0),
+                        "failure_count": state.get("failure_count", 0),
+                    }
+                )
+            except Exception:
+                pass
         raise
 
 

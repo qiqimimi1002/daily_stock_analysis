@@ -143,6 +143,17 @@ after T (not the next natural date), loads only the pinned frozen artifact,
 requires the accepted public evidence to retain `fit_count=1`, and runs the
 existing immutable `shadow` implementation for that next session.
 
+The raw refresh writes JSONL stage, progress, per-symbol duration, retry and
+failure events under `research/runtime/qlib/logs/` and inside its private
+staging directory. Each Baostock request has a 15-second socket limit, at most
+two attempts, and the stage stops after five failed symbols. A successful row
+is validated and atomically appended to deterministic
+`.raw-through-YYYYMMDD-staging` immediately. A rerun verifies those rows and
+skips them; it fetches only the remaining symbols. The staging manifest remains
+`incomplete` and no `raw-through-YYYYMMDD` snapshot is published until every
+source file has exactly one valid T row and the existing full-coverage
+inspection passes.
+
 After inference, `after-close` writes a second immutable nightly-ready package.
 That package binds the original shadow run/model/Provider hashes to the exact
 Top5 and completed-close context: `close`, `prev_close`, `MA5`, `MA10`, `MA20`,

@@ -4,6 +4,7 @@ from datetime import date, datetime, timedelta
 import json
 from pathlib import Path
 import subprocess
+from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
 import pandas as pd
@@ -181,6 +182,191 @@ def test_existing_today_source_is_rejected_before_1630(tmp_path):
             completed_date=TARGET,
             observed_at=datetime(2026, 1, 30, 15, 59, tzinfo=CN_TZ),
         )
+
+
+def _baostock_row(symbol: str, target: date) -> dict[str, str]:
+    return {
+        "date": target.isoformat(),
+        "code": symbol,
+        "open": "13.0",
+        "high": "13.2",
+        "low": "12.8",
+        "close": "13.1",
+        "preclose": "12.9",
+        "volume": "1200",
+        "amount": "15720",
+        "adjustflag": "3",
+        "turn": "1.1",
+        "pctChg": "1.55",
+        "tradestatus": "1",
+        "isST": "0",
+    }
+
+
+class _FakeResult:
+    def __init__(self, row=None, *, error_code="0"):
+        self.error_code = error_code
+        self.fields = list(daily.RAW_FIELDS)
+        self._row = row
+        self._used = False
+
+    def next(self):
+        return self._row is not None and not self._used
+
+    def get_row_data(self):
+        self._used = True
+        return [self._row[field] for field in daily.RAW_FIELDS]
+
+
+class _FakeSocket:
+    def __init__(self):
+        self.timeout = None
+        self.closed = False
+
+    def settimeout(self, value):
+        self.timeout = value
+
+    def close(self):
+        self.closed = True
+
+
+def test_baostock_socket_guard_turns_peer_eof_into_bounded_failure():
+    raw = SimpleNamespace(recv=lambda *_args: b"")
+
+    with pytest.raises(ConnectionError, match="closed"):
+        daily._BaostockSocketGuard(raw).recv(8192)
+
+
+class _FakeBaostock:
+    def __init__(self, context, results):
+        self.context = context
+        self.results = list(results)
+        self.calls = 0
+        self.sockets = []
+
+    def login(self):
+        active = _FakeSocket()
+        self.sockets.append(active)
+        self.context.default_socket = active
+        return SimpleNamespace(error_code="0")
+
+    def logout(self):
+        return SimpleNamespace(error_code="0")
+
+    def query_history_k_data_plus(self, *_args, **_kwargs):
+        self.calls += 1
+        return self.results.pop(0)
+
+
+def test_baostock_request_has_timeout_retry_and_attempt_limit():
+    symbol = "sh.600000"
+    context = SimpleNamespace(default_socket=None)
+    provider = _FakeBaostock(
+        context,
+        [
+            _FakeResult(error_code="100"),
+            _FakeResult(_baostock_row(symbol, NEXT_SESSION)),
+        ],
+    )
+    completed = []
+    events = []
+
+    result = daily._baostock_rows(
+        [symbol],
+        NEXT_SESSION,
+        on_success=lambda *values: completed.append(values),
+        event_sink=events.append,
+        request_timeout_seconds=3.5,
+        max_attempts=2,
+        max_failures=1,
+        baostock_module=provider,
+        baostock_context=context,
+    )
+
+    assert provider.calls == 2
+    assert result["retry_count"] == 1
+    assert completed[0][0] == symbol
+    assert completed[0][2] == 2
+    assert all(item.timeout == 3.5 for item in provider.sockets)
+    assert [event["event"] for event in events] == ["stock_retry"]
+
+
+def test_baostock_failure_limit_fails_closed_after_bounded_attempts():
+    context = SimpleNamespace(default_socket=None)
+    provider = _FakeBaostock(
+        context,
+        [_FakeResult(error_code="100"), _FakeResult(error_code="100")],
+    )
+
+    with pytest.raises(daily.QlibDailyError, match="failure_count=1"):
+        daily._baostock_rows(
+            ["sh.600000", "sh.600001"],
+            NEXT_SESSION,
+            on_success=lambda *_args: None,
+            request_timeout_seconds=1,
+            max_attempts=2,
+            max_failures=1,
+            baostock_module=provider,
+            baostock_context=context,
+        )
+
+    assert provider.calls == 2
+
+
+def test_refresh_staging_resumes_verified_symbols_without_full_snapshot(tmp_path, monkeypatch):
+    codes = ("600000", "600001")
+    _source(tmp_path, codes=codes)
+    target = NEXT_SESSION
+    calendar = pd.DataFrame(
+        [{"calendar_date": target.isoformat(), "is_trading_day": "1"}]
+    )
+    monkeypatch.setattr(
+        daily,
+        "_verified_calendar_rows",
+        lambda _target: (calendar, {"status": "verified"}),
+    )
+    first_calls = []
+
+    def interrupted(symbols, _target, *, on_success, **_kwargs):
+        first_calls.extend(symbols)
+        first = symbols[0]
+        on_success(first, _baostock_row(first, target), 1, 0.1)
+        raise daily.QlibDailyError("synthetic interruption")
+
+    monkeypatch.setattr(daily, "_baostock_rows", interrupted)
+    with pytest.raises(daily.QlibDailyError, match="synthetic interruption"):
+        daily.refresh_completed_source(
+            runtime_root=tmp_path,
+            completed_date=target,
+            observed_at=datetime(2026, 2, 2, 17, 0, tzinfo=CN_TZ),
+        )
+
+    staging = tmp_path / ".raw-through-20260202-staging"
+    assert staging.is_dir()
+    assert not (tmp_path / "raw-through-20260202").exists()
+    assert pd.read_csv(staging / "symbols" / "600000.csv").iloc[-1]["date"] == target.isoformat()
+    resumed_calls = []
+
+    def resumed(symbols, _target, *, on_success, **_kwargs):
+        resumed_calls.extend(symbols)
+        for symbol in symbols:
+            on_success(symbol, _baostock_row(symbol, target), 1, 0.1)
+        return {"completed_count": len(symbols), "failure_count": 0, "retry_count": 0}
+
+    monkeypatch.setattr(daily, "_baostock_rows", resumed)
+    result = daily.refresh_completed_source(
+        runtime_root=tmp_path,
+        completed_date=target,
+        observed_at=datetime(2026, 2, 2, 17, 1, tzinfo=CN_TZ),
+    )
+
+    assert first_calls == ["sh.600000", "sh.600001"]
+    assert resumed_calls == ["sh.600001"]
+    assert result["operation_status"] == "resumed"
+    assert result["resumed_symbol_count"] == 1
+    assert result["target_row_coverage_count"] == 2
+    assert result["source_dir"] == str((tmp_path / "raw-through-20260202").resolve())
+    assert (tmp_path / "raw-through-20260202").is_dir()
 
 
 def test_technical_context_uses_completed_rows_only(tmp_path):

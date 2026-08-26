@@ -4,8 +4,9 @@
 from __future__ import annotations
 
 import argparse
-from datetime import date
+from datetime import date, datetime
 import json
+import os
 from pathlib import Path
 import sys
 import time
@@ -167,32 +168,123 @@ def shadow(args: argparse.Namespace) -> None:
 def after_close(args: argparse.Namespace) -> None:
     """Prepare completed T data and freeze the next real session's Top5."""
 
-    source = refresh_completed_source(
-        runtime_root=args.runtime_root,
-        completed_date=args.date,
-    )
-    provider = prepare_provider_for_completed_date(
-        source_dir=Path(source["source_dir"]),
-        provider_uri=args.provider,
-        completed_date=args.date,
-    )
-    artifact_manifest = json.loads(
-        (args.artifact / "manifest.json").read_text(encoding="utf-8")
-    )
-    model_identity = verify_fit_count(
-        args.fit_evidence,
-        model_manifest=artifact_manifest,
-    )
-    inference_started = time.perf_counter()
-    shadow_result = run_prospective_shadow(
-        provider_uri=args.provider,
-        artifact_dir=args.artifact,
-        archive_root=args.shadow_root,
-        trade_date=provider["next_trading_date"],
-        data_as_of=args.date,
-        generated_at=args.generated_at,
-        expected_model_manifest_sha256=PROSPECTIVE_V1_MANIFEST_SHA256,
-    )
+    run_started = time.perf_counter()
+    run_id = f"after-close-{args.date}-pid-{os.getpid()}"
+    log_path = args.runtime_root / "logs" / f"after-close-{args.date}.jsonl"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+
+    def emit(event: dict[str, Any]) -> None:
+        payload = {
+            "observed_at": datetime.now().astimezone().isoformat(timespec="milliseconds"),
+            "pid": os.getpid(),
+            "run_id": run_id,
+            **event,
+        }
+        with log_path.open("a", encoding="utf-8") as handle:
+            handle.write(
+                json.dumps(
+                    payload,
+                    ensure_ascii=False,
+                    sort_keys=True,
+                    allow_nan=False,
+                )
+                + "\n"
+            )
+            handle.flush()
+        if payload.get("event") != "stock_complete":
+            print(
+                json.dumps(payload, ensure_ascii=False, sort_keys=True),
+                file=sys.stderr,
+                flush=True,
+            )
+
+    stage_seconds: dict[str, float] = {}
+    emit({"event": "run_start", "stage": "after_close", "date": args.date})
+    try:
+        stage_started = time.perf_counter()
+        source = refresh_completed_source(
+            runtime_root=args.runtime_root,
+            completed_date=args.date,
+            event_sink=emit,
+        )
+        stage_seconds["raw_refresh"] = round(time.perf_counter() - stage_started, 4)
+        emit(
+            {
+                "event": "stage_complete",
+                "stage": "raw_refresh",
+                "duration_seconds": stage_seconds["raw_refresh"],
+                "retry_count": source.get("retry_count", 0),
+                "failure_count": source.get("failure_count", 0),
+            }
+        )
+
+        stage_started = time.perf_counter()
+        provider = prepare_provider_for_completed_date(
+            source_dir=Path(source["source_dir"]),
+            provider_uri=args.provider,
+            completed_date=args.date,
+        )
+        stage_seconds["provider_prepare"] = round(
+            time.perf_counter() - stage_started, 4
+        )
+        emit(
+            {
+                "event": "stage_complete",
+                "stage": "provider_prepare",
+                "duration_seconds": stage_seconds["provider_prepare"],
+            }
+        )
+
+        stage_started = time.perf_counter()
+        artifact_manifest = json.loads(
+            (args.artifact / "manifest.json").read_text(encoding="utf-8")
+        )
+        model_identity = verify_fit_count(
+            args.fit_evidence,
+            model_manifest=artifact_manifest,
+        )
+        stage_seconds["model_identity"] = round(
+            time.perf_counter() - stage_started, 4
+        )
+        emit(
+            {
+                "event": "stage_complete",
+                "stage": "model_identity",
+                "duration_seconds": stage_seconds["model_identity"],
+            }
+        )
+
+        stage_started = time.perf_counter()
+        shadow_result = run_prospective_shadow(
+            provider_uri=args.provider,
+            artifact_dir=args.artifact,
+            archive_root=args.shadow_root,
+            trade_date=provider["next_trading_date"],
+            data_as_of=args.date,
+            generated_at=args.generated_at,
+            expected_model_manifest_sha256=PROSPECTIVE_V1_MANIFEST_SHA256,
+        )
+        stage_seconds["shadow_inference"] = round(
+            time.perf_counter() - stage_started, 4
+        )
+        emit(
+            {
+                "event": "stage_complete",
+                "stage": "shadow_inference",
+                "duration_seconds": stage_seconds["shadow_inference"],
+            }
+        )
+    except Exception as exc:
+        emit(
+            {
+                "event": "run_failed",
+                "stage": "after_close",
+                "duration_seconds": round(time.perf_counter() - run_started, 4),
+                "error_type": type(exc).__name__,
+            }
+        )
+        raise
+
     stable_preparation = {
         "active_file_count": source["active_file_count"],
         "eligible_target_count": source["eligible_target_count"],
@@ -207,15 +299,38 @@ def after_close(args: argparse.Namespace) -> None:
         "symbol_file_count": source["symbol_file_count"],
         "target_row_coverage_count": source["target_row_coverage_count"],
     }
-    ready = archive_nightly_ready(
-        source_dir=Path(source["source_dir"]),
-        ready_root=args.ready_root,
-        shadow_result=shadow_result["result"],
-        shadow_manifest=shadow_result["manifest"],
-        preparation=stable_preparation,
-        model_identity=model_identity,
+    stage_started = time.perf_counter()
+    try:
+        ready = archive_nightly_ready(
+            source_dir=Path(source["source_dir"]),
+            ready_root=args.ready_root,
+            shadow_result=shadow_result["result"],
+            shadow_manifest=shadow_result["manifest"],
+            preparation=stable_preparation,
+            model_identity=model_identity,
+        )
+    except Exception as exc:
+        emit(
+            {
+                "event": "run_failed",
+                "stage": "nightly_archive",
+                "duration_seconds": round(time.perf_counter() - run_started, 4),
+                "error_type": type(exc).__name__,
+            }
+        )
+        raise
+    stage_seconds["nightly_archive"] = round(time.perf_counter() - stage_started, 4)
+    emit(
+        {
+            "event": "stage_complete",
+            "stage": "nightly_archive",
+            "duration_seconds": stage_seconds["nightly_archive"],
+        }
     )
-    top5_seconds = round(time.perf_counter() - inference_started, 4)
+    total_seconds = round(time.perf_counter() - run_started, 4)
+    top5_seconds = round(
+        stage_seconds["shadow_inference"] + stage_seconds["nightly_archive"], 4
+    )
     result = {
         "data_as_of": args.date,
         "data_prepare_seconds": round(
@@ -230,11 +345,22 @@ def after_close(args: argparse.Namespace) -> None:
         "ready_manifest_sha256": ready["manifest"]["manifest_sha256"],
         "ready_status": ready["operation_status"],
         "source": source,
+        "stage_seconds": stage_seconds,
         "status": "ready",
         "top5": ready["ready"]["candidates"],
         "top5_generation_seconds": top5_seconds,
         "trade_date": provider["next_trading_date"],
+        "total_seconds": total_seconds,
     }
+    emit(
+        {
+            "event": "run_complete",
+            "stage": "after_close",
+            "duration_seconds": total_seconds,
+            "failure_count": source.get("failure_count", 0),
+            "retry_count": source.get("retry_count", 0),
+        }
+    )
     print(json.dumps(result, ensure_ascii=False, sort_keys=True))
 
 

@@ -1,5 +1,48 @@
 # Project Status
 
+## After-close Baostock serial refresh hardening and live validation (2026-08-26)
+
+- PID 23936 was captured at `2026-08-26 21:55:43 +08:00` after
+  18,946.806 seconds elapsed (CPU 16,158.078 seconds), with no established
+  remote TCP connection and no post-start staging writes. The installed
+  Baostock socket reader treated EOF as an empty read and could spin forever.
+  After explicit owner approval the process was force-terminated; the original
+  `.raw-through-20260826-yptr_toj` failure staging remains untouched with all
+  3,193 symbol files and no completed target from that attempt.
+- The raw refresh now logs stages, progress, per-symbol duration, attempts,
+  retry and failure events; each request has a 15-second socket deadline, at
+  most two attempts, EOF is terminal for the attempt, and five failed symbols
+  fail the refresh closed. A deterministic staging directory checkpoints each
+  validated symbol atomically and resumes only verified target-date rows.
+  Partial coverage cannot be renamed to the final snapshot.
+- The repaired real serial run completed 3,193/3,193 requests with zero
+  timeouts, EOFs, retries, or failures. Raw refresh took 995.4693 seconds,
+  including 848.4293 seconds of Baostock requests and 84.6411 seconds of final
+  source validation. Per-symbol p50/p95/p99/max were
+  0.0807/0.7091/1.3361/10.0132 seconds. Provider preparation took 688.3136
+  seconds, frozen-model inference 234.0989 seconds, archive 0.2000 seconds,
+  and the complete after-close run took 1,918.0933 seconds.
+- Publication occurred only after verified coverage reached 3,193/3,193:
+  3,190 active plus 3 inactive files, 3,038 eligible rows, `failure_count=0`,
+  and `retry_count=0`. The source semantic content SHA-256 is
+  `faf069745135dbce404d3a1aaf1ba787a72319fba401d09488ab6845b943827c`;
+  Provider semantic content SHA-256 is
+  `226a308774bb6160e3c17aab61d378a1c97943d46e4b212424f719825fa05`.
+- A same-input idempotence replay took 466.2313 seconds, returned `exists` for
+  source and Provider, emitted zero Baostock stock/login/retry/failure events,
+  and reproduced the same Top5 codes and scores. The immutable result file
+  SHA-256 remained
+  `4b0b4d6fbab111669f3ad1eccdc4202b2b0e4431257de7df79c744ff5bf7812f`,
+  while the frozen model remained
+  `0336cdcd8adc29dd8810db2901e0b1cd765c5fd988b3bf8226996fd1545ae71e`
+  with `fit_count=1`. No concurrency A/B was run. The deterministic resume
+  test proves an interrupted partial staging is retained and the next call
+  requests only unfinished symbols; this successful live run itself had no
+  interruption, so its live `resumed_symbol_count` was zero.
+- Focused regression suite: 35 passed. No Alpha158, DoubleEnsemble, model
+  parameters, Top5 formula, T-1/raw-unadjusted/full-coverage/immutable archive
+  contract, scheduler, workflow, or V2.1 file was changed.
+
 ## DoubleEnsemble prospective shadow daily run (2026-08-26)
 
 - Execution-only run; no code, model, V2.1, scheduler, workflow, Tushare, or
