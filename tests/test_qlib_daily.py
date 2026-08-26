@@ -102,7 +102,7 @@ def _provider(tmp_path: Path, source_info: dict) -> Path:
                 "pctChg": row["pctChg"],
             }
         )
-    pd.DataFrame(rows).to_parquet(
+    pd.DataFrame(rows).to_csv(
         provider / "metadata" / "eligible_rows.parquet", index=False
     )
     return provider
@@ -138,10 +138,13 @@ def _shadow_result(codes: tuple[str, ...]) -> tuple[dict, dict]:
     return result, {"manifest_sha256": "e" * 64}
 
 
-def test_source_and_provider_require_exact_completed_date_and_coverage(tmp_path):
+def test_source_and_provider_require_exact_completed_date_and_coverage(
+    tmp_path, monkeypatch
+):
     source = _source(tmp_path)
     source_info = daily.inspect_completed_source(source, TARGET)
     provider = _provider(tmp_path, source_info)
+    monkeypatch.setattr(daily.pd, "read_parquet", pd.read_csv)
 
     inspected = daily.inspect_prepared_provider(
         provider, completed_date=TARGET, source_info=source_info
@@ -154,14 +157,15 @@ def test_source_and_provider_require_exact_completed_date_and_coverage(tmp_path)
     assert inspected["next_trading_date"] == NEXT_SESSION.isoformat()
 
 
-def test_provider_content_mismatch_fails_closed(tmp_path):
+def test_provider_content_mismatch_fails_closed(tmp_path, monkeypatch):
     source = _source(tmp_path)
     source_info = daily.inspect_completed_source(source, TARGET)
     provider = _provider(tmp_path, source_info)
     eligible_path = provider / "metadata" / "eligible_rows.parquet"
-    frame = pd.read_parquet(eligible_path)
+    monkeypatch.setattr(daily.pd, "read_parquet", pd.read_csv)
+    frame = pd.read_csv(eligible_path)
     frame.loc[0, "close"] += 1.0
-    frame.to_parquet(eligible_path, index=False)
+    frame.to_csv(eligible_path, index=False)
 
     with pytest.raises(daily.QlibDailyError, match="content differs"):
         daily.inspect_prepared_provider(
