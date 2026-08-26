@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - [新功能] 新增 research-only Microsoft Qlib Alpha158 + DoubleEnsemble 离线候选与严格时间隔离样本外评估，不接入生产筛选或交易链路。
 - [测试] 增加 DoubleEnsemble 冻结工件及前瞻 shadow 的 T-1、幂等、哈希和冲突保护入口；唯一真实重放未通过 score 容差，已 fail-closed 禁止重训和每日推理。
 - [新功能] 按明确新授权一次性训练并冻结正式编号 DoubleEnsemble prospective-v1，以同一工件两次独立加载推理完全一致验收；每日 shadow 永久只加载该工件，不自动重训。
+- [改进] 将 DoubleEnsemble prospective shadow 前移到收盘后完成 T 日全市场准备、下一真实交易日 Top5 与最少技术字段不可变归档；次日只读前夜候选并手动触发 Private `rt_k` 行情确认。
 - [新功能] 全市场初筛升级为V2.1透明评分，增加基本面、资金面、技术面、估值、证据覆盖率、市场环境和风险门禁。
 - [改进] A股主板初筛默认当日与20日平均成交额门槛提高至2亿元，弱市自动缩减观察名单，并限制高成本证据增强数量与单股时间预算。
 - [测试] 增加V2.1评分覆盖率、亏损风险门禁、市场环境和端到端报告字段回归测试。

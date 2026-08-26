@@ -91,18 +91,21 @@ workflow.
 
 ## Frozen-model and daily prospective entry
 
-The research CLI also contains two deliberately manual commands:
+The accepted artifact is still created only through the deliberately manual
+`freeze-model` command. Normal prospective operation now uses two short manual
+entries and has no scheduler:
 
 ```bash
 python scripts/research_qlib_doubleensemble.py freeze-model \
   --provider research/runtime/qlib/provider \
   --artifact research/runtime/qlib/frozen-doubleensemble-prospective-v1
 
-python scripts/research_qlib_doubleensemble.py shadow \
-  --provider research/runtime/qlib/provider \
-  --artifact research/runtime/qlib/frozen-doubleensemble-prospective-v1 \
-  --archive-root research/runtime/qlib/prospective-shadow-v1 \
-  --trade-date YYYY-MM-DD --data-as-of YYYY-MM-DD
+# Run after 16:30 Asia/Shanghai for completed trading date T.
+python scripts/research_qlib_doubleensemble.py after-close --date YYYY-MM-DD
+
+# Run on the already frozen next trading date. This does not run Qlib.
+python scripts/research_qlib_doubleensemble.py morning-quotes \
+  --trade-date YYYY-MM-DD
 ```
 
 `freeze-model` uses only the approved segments, Qlib 0.9.7, random seed 0,
@@ -129,16 +132,38 @@ Both CLI entries pin the accepted artifact manifest hash
 a different or rewritten manifest fails closed even if it is internally
 self-consistent.
 
-`shadow` contains no fit call: it verifies and loads that artifact, checks that
-`data-as-of` is exactly the completed T-1 trading session, and archives only
-`result.json` plus a hash manifest. Same-input reruns verify and return the
-first result; input, output, or file conflicts preserve the original and fail
-closed. Fewer than three finite scores produces zero candidates. No outcome is
-pre-filled; the existing Outcome Engine can evaluate naturally matured days
-later. The acceptance batch is not labelled as a prospective sample because
-it was generated after its trade date. The first real sample requires the
-existing provider and calendar to be refreshed through that run's completed
-T-1 session; no Tushare or new acquisition path is added here.
+`after-close` is the only normal entry that may refresh full-market history or
+run Qlib. For an absent `raw-through-T` snapshot it reuses the existing
+Baostock raw, unadjusted daily schema and the existing dual-source
+Baostock/AKShare calendar contract. Same-day preparation is rejected before
+16:30 Asia/Shanghai. It requires one T row for every source symbol file,
+`failure_count=0`, exact Provider/source T-day universe content, and Provider
+maximum completed date exactly T. It then selects the first calendar session
+after T (not the next natural date), loads only the pinned frozen artifact,
+requires the accepted public evidence to retain `fit_count=1`, and runs the
+existing immutable `shadow` implementation for that next session.
+
+After inference, `after-close` writes a second immutable nightly-ready package.
+That package binds the original shadow run/model/Provider hashes to the exact
+Top5 and completed-close context: `close`, `prev_close`, `MA5`, `MA10`, `MA20`,
+14-session simple-mean true range (`ATR14`), and 20-session high/low. These
+fields are manual/ChatGPT context only and contain no trading advice.
+
+`morning-quotes` never calls the Provider builder, history adapters, Qlib, the
+frozen model, or a ranking function. It verifies the same-date nightly package
+and manually dispatches the existing standalone Private Tushare `rt_k`
+`sample_only` workflow with exactly the five exchange-qualified codes. Missing,
+tampered, stale-date, or non-Top5 nightly input fails closed with an instruction
+to run after-close preparation; an earlier day's candidates are never used.
+The Private workflow remains manual-only and keeps prices/timestamps outside
+this Public repository. `--dry-run` performs only the local immutable-package
+gate for offline acceptance.
+
+The lower-level `shadow` command remains available for contract testing and
+historical recovery, but it is not the morning entry. Same-input reruns verify
+and return the first immutable result; input, output, or file conflicts preserve
+the original and fail closed. No outcome is pre-filled; the existing Outcome
+Engine can evaluate naturally matured days later.
 
 The earlier attempt to reproduce the lost first-run scores remains a separate
 historical failure in

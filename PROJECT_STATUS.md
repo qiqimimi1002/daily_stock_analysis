@@ -1,5 +1,61 @@
 # Project Status
 
+## DoubleEnsemble prospective shadow daily run (2026-08-26)
+
+- Execution-only run; no code, model, V2.1, scheduler, workflow, Tushare, or
+  trading-decision path was changed or invoked.
+- The existing Baostock raw/unadjusted refresh completed 3,193/3,193 symbol
+  files through 2026-08-25 with zero failures. The verified Qlib Provider has
+  calendar through 2026-08-26, complete eligible daily rows through exactly
+  2026-08-25, and zero rows after that cutoff.
+- Frozen model `qlib-alpha158-doubleensemble-prospective-v1` remained at model
+  SHA-256 `0336cdcd8adc29dd8810db2901e0b1cd765c5fd988b3bf8226996fd1545ae71e`,
+  semantic artifact manifest SHA-256
+  `f282bd287fbdc07b06aa493955364ea46b6dd42616a5cdc512a28cd0288fe0ae`,
+  and `fit_count=1`; no fit or retraining occurred.
+- The immutable 2026-08-26 result is `status=ok`, `candidate_count=5`, with
+  ranks: `002084` 海鸥住工 (0.851368225563209), `002445` 中南文化
+  (0.7733819269409278), `603738` 泰晶科技 (0.6492470483189229), `601208`
+  东材科技 (0.6342211776731222), and `002222` 福晶科技
+  (0.5771178621615803).
+- Archive:
+  `research/runtime/qlib/prospective-shadow-v1/2026/08/26/doubleensemble-shadow-v1`;
+  result file SHA-256
+  `79793c2476045afa875b60cae15321b3f75725e4ba2b61dfa4909098db5c91f3`;
+  semantic manifest SHA-256
+  `24cfe3fd373694dd490912e227802eaeb550e48defa92a4c1f75bbc16bdbaa4a`;
+  archive verification passed. Open P0/P1/P2: 0/0/0.
+
+## After-close preparation and frozen next-session Top5 (2026-08-26)
+
+- Draft PR #30 remains isolated on `codex/qlib-alpha158-doubleensemble`; no
+  scheduler, workflow, V2.1, model, parameter, seed, or production path changed.
+- Manual entries are now:
+  `python scripts/research_qlib_doubleensemble.py after-close --date YYYY-MM-DD`
+  after 16:30 Asia/Shanghai, and
+  `python scripts/research_qlib_doubleensemble.py morning-quotes --trade-date YYYY-MM-DD`
+  on the already frozen next trading date.
+- Local replay for completed 2026-08-25 verified 3,193/3,193 source files,
+  3,189 active plus 4 inactive rows, zero failures, and Provider maximum
+  completed date exactly 2026-08-25. Source verification plus Provider
+  preparation took 230.2084 seconds.
+- The calendar selected 2026-08-26 as the next real trading day. Loading only
+  frozen `qlib-alpha158-doubleensemble-prospective-v1`, with model SHA-256
+  `0336cdcd8adc29dd8810db2901e0b1cd765c5fd988b3bf8226996fd1545ae71e`
+  and `fit_count=1`, reproduced the existing Top5 exactly and archived their
+  completed-close technical context in 263.8503 seconds. The immutable nightly
+  manifest SHA-256 is
+  `be4ca458a6c48a81a8c2ea0eafa873d92371e6128d23ba2619ba80ba17cfb890`.
+- Morning local validation took 0.0043 seconds and proved `qlib_ran=false` and
+  `shadow_reordered=false`. A single owner-authorized live Private run
+  (`32929865651`) failed closed with `stale_lunch_snapshot`; it produced no
+  sanitized artifact and was not retried. This is an operational P1 for live
+  quote confirmation, not a model/data-preparation regression. Open P0/P1/P2:
+  0/1/0.
+- Relevant regression suite: 31 passed. The next operational acceptance should
+  be one newly authorized in-session Private quote run; no scheduler is planned
+  until 1-2 trading sessions are proven stable.
+
 ## Qlib Alpha158 + DoubleEnsemble research shadow (2026-08-24)
 
 - Baseline: `origin/main@af87ad6a5660c028359ae6e37f76936ccc8ed825`;
