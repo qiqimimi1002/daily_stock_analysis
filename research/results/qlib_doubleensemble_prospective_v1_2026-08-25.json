@@ -1,0 +1,62 @@
+{
+  "acceptance": {
+    "candidate_count": 5,
+    "comparison": "exact_canonical_json",
+    "data_as_of": "2026-08-21",
+    "first_inference_sha256": "05144d2612c76acbd9a7a21cab4da1fa27d1b6f8ee57261b830756852fc05e3f",
+    "repeated_load_count": 2,
+    "second_inference_sha256": "05144d2612c76acbd9a7a21cab4da1fa27d1b6f8ee57261b830756852fc05e3f",
+    "status": "matched",
+    "trade_date": "2026-08-24"
+  },
+  "acceptance_candidates": [
+    [1, "603285", "键邦股份", 0.5474044271982293],
+    [2, "600785", "新华百货", 0.5382599827681899],
+    [3, "603052", "可川科技", 0.5240847010760721],
+    [4, "600791", "京能置业", 0.514760129211734],
+    [5, "603386", "骏亚科技", 0.49815303999920674]
+  ],
+  "artifact": {
+    "acceptance_file_sha256": "e203a2a5e7d5d4915adb8c62e626bbb32d24e132e7b55175c157b275facad9e5",
+    "acceptance_manifest_sha256": "c1b7afa409dbe8c0df7c11215bc2093ff7f8d6b4412899d8ab004b86b9fd79de",
+    "local_path": "research/runtime/qlib/frozen-doubleensemble-prospective-v1",
+    "manifest_file_sha256": "20e0107ae8e2f3dd8aa082cdfa6830e05b03097908c6da0bbd48d7414d483647",
+    "manifest_sha256": "f282bd287fbdc07b06aa493955364ea46b6dd42616a5cdc512a28cd0288fe0ae",
+    "model_file_sha256": "0336cdcd8adc29dd8810db2901e0b1cd765c5fd988b3bf8226996fd1545ae71e",
+    "pinned_in_freeze_and_shadow_cli": true,
+    "status": "accepted",
+    "training_attempt_file_sha256": "60e0fe39ed35912e24962ed3aea2445d97ee8dcb5a58f0213fbee0702194e61d",
+    "training_attempt_sha256": "5fd40d98b899e5a0ddff44eaf7f9a582a933a9dd8ee4dd37eb2b2a51a55525e9",
+    "training_file_sha256": "3e015eba12a2747125e1925d64a32a204134c938df4af7d6026e3f52ef1411eb",
+    "training_manifest_sha256": "edebe5e43b60bebf0e148795e30d7e86c89faa78296725a41ccf03fe7427339d"
+  },
+  "as_of": "2026-08-25",
+  "model_config_sha256": "a6c0e054f774ab2bc1424d1568b7877a8a5ac38659e558a2c04c689c24d37d75",
+  "model_config_version": "qlib-0.9.7-alpha158-doubleensemble-official-v1",
+  "model_version": "qlib-alpha158-doubleensemble-prospective-v1",
+  "prospective_shadow": {
+    "automatic_retraining": false,
+    "current_provider_calendar_end": "2026-08-24",
+    "current_provider_last_completed_bar": "2026-08-21",
+    "first_real_sample_status": "awaiting_existing_data_refresh_to_completed_t_minus_one",
+    "prospective_sample_count": 0,
+    "software_and_model_ready": true
+  },
+  "qlib_version": "0.9.7",
+  "random_seed": 0,
+  "segments": {
+    "test_end": "2026-08-21",
+    "test_start": "2025-07-01",
+    "train_end": "2024-12-25",
+    "train_start": "2024-01-02",
+    "valid_end": "2025-06-25",
+    "valid_start": "2025-01-02"
+  },
+  "training": {
+    "fit_count": 1,
+    "lost_model_reproduction_attempted": false,
+    "provider_file_count": 22356,
+    "status": "trained_once_and_frozen",
+    "training_input_sha256": "ced59a13647e48d06925128b11bc1909e6f119956902a391fb65a10b92dcdb8c"
+  }
+}

@@ -1,6 +1,217 @@
 # Project Status
 
-> Last updated: 2026-08-22 (Asia/Shanghai)
+## After-close local idempotence revalidation (2026-08-27)
+
+- Scope remained local-only on
+  `codex/qlib-alpha158-doubleensemble@9b25533090035d964bc15692efb4dee004e7d2e0`.
+  No GitHub login, fetch, push, PR update, CI/workflow dispatch, retraining,
+  Short-term Launch Model, scheduler, Cloudflare, V2.1, Alpha158, or
+  DoubleEnsemble parameter action was performed.
+- Re-ran the formal entry
+  `python scripts/research_qlib_doubleensemble.py after-close --date 2026-08-26`.
+  Because the fully validated immutable source already existed, this was an
+  idempotent full-chain replay: raw source validation 85.5405 seconds,
+  Provider preparation 142.9590 seconds, frozen-model inference 244.8354
+  seconds, nightly archive 0.2131 seconds, total 473.5661 seconds. The run
+  completed `status=ready`, with zero retry/failure events and no Baostock
+  login/stock request events. No after-close process remained after exit.
+- The original repaired live run remains the external-provider proof: it
+  requested and atomically checkpointed 3,193/3,193 Baostock symbols, with
+  zero timeouts, EOFs, retries, or failures, then completed Provider,
+  inference, and nightly publication in 1,918.0933 seconds. Its per-symbol
+  p50/p95/p99/max were 0.0807/0.7093/1.3370/10.0132 seconds. The old failed
+  `.raw-through-20260826-yptr_toj` staging remains untouched, and the current
+  completed state is `qlib-raw-refresh-state-v1` with 3,193/3,193 coverage.
+- The replay returned source and Provider `operation_status=exists`, Provider
+  maximum completed trading date `2026-08-26`, next trading date
+  `2026-08-27`, 3,038 eligible rows, and Provider semantic SHA-256
+  `226a308774bb6160e3c17aab61d378a1c97943d46e4b212424f719825fa05`.
+  The immutable next-session Top5 remained `002742`, `002084`, `601208`,
+  `603663`, and `603618`, in that order with unchanged scores.
+- Frozen model SHA-256 remains
+  `0336cdcd8adc29dd8810db2901e0b1cd765c5fd988b3bf8226996fd1545ae71e`
+  and the accepted fit evidence remains `fit_count=1`. The 2026-08-27 shadow
+  result file SHA-256 remains
+  `4b0b4d6fbab111669f3ad1eccdc4202b2b0e4431257de7df79c744ff5bf7812f`.
+  Nightly `ready.json` file SHA-256 is
+  `4d362da00ccc27def9c0d3fd665cf1c9d7eaa7ac90f554d6168abf711775e6d0`;
+  its semantic manifest SHA-256 is
+  `ebbe569fdfc38b5e7b4c8facdd9d0ac9a483e8ecd715bbbf51e142d590aa93ae`
+  and manifest file SHA-256 is
+  `d22ca486007a80b023dce3f3f9956623dad1b21c6b347f11657b4c8a6fc760a9`.
+- The 35-test Qlib daily/shadow/DoubleEnsemble regression selection passed in
+  81.78 seconds. Python compilation, critical flake8, and `git diff --check`
+  passed. AST/source hashes prove the Provider preparation, fit-count gate,
+  technical-context, nightly archive/load, morning dispatch, complete shadow,
+  and complete DoubleEnsemble modules are identical to the parent baseline.
+  The deterministic interruption test confirms that a partial staging remains
+  unpublished and a rerun requests only unfinished symbols; the successful
+  live run itself did not need to resume (`resumed_symbol_count=0`).
+
+## After-close Baostock serial refresh hardening and live validation (2026-08-26)
+
+- PID 23936 was captured at `2026-08-26 21:55:43 +08:00` after
+  18,946.806 seconds elapsed (CPU 16,158.078 seconds), with no established
+  remote TCP connection and no post-start staging writes. The installed
+  Baostock socket reader treated EOF as an empty read and could spin forever.
+  After explicit owner approval the process was force-terminated; the original
+  `.raw-through-20260826-yptr_toj` failure staging remains untouched with all
+  3,193 symbol files and no completed target from that attempt.
+- The raw refresh now logs stages, progress, per-symbol duration, attempts,
+  retry and failure events; each request has a 15-second socket deadline, at
+  most two attempts, EOF is terminal for the attempt, and five failed symbols
+  fail the refresh closed. A deterministic staging directory checkpoints each
+  validated symbol atomically and resumes only verified target-date rows.
+  Partial coverage cannot be renamed to the final snapshot.
+- The repaired real serial run completed 3,193/3,193 requests with zero
+  timeouts, EOFs, retries, or failures. Raw refresh took 995.4693 seconds,
+  including 848.4293 seconds of Baostock requests and 84.6411 seconds of final
+  source validation. Per-symbol p50/p95/p99/max were
+  0.0807/0.7091/1.3361/10.0132 seconds. Provider preparation took 688.3136
+  seconds, frozen-model inference 234.0989 seconds, archive 0.2000 seconds,
+  and the complete after-close run took 1,918.0933 seconds.
+- Publication occurred only after verified coverage reached 3,193/3,193:
+  3,190 active plus 3 inactive files, 3,038 eligible rows, `failure_count=0`,
+  and `retry_count=0`. The source semantic content SHA-256 is
+  `faf069745135dbce404d3a1aaf1ba787a72319fba401d09488ab6845b943827c`;
+  Provider semantic content SHA-256 is
+  `226a308774bb6160e3c17aab61d378a1c97943d46e4b212424f719825fa05`.
+- A same-input idempotence replay took 466.2313 seconds, returned `exists` for
+  source and Provider, emitted zero Baostock stock/login/retry/failure events,
+  and reproduced the same Top5 codes and scores. The immutable result file
+  SHA-256 remained
+  `4b0b4d6fbab111669f3ad1eccdc4202b2b0e4431257de7df79c744ff5bf7812f`,
+  while the frozen model remained
+  `0336cdcd8adc29dd8810db2901e0b1cd765c5fd988b3bf8226996fd1545ae71e`
+  with `fit_count=1`. No concurrency A/B was run. The deterministic resume
+  test proves an interrupted partial staging is retained and the next call
+  requests only unfinished symbols; this successful live run itself had no
+  interruption, so its live `resumed_symbol_count` was zero.
+- Focused regression suite: 35 passed. No Alpha158, DoubleEnsemble, model
+  parameters, Top5 formula, T-1/raw-unadjusted/full-coverage/immutable archive
+  contract, scheduler, workflow, or V2.1 file was changed.
+
+## DoubleEnsemble prospective shadow daily run (2026-08-26)
+
+- Execution-only run; no code, model, V2.1, scheduler, workflow, Tushare, or
+  trading-decision path was changed or invoked.
+- The existing Baostock raw/unadjusted refresh completed 3,193/3,193 symbol
+  files through 2026-08-25 with zero failures. The verified Qlib Provider has
+  calendar through 2026-08-26, complete eligible daily rows through exactly
+  2026-08-25, and zero rows after that cutoff.
+- Frozen model `qlib-alpha158-doubleensemble-prospective-v1` remained at model
+  SHA-256 `0336cdcd8adc29dd8810db2901e0b1cd765c5fd988b3bf8226996fd1545ae71e`,
+  semantic artifact manifest SHA-256
+  `f282bd287fbdc07b06aa493955364ea46b6dd42616a5cdc512a28cd0288fe0ae`,
+  and `fit_count=1`; no fit or retraining occurred.
+- The immutable 2026-08-26 result is `status=ok`, `candidate_count=5`, with
+  ranks: `002084` 海鸥住工 (0.851368225563209), `002445` 中南文化
+  (0.7733819269409278), `603738` 泰晶科技 (0.6492470483189229), `601208`
+  东材科技 (0.6342211776731222), and `002222` 福晶科技
+  (0.5771178621615803).
+- Archive:
+  `research/runtime/qlib/prospective-shadow-v1/2026/08/26/doubleensemble-shadow-v1`;
+  result file SHA-256
+  `79793c2476045afa875b60cae15321b3f75725e4ba2b61dfa4909098db5c91f3`;
+  semantic manifest SHA-256
+  `24cfe3fd373694dd490912e227802eaeb550e48defa92a4c1f75bbc16bdbaa4a`;
+  archive verification passed. Open P0/P1/P2: 0/0/0.
+
+## After-close preparation and frozen next-session Top5 (2026-08-26)
+
+- Draft PR #30 remains isolated on `codex/qlib-alpha158-doubleensemble`; no
+  scheduler, workflow, V2.1, model, parameter, seed, or production path changed.
+- Manual entries are now:
+  `python scripts/research_qlib_doubleensemble.py after-close --date YYYY-MM-DD`
+  after 16:30 Asia/Shanghai, and
+  `python scripts/research_qlib_doubleensemble.py morning-quotes --trade-date YYYY-MM-DD`
+  on the already frozen next trading date.
+- Local replay for completed 2026-08-25 verified 3,193/3,193 source files,
+  3,189 active plus 4 inactive rows, zero failures, and Provider maximum
+  completed date exactly 2026-08-25. Source verification plus Provider
+  preparation took 230.2084 seconds.
+- The calendar selected 2026-08-26 as the next real trading day. Loading only
+  frozen `qlib-alpha158-doubleensemble-prospective-v1`, with model SHA-256
+  `0336cdcd8adc29dd8810db2901e0b1cd765c5fd988b3bf8226996fd1545ae71e`
+  and `fit_count=1`, reproduced the existing Top5 exactly and archived their
+  completed-close technical context in 263.8503 seconds. The immutable nightly
+  manifest SHA-256 is
+  `be4ca458a6c48a81a8c2ea0eafa873d92371e6128d23ba2619ba80ba17cfb890`.
+- Morning local validation took 0.0043 seconds and proved `qlib_ran=false` and
+  `shadow_reordered=false`. A single owner-authorized live Private run
+  (`32929865651`) failed closed with `stale_lunch_snapshot`; it produced no
+  sanitized artifact and was not retried. This is an operational P1 for live
+  quote confirmation, not a model/data-preparation regression. Open P0/P1/P2:
+  0/1/0.
+- Relevant regression suite: 31 passed. The next operational acceptance should
+  be one newly authorized in-session Private quote run; no scheduler is planned
+  until 1-2 trading sessions are proven stable.
+
+## Qlib Alpha158 + DoubleEnsemble research shadow (2026-08-24)
+
+- Baseline: `origin/main@af87ad6a5660c028359ae6e37f76936ccc8ed825`;
+  branch: `codex/qlib-alpha158-doubleensemble`; implementation commit
+  `24fa7973454dc2d75f9c107b508801d52f3eb217`; Draft PR
+  [#30](https://github.com/qiqimimi1002/daily_stock_analysis/pull/30).
+  This is an independent research-only integration. It does not replace V2.1
+  or touch production
+  screening, Signal Monitor, notifications, scheduler, Cloudflare, workflows,
+  Tushare/Private real-time boundaries, PR #28, or PR #29.
+- Uses `pyqlib==0.9.7`, official `Alpha158`, official `DEnsembleModel`, and the
+  exact official Alpha158/DoubleEnsemble model kwargs with no tuning or search.
+  Qlib's MIT notice is retained in `THIRD_PARTY_NOTICES.md`.
+- Historical raw-unadjusted daily inputs cover `2023-09-01..2026-08-21`; the
+  verified calendar extends to `2026-08-24`. The provider contains 3,046
+  eligible instruments, 2,256,450 rows, and the Shanghai/Shenzhen main-board
+  prefixes only, excluding ST/*ST, suspended, ChiNext, STAR, and BSE.
+- Strict chronological segments: train `2024-01-02..2024-12-25`, validation
+  `2025-01-02..2025-06-25`, test `2025-07-01..2026-08-21`, with a two-session
+  label embargo. Candidate date T uses only completed T-1 data.
+- Alpha158 completed all 158 features. DoubleEnsemble produced 844,501 test
+  predictions and non-empty Top-5 batches on 280/280 test dates. Latest
+  example for `2026-08-24` uses cutoff `2026-08-21`.
+- After 30 bps, mean net 1d/3d/5d/10d returns are
+  `1.2057%/1.6382%/1.6412%/1.5079%`; mean HS300 excess is
+  `1.1471%/1.4563%/1.3223%/0.9025%`. Against frozen V2.1, mean net deltas are
+  `+1.5467/+1.6910/+1.5435/+1.1297` percentage points.
+- Evidence is **INSUFFICIENT EVIDENCE**: the historical backfill uses a
+  current-active universe, lacks point-in-time constituent/name vintage and
+  immutable dual-source coverage, and Pytdx rows lack historical turnover for
+  the V2.1 baseline. The 3d/5d/10d net medians are negative and 10d maximum
+  drawdown is 92.1676%. Proceed, if accepted, only to a real prospective
+  research shadow; do not promote to production.
+- Frozen aggregate evidence:
+  `research/results/qlib_alpha158_doubleensemble_oos_2026-08-24.json`.
+- The formally numbered model
+  `qlib-alpha158-doubleensemble-prospective-v1` was trained exactly once on
+  2026-08-25 with the unchanged official configuration, seed, provider hash,
+  and approved time segments. It was immediately saved under
+  `research/runtime/qlib/frozen-doubleensemble-prospective-v1`; model SHA-256
+  is `0336cdcd8adc29dd8810db2901e0b1cd765c5fd988b3bf8226996fd1545ae71e`.
+- Acceptance independently loaded that same disk artifact twice and produced
+  the exact same inference hash
+  `05144d2612c76acbd9a7a21cab4da1fa27d1b6f8ee57261b830756852fc05e3f`
+  both times. Artifact semantic manifest hash is
+  `f282bd287fbdc07b06aa493955364ea46b6dd42616a5cdc512a28cd0288fe0ae`.
+  This identity is pinned by both CLI entries, so a different self-consistent
+  local model/manifest is rejected.
+  Re-running `freeze-model` with a nonexistent Provider returned the existing
+  accepted artifact, proving it does not fit or read training input again.
+- Daily `shadow` has exact T-1 validation, Top-5/under-3-to-zero behavior,
+  immutable hashes, same-input idempotency, and conflict/tamper fail-closed
+  protection. It only loads prospective-v1 and is not connected to a workflow.
+  The 2026-08-24 acceptance batch is not counted as a prospective sample. The
+  local Provider currently ends at 2026-08-21 with calendar through 2026-08-24,
+  so the first real daily sample awaits the normal existing-data refresh to
+  the completed T-1 session. **Model/software readiness: YES; prospective
+  sample count: 0.**
+- The lost first model was not reproduced. Its separate 2026-08-24 replay
+  failure remains preserved for audit and was superseded only by explicit
+  authorization to create the newly numbered prospective-v1 artifact.
+- Frozen prospective-v1 evidence:
+  `research/results/qlib_doubleensemble_prospective_v1_2026-08-25.json`.
+
+> Last updated: 2026-08-25 (Asia/Shanghai)
 >
 > Codex workflow rule: read this file before substantial project work and
 > update it after every completed material task. Complete safe in-scope work

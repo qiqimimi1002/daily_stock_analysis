@@ -1,0 +1,69 @@
+{
+  "as_of": "2026-08-24",
+  "baseline_main": "af87ad6a5660c028359ae6e37f76936ccc8ed825",
+  "model_config_version": "qlib-0.9.7-alpha158-doubleensemble-official-v1",
+  "qlib_version": "0.9.7",
+  "segments": {
+    "train": ["2024-01-02", "2024-12-25"],
+    "valid": ["2025-01-02", "2025-06-25"],
+    "test": ["2025-07-01", "2026-08-21"],
+    "label_embargo_sessions": 2
+  },
+  "data": {
+    "price_basis": "raw_unadjusted",
+    "provider_window": ["2023-09-01", "2026-08-24"],
+    "last_completed_bar": "2026-08-21",
+    "source_ids": [
+      "akshare.stock_zh_a_hist.eastmoney.raw",
+      "pytdx.get_security_bars.raw"
+    ],
+    "source_symbol_file_count": 3193,
+    "instrument_count": 3046,
+    "raw_row_count": 2256450,
+    "provider_manifest_sha256": "6ebfab378dde93f2ada7cd75947c4dcd662e704444661052417ed99e3b4789de"
+  },
+  "execution": {
+    "alpha158_complete": true,
+    "alpha158_feature_count": 158,
+    "test_feature_non_null_rate": 0.99987343,
+    "prediction_count": 844501,
+    "candidate_batch_count": 280,
+    "candidate_nonempty_batch_count": 280
+  },
+  "doubleensemble": {
+    "1d": {"samples": 1374, "signal_dates": 278, "net_mean_pct": 1.20572704, "net_median_pct": 1.05942015, "net_win_rate_pct": 54.58515284, "hs300_excess_mean_pct": 1.14713008, "mfe_mean_pct": 5.36561062, "mae_mean_pct": 3.69113101, "max_drawdown_pct": 18.4807736},
+    "3d": {"samples": 1346, "signal_dates": 276, "net_mean_pct": 1.63820226, "net_median_pct": -0.15984411, "net_win_rate_pct": 49.33135215, "hs300_excess_mean_pct": 1.45629594, "mfe_mean_pct": 10.50029308, "mae_mean_pct": 6.77930577, "max_drawdown_pct": 51.73850113},
+    "5d": {"samples": 1323, "signal_dates": 274, "net_mean_pct": 1.64121167, "net_median_pct": -1.1, "net_win_rate_pct": 47.0143613, "hs300_excess_mean_pct": 1.32232069, "mfe_mean_pct": 13.48055124, "mae_mean_pct": 8.77378536, "max_drawdown_pct": 80.98352933},
+    "10d": {"samples": 1276, "signal_dates": 269, "net_mean_pct": 1.50785879, "net_median_pct": -2.2275959, "net_win_rate_pct": 43.65203762, "hs300_excess_mean_pct": 0.90246959, "mfe_mean_pct": 17.59361865, "mae_mean_pct": 11.49984517, "max_drawdown_pct": 92.16764087}
+  },
+  "v2_1_baseline": {
+    "1d": {"net_mean_pct": -0.34097837, "hs300_excess_mean_pct": -0.40650894},
+    "3d": {"net_mean_pct": -0.05281906, "hs300_excess_mean_pct": -0.23289523},
+    "5d": {"net_mean_pct": 0.09769249, "hs300_excess_mean_pct": -0.21728623},
+    "10d": {"net_mean_pct": 0.37813636, "hs300_excess_mean_pct": -0.24122231}
+  },
+  "doubleensemble_minus_v2_1": {
+    "1d": {"net_mean_pct": 1.54670541, "hs300_excess_mean_pct": 1.55363902},
+    "3d": {"net_mean_pct": 1.69102132, "hs300_excess_mean_pct": 1.68919117},
+    "5d": {"net_mean_pct": 1.54351918, "hs300_excess_mean_pct": 1.53960692},
+    "10d": {"net_mean_pct": 1.12972243, "hs300_excess_mean_pct": 1.1436919}
+  },
+  "latest_candidate_example": {
+    "trade_date": "2026-08-24",
+    "data_cutoff_date": "2026-08-21",
+    "candidates": [
+      [1, "603285", "键邦股份", 0.6135704316934073],
+      [2, "601869", "长飞光纤", 0.4882715712088396],
+      [3, "603052", "可川科技", 0.43778826633485374],
+      [4, "600791", "京能置业", 0.4373375450996326],
+      [5, "603386", "骏亚科技", 0.4311668293682889]
+    ]
+  },
+  "evidence_status": "INSUFFICIENT EVIDENCE",
+  "evidence_status_reasons": [
+    "current_active_universe_survivorship",
+    "historical_constituent_name_vintage_unavailable",
+    "full_history_not_dual_source_immutable",
+    "pytdx_historical_turnover_unavailable_for_v21_baseline"
+  ]
+}
