@@ -1,5 +1,53 @@
 # Project Status
 
+## After-close local idempotence revalidation (2026-08-27)
+
+- Scope remained local-only on
+  `codex/qlib-alpha158-doubleensemble@9b25533090035d964bc15692efb4dee004e7d2e0`.
+  No GitHub login, fetch, push, PR update, CI/workflow dispatch, retraining,
+  Short-term Launch Model, scheduler, Cloudflare, V2.1, Alpha158, or
+  DoubleEnsemble parameter action was performed.
+- Re-ran the formal entry
+  `python scripts/research_qlib_doubleensemble.py after-close --date 2026-08-26`.
+  Because the fully validated immutable source already existed, this was an
+  idempotent full-chain replay: raw source validation 85.5405 seconds,
+  Provider preparation 142.9590 seconds, frozen-model inference 244.8354
+  seconds, nightly archive 0.2131 seconds, total 473.5661 seconds. The run
+  completed `status=ready`, with zero retry/failure events and no Baostock
+  login/stock request events. No after-close process remained after exit.
+- The original repaired live run remains the external-provider proof: it
+  requested and atomically checkpointed 3,193/3,193 Baostock symbols, with
+  zero timeouts, EOFs, retries, or failures, then completed Provider,
+  inference, and nightly publication in 1,918.0933 seconds. Its per-symbol
+  p50/p95/p99/max were 0.0807/0.7093/1.3370/10.0132 seconds. The old failed
+  `.raw-through-20260826-yptr_toj` staging remains untouched, and the current
+  completed state is `qlib-raw-refresh-state-v1` with 3,193/3,193 coverage.
+- The replay returned source and Provider `operation_status=exists`, Provider
+  maximum completed trading date `2026-08-26`, next trading date
+  `2026-08-27`, 3,038 eligible rows, and Provider semantic SHA-256
+  `226a308774bb6160e3c17aab61d378a1c97943d46e4b212424f719825fa05`.
+  The immutable next-session Top5 remained `002742`, `002084`, `601208`,
+  `603663`, and `603618`, in that order with unchanged scores.
+- Frozen model SHA-256 remains
+  `0336cdcd8adc29dd8810db2901e0b1cd765c5fd988b3bf8226996fd1545ae71e`
+  and the accepted fit evidence remains `fit_count=1`. The 2026-08-27 shadow
+  result file SHA-256 remains
+  `4b0b4d6fbab111669f3ad1eccdc4202b2b0e4431257de7df79c744ff5bf7812f`.
+  Nightly `ready.json` file SHA-256 is
+  `4d362da00ccc27def9c0d3fd665cf1c9d7eaa7ac90f554d6168abf711775e6d0`;
+  its semantic manifest SHA-256 is
+  `ebbe569fdfc38b5e7b4c8facdd9d0ac9a483e8ecd715bbbf51e142d590aa93ae`
+  and manifest file SHA-256 is
+  `d22ca486007a80b023dce3f3f9956623dad1b21c6b347f11657b4c8a6fc760a9`.
+- The 35-test Qlib daily/shadow/DoubleEnsemble regression selection passed in
+  81.78 seconds. Python compilation, critical flake8, and `git diff --check`
+  passed. AST/source hashes prove the Provider preparation, fit-count gate,
+  technical-context, nightly archive/load, morning dispatch, complete shadow,
+  and complete DoubleEnsemble modules are identical to the parent baseline.
+  The deterministic interruption test confirms that a partial staging remains
+  unpublished and a rerun requests only unfinished symbols; the successful
+  live run itself did not need to resume (`resumed_symbol_count=0`).
+
 ## After-close Baostock serial refresh hardening and live validation (2026-08-26)
 
 - PID 23936 was captured at `2026-08-26 21:55:43 +08:00` after
