@@ -3,56 +3,155 @@
   "trade_date": "2026-09-01",
   "workflow_name": "全市场初筛",
   "branch": "main",
-  "run_id": "33460917440",
-  "run_number": "94",
-  "status": "failure",
-  "started_at": "2026-09-01T10:01:35+08:00",
-  "completed_at": "2026-09-01T10:02:27+08:00",
+  "run_id": "33461235662",
+  "run_number": "95",
+  "status": "success",
+  "started_at": "2026-09-01T10:06:21+08:00",
+  "completed_at": "2026-09-01T10:17:59+08:00",
   "trigger_source": "external_scheduler_cloudflare",
   "scheduled_slot": null,
-  "run_created_at": "2026-09-01T10:00:39+08:00",
-  "screening_started_at": "2026-09-01T10:01:35+08:00",
+  "run_created_at": "2026-09-01T10:05:36+08:00",
+  "screening_started_at": "2026-09-01T10:06:21+08:00",
   "run_creation_delay_minutes": null,
   "screening_start_delay_minutes": null,
   "idempotency_skipped": false,
   "idempotency_skip_reason": null,
   "idempotency_existing_run_id": null,
   "idempotency_existing_run_number": null,
-  "screening_generated_at": null,
-  "market_data_at": null,
-  "market_snapshot": null,
+  "screening_generated_at": "2026-09-01T10:08:31+08:00",
+  "market_data_at": "2026-09-01T10:06:49+08:00",
+  "market_snapshot": "data/market_snapshot.json",
   "market_snapshot_error_report": null,
-  "technical_snapshot": null,
+  "technical_snapshot": "data/technical_snapshot.json",
   "technical_snapshot_error_report": null,
-  "data_source": null,
-  "model_version": null,
-  "screening_outcome": "failure",
-  "deep_analysis_outcome": "skipped",
-  "deep_analysis_status": "not_required_no_candidates",
+  "data_source": "sina",
+  "model_version": "V2.1",
+  "screening_outcome": "success",
+  "deep_analysis_outcome": "success",
+  "deep_analysis_status": "completed",
   "deep_analysis_requested": true,
-  "market_record_count": 0,
-  "preselected_count": 0,
-  "history_success_count": 0,
+  "market_record_count": 5552,
+  "preselected_count": 60,
+  "history_success_count": 60,
   "history_failure_count": 0,
-  "history_success_rate": null,
-  "history_failure_reasons": {},
-  "history_source_stats": {},
-  "history_consistency": {},
-  "history_data_quality": {},
-  "enrichment_success_count": 0,
+  "history_success_rate": 100.0,
+  "history_failure_reasons": {
+    "counts": {},
+    "by_code": []
+  },
+  "history_source_stats": {
+    "akshare_eastmoney": {
+      "attempts": 99,
+      "successes": 25,
+      "failures": 35,
+      "skipped": 0,
+      "retries": 39,
+      "failure_reasons": {
+        "remote_disconnect": 74
+      },
+      "success_rate": 41.67
+    },
+    "akshare_sina": {
+      "attempts": 60,
+      "successes": 60,
+      "failures": 0,
+      "skipped": 0,
+      "retries": 0,
+      "failure_reasons": {},
+      "success_rate": 100.0
+    },
+    "efinance_eastmoney": {
+      "attempts": 0,
+      "successes": 0,
+      "failures": 0,
+      "skipped": 35,
+      "retries": 0,
+      "failure_reasons": {},
+      "success_rate": null
+    },
+    "cache_hits": 0
+  },
+  "history_consistency": {
+    "status_counts": {
+      "matched": 25,
+      "single_backend": 35
+    },
+    "checked_count": 25,
+    "conflict_count": 0,
+    "single_backend_count": 35
+  },
+  "history_data_quality": {
+    "status": "ok",
+    "confidence_label": "high",
+    "warning": null
+  },
+  "enrichment_success_count": 8,
   "enrichment_failure_count": 0,
-  "candidate_count": 0,
-  "candidate_codes": [],
-  "analysis_codes": [],
-  "screening_json": null,
-  "screened_codes": null,
-  "screening_reports": [],
-  "deep_analysis_reports": [],
+  "candidate_count": 5,
+  "candidate_codes": [
+    "600737",
+    "000725",
+    "600497",
+    "600403",
+    "000630"
+  ],
+  "analysis_codes": [
+    "600737",
+    "000725",
+    "600497"
+  ],
+  "screening_json": "data/market_screening_20260901_1008.json",
+  "screened_codes": "data/screened_codes.txt",
+  "screening_reports": [
+    "reports/market_screening_20260901_1008.md"
+  ],
+  "deep_analysis_reports": [
+    "reports/report_20260901.md"
+  ],
   "deep_analysis_missing_codes": [],
-  "llm_retry_events": [],
+  "llm_retry_events": [
+    {
+      "key_index": 0,
+      "recorded_at": "2026-09-01T10:10:26+08:00",
+      "delay_seconds": 5.0,
+      "stock_code": "600737",
+      "error_type": "gemini_503",
+      "model": "gemini/gemini-3-flash-preview",
+      "max_attempts": 3,
+      "key_switched": false,
+      "action": "retry",
+      "attempt": 1
+    },
+    {
+      "key_index": 0,
+      "recorded_at": "2026-09-01T10:10:46+08:00",
+      "delay_seconds": 10.0,
+      "stock_code": "600737",
+      "error_type": "gemini_503",
+      "model": "gemini/gemini-3-flash-preview",
+      "max_attempts": 3,
+      "key_switched": false,
+      "action": "retry",
+      "attempt": 2
+    },
+    {
+      "key_index": 0,
+      "recorded_at": "2026-09-01T10:17:11+08:00",
+      "delay_seconds": 5.0,
+      "stock_code": "600497",
+      "error_type": "gemini_503",
+      "model": "gemini/gemini-3-flash-preview",
+      "max_attempts": 3,
+      "key_switched": false,
+      "action": "retry",
+      "attempt": 1
+    }
+  ],
   "deep_analysis_failures": [],
-  "reason_codes": [],
-  "artifact_name": "market-screening-94",
+  "reason_codes": [
+    "gemini_503"
+  ],
+  "artifact_name": "market-screening-95",
   "fixed_result_entry": {
     "branch": "screening-results",
     "latest_manifest": "latest/manifest.json",
@@ -63,19 +162,22 @@
     "latest_reports": "latest/reports/",
     "history_prefix": "history/2026-09-01/"
   },
-  "evidence_coverage_average": null,
-  "evidence_coverage_minimum": null,
+  "evidence_coverage_average": 44.0,
+  "evidence_coverage_minimum": 44.0,
   "result_file_sha256": {
-    "logs/screening_execution_guard.log": "77086e2e4839530b5aeaad0c0ca112a2493c8fed13229fcecb193a0d279128c2",
-    "data/screening_execution_guard.json": "3c17744116c0ae8b462c3747f9859856721f61c2a1001be84d118bef7445b766"
+    "data/market_screening_20260901_1008.json": "b5e2ff48b824c562f2c5d0e3aa3c9fe9511fe2bfc5a43a20dfcb4376c630d92f",
+    "data/market_snapshot.json": "0f3ecf155aae3a0529150d3ec978d50f81c2735b0abdb241c9b6d70ad0dffef3",
+    "data/technical_snapshot.json": "1cad3c34a3522fd3e73ccbcc2c1f97af720d66e4e2fcc89b9fb0a53f4f2cb7bd",
+    "data/screened_codes.txt": "ddbb0aae58eea13d0ebe1f7d6452573b360009d22957f5ffa034f013d07a3112",
+    "reports/market_screening_20260901_1008.md": "07fa3632fe69f9a5944037e361b50eb0e153bf2075cb57d3c50cfe692ed84a5b",
+    "reports/report_20260901.md": "21944192d9f8435a51e258628a722de19195b59e8056f55272f924da02912c3d",
+    "logs/llm_retry_events.jsonl": "1d2ec3b353e9d43fc9900d8ee3869d66cbd7a85eeb3403eaa3e49329dc3aaaaa",
+    "logs/screening_execution_guard.log": "ef724c0f02a3a853224c278c5460842c2bc94eade3f69d7c48b26ae45347ad04",
+    "data/screening_execution_guard.json": "f33e242987fc2a021f10dd52b70ff74f70ec750d129839352cf43bc8950094c5"
   },
   "integrity": {
-    "ok": false,
-    "errors": [
-      "screening_json_missing",
-      "screening_report_missing_or_empty",
-      "screened_codes_missing"
-    ],
-    "screening_json_count": 0
+    "ok": true,
+    "errors": [],
+    "screening_json_count": 1
   }
 }
