@@ -3,56 +3,115 @@
   "trade_date": "2026-09-09",
   "workflow_name": "全市场初筛",
   "branch": "main",
-  "run_id": "34301471433",
-  "run_number": "124",
-  "status": "failure",
-  "started_at": "2026-09-09T10:01:34+08:00",
-  "completed_at": "2026-09-09T10:02:22+08:00",
+  "run_id": "34301811950",
+  "run_number": "125",
+  "status": "success",
+  "started_at": "2026-09-09T10:06:23+08:00",
+  "completed_at": "2026-09-09T10:12:40+08:00",
   "trigger_source": "external_scheduler_cloudflare",
   "scheduled_slot": null,
-  "run_created_at": "2026-09-09T10:00:32+08:00",
-  "screening_started_at": "2026-09-09T10:01:34+08:00",
+  "run_created_at": "2026-09-09T10:05:25+08:00",
+  "screening_started_at": "2026-09-09T10:06:23+08:00",
   "run_creation_delay_minutes": null,
   "screening_start_delay_minutes": null,
   "idempotency_skipped": false,
   "idempotency_skip_reason": null,
   "idempotency_existing_run_id": null,
   "idempotency_existing_run_number": null,
-  "screening_generated_at": null,
-  "market_data_at": null,
-  "market_snapshot": null,
+  "screening_generated_at": "2026-09-09T10:08:48+08:00",
+  "market_data_at": "2026-09-09T10:07:03+08:00",
+  "market_snapshot": "data/market_snapshot.json",
   "market_snapshot_error_report": null,
-  "technical_snapshot": null,
+  "technical_snapshot": "data/technical_snapshot.json",
   "technical_snapshot_error_report": null,
-  "data_source": null,
-  "model_version": null,
-  "screening_outcome": "failure",
-  "deep_analysis_outcome": "skipped",
-  "deep_analysis_status": "not_required_no_candidates",
+  "data_source": "sina",
+  "model_version": "V2.1",
+  "screening_outcome": "success",
+  "deep_analysis_outcome": "success",
+  "deep_analysis_status": "completed",
   "deep_analysis_requested": true,
-  "market_record_count": 0,
-  "preselected_count": 0,
-  "history_success_count": 0,
+  "market_record_count": 5239,
+  "preselected_count": 60,
+  "history_success_count": 60,
   "history_failure_count": 0,
-  "history_success_rate": null,
-  "history_failure_reasons": {},
-  "history_source_stats": {},
-  "history_consistency": {},
-  "history_data_quality": {},
-  "enrichment_success_count": 0,
+  "history_success_rate": 100.0,
+  "history_failure_reasons": {
+    "counts": {},
+    "by_code": []
+  },
+  "history_source_stats": {
+    "akshare_eastmoney": {
+      "attempts": 107,
+      "successes": 15,
+      "failures": 45,
+      "skipped": 0,
+      "retries": 47,
+      "failure_reasons": {
+        "remote_disconnect": 92
+      },
+      "success_rate": 25.0
+    },
+    "akshare_sina": {
+      "attempts": 60,
+      "successes": 60,
+      "failures": 0,
+      "skipped": 0,
+      "retries": 0,
+      "failure_reasons": {},
+      "success_rate": 100.0
+    },
+    "efinance_eastmoney": {
+      "attempts": 0,
+      "successes": 0,
+      "failures": 0,
+      "skipped": 45,
+      "retries": 0,
+      "failure_reasons": {},
+      "success_rate": null
+    },
+    "cache_hits": 0
+  },
+  "history_consistency": {
+    "status_counts": {
+      "matched": 15,
+      "single_backend": 45
+    },
+    "checked_count": 15,
+    "conflict_count": 0,
+    "single_backend_count": 45
+  },
+  "history_data_quality": {
+    "status": "ok",
+    "confidence_label": "high",
+    "warning": null
+  },
+  "enrichment_success_count": 8,
   "enrichment_failure_count": 0,
-  "candidate_count": 0,
-  "candidate_codes": [],
-  "analysis_codes": [],
-  "screening_json": null,
-  "screened_codes": null,
-  "screening_reports": [],
-  "deep_analysis_reports": [],
+  "candidate_count": 4,
+  "candidate_codes": [
+    "000878",
+    "000807",
+    "600711",
+    "601168"
+  ],
+  "analysis_codes": [
+    "000878",
+    "000807",
+    "600711"
+  ],
+  "screening_json": "data/market_screening_20260909_1008.json",
+  "screened_codes": "data/screened_codes.txt",
+  "screening_reports": [
+    "reports/market_screening_20260909_1008.md"
+  ],
+  "deep_analysis_reports": [
+    "reports/report_20260909.md"
+  ],
   "deep_analysis_missing_codes": [],
   "llm_retry_events": [],
   "deep_analysis_failures": [],
   "reason_codes": [],
-  "artifact_name": "market-screening-124",
+  "artifact_name": "market-screening-125",
   "fixed_result_entry": {
     "branch": "screening-results",
     "latest_manifest": "latest/manifest.json",
@@ -63,19 +122,21 @@
     "latest_reports": "latest/reports/",
     "history_prefix": "history/2026-09-09/"
   },
-  "evidence_coverage_average": null,
-  "evidence_coverage_minimum": null,
+  "evidence_coverage_average": 44.0,
+  "evidence_coverage_minimum": 44.0,
   "result_file_sha256": {
-    "logs/screening_execution_guard.log": "5fb34a70b277a315636627748c12354a246bd06bdccec296278c85f833c2bf9e",
-    "data/screening_execution_guard.json": "727193a85c338902e813946fbc514a200937efefeb106dd35f4f22813b797c13"
+    "data/market_screening_20260909_1008.json": "61620896051af01857b306bee7a9e0011bfa85857778d33dac3742e33406474e",
+    "data/market_snapshot.json": "728731cb234e1b940282622b2bd016541aa6950e3f53df7f7c50fb204874046f",
+    "data/technical_snapshot.json": "be280969e89fcf9ef68cf61d2c32af8f783e636b37ac44e439c1be9239bb4b73",
+    "data/screened_codes.txt": "b7a3fcd9242b4851d9208863b74ef9f4f599caf0b76c2273efe6bdb19282e96e",
+    "reports/market_screening_20260909_1008.md": "c9a5e64d4d7681fd1c0f0f450f04a5aa6bd90b30e8be2a88e8a5d21a07fcc90f",
+    "reports/report_20260909.md": "3b4970c370a9839d1dd08df4af7bde6a1c2b2cfb5147e684f4a95f7389ae31ba",
+    "logs/screening_execution_guard.log": "13480c46326897c3944f7cf8762378db4eaad619d7e80cf383593fba3f6ee4d5",
+    "data/screening_execution_guard.json": "3fcb80876c7cd1cc927b06116bb1cee73c5f6ab778d712e78a3338bb165a46f2"
   },
   "integrity": {
-    "ok": false,
-    "errors": [
-      "screening_json_missing",
-      "screening_report_missing_or_empty",
-      "screened_codes_missing"
-    ],
-    "screening_json_count": 0
+    "ok": true,
+    "errors": [],
+    "screening_json_count": 1
   }
 }
