@@ -3,23 +3,23 @@
   "trade_date": "2026-10-05",
   "workflow_name": "全市场初筛",
   "branch": "main",
-  "run_id": "37253713427",
-  "run_number": "214",
+  "run_id": "37286381210",
+  "run_number": "218",
   "status": "partial_success",
-  "started_at": "2026-10-05T10:02:18+08:00",
-  "completed_at": "2026-10-05T10:04:50+08:00",
-  "trigger_source": "external_scheduler_cloudflare",
-  "scheduled_slot": null,
-  "run_created_at": "2026-10-05T10:01:20+08:00",
-  "screening_started_at": "2026-10-05T10:02:18+08:00",
-  "run_creation_delay_minutes": null,
-  "screening_start_delay_minutes": null,
+  "started_at": "2026-10-05T16:53:39+08:00",
+  "completed_at": "2026-10-05T16:56:40+08:00",
+  "trigger_source": "schedule_fallback",
+  "scheduled_slot": "10:10",
+  "run_created_at": "2026-10-05T16:52:40+08:00",
+  "screening_started_at": "2026-10-05T16:53:39+08:00",
+  "run_creation_delay_minutes": 402.67,
+  "screening_start_delay_minutes": 403.65,
   "idempotency_skipped": false,
   "idempotency_skip_reason": null,
   "idempotency_existing_run_id": null,
   "idempotency_existing_run_number": null,
-  "screening_generated_at": "2026-10-05T10:04:37+08:00",
-  "market_data_at": "2026-10-05T10:02:55+08:00",
+  "screening_generated_at": "2026-10-05T16:56:25+08:00",
+  "market_data_at": "2026-10-05T16:54:24+08:00",
   "market_snapshot": "data/market_snapshot.json",
   "market_snapshot_error_report": null,
   "technical_snapshot": "data/technical_snapshot.json",
@@ -98,10 +98,10 @@
     "603588",
     "600276"
   ],
-  "screening_json": "data/market_screening_20261005_1004.json",
+  "screening_json": "data/market_screening_20261005_1656.json",
   "screened_codes": "data/screened_codes.txt",
   "screening_reports": [
-    "reports/market_screening_20261005_1004.md"
+    "reports/market_screening_20261005_1656.md"
   ],
   "deep_analysis_reports": [],
   "deep_analysis_missing_codes": [
@@ -114,7 +114,7 @@
   "reason_codes": [
     "deep_analysis_incomplete"
   ],
-  "artifact_name": "market-screening-214",
+  "artifact_name": "market-screening-218",
   "fixed_result_entry": {
     "branch": "screening-results",
     "latest_manifest": "latest/manifest.json",
@@ -128,13 +128,13 @@
   "evidence_coverage_average": 44.0,
   "evidence_coverage_minimum": 44.0,
   "result_file_sha256": {
-    "data/market_screening_20261005_1004.json": "c7ae4dba120e9fba7341e022890ed9fe16d2bcb001910ce6c561a1752d3a48b6",
-    "data/market_snapshot.json": "19c5692ce63261573bd2ec020f441fe7e0cddb5341b263d20f70fc02574844b6",
-    "data/technical_snapshot.json": "939cf9749e91fead158a5297bc413881951915575fcde545849fc75455bca5b7",
+    "data/market_screening_20261005_1656.json": "750ff0853f50d6261f5fda27ac0e9d8e07e7672c82b989a309dff5f9227ab00d",
+    "data/market_snapshot.json": "f1d2fd76289c1195fe95991ced0dd32df8890e2d7274b3c4dd12fc8dbd008d37",
+    "data/technical_snapshot.json": "93ae94be4d68ea4a73026fac26608d1920fd11799dee7ed1b9a05be2f1d6018d",
     "data/screened_codes.txt": "c8bf6ea253f2263036c658ac6fc378990ae5cadc6e928a608bd6207941097b5c",
-    "reports/market_screening_20261005_1004.md": "a66e68125421cd0da33452f196e57c31fa5788c97db3e49038ea60b9a39a40e5",
-    "logs/screening_execution_guard.log": "d73e33bb0b71339bc06f2030f1cf4110165a8c1a3c79d1d1dd063fedcdfc6800",
-    "data/screening_execution_guard.json": "076669cd4cb954400415fa1d0262f41e7f28223fd7fff531fd428b91dc5aa711"
+    "reports/market_screening_20261005_1656.md": "07beb3fbdca1465f1f795c670f4cae65c5c627121ced6f6d5d498be261028670",
+    "logs/screening_execution_guard.log": "74a05104f7524300aa9525b0c2ed4cba632ca6ae340c5964e7734b55f2b02dcf",
+    "data/screening_execution_guard.json": "2e87c9674f0e089bcbd35e9f85d5ecfe6a2d0b940fe879716ddb413939f4cff0"
   },
   "integrity": {
     "ok": false,

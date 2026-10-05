@@ -1,9 +1,9 @@
 {
   "schema_version": "1.0",
   "trade_date": "2026-10-05",
-  "run_id": "37253713427",
-  "run_number": "214",
-  "technical_as_of": "2026-10-05T10:02:55+08:00",
+  "run_id": "37286381210",
+  "run_number": "218",
+  "technical_as_of": "2026-10-05T16:54:24+08:00",
   "market_data_source": "sina",
   "indicators": {
     "603259": {

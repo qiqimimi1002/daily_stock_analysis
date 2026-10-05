@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-05T10:04:37+08:00",
-  "market_data_at": "2026-10-05T10:02:55+08:00",
+  "generated_at": "2026-10-05T16:56:25+08:00",
+  "market_data_at": "2026-10-05T16:54:24+08:00",
   "universe_count": 5571,
   "spot_filtered_count": 60,
   "history_success_count": 60,
@@ -545,7 +545,7 @@
   },
   "market_snapshot": {
     "schema_version": "1.0",
-    "market_data_at": "2026-10-05T10:02:55+08:00",
+    "market_data_at": "2026-10-05T16:54:24+08:00",
     "data_source": "sina",
     "price_adjustment": "none_realtime_spot",
     "prev_close_adjustment": "provider_exchange_reference",

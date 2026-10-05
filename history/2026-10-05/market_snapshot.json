@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "market_data_at": "2026-10-05T10:02:55+08:00",
+  "market_data_at": "2026-10-05T16:54:24+08:00",
   "data_source": "sina",
   "price_adjustment": "none_realtime_spot",
   "prev_close_adjustment": "provider_exchange_reference",
