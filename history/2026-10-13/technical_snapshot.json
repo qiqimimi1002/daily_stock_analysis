@@ -1,0 +1,52 @@
+{
+  "schema_version": "1.0",
+  "trade_date": "2026-10-13",
+  "run_id": "38334872692",
+  "run_number": "244",
+  "technical_as_of": "2026-10-13T10:05:14+08:00",
+  "market_data_source": "akshare_eastmoney",
+  "indicators": {
+    "600026": {
+      "code": "600026",
+      "history_data_through": "2026-10-12",
+      "reference_price": 22.11,
+      "ma5": 21.72,
+      "ma10": 21.71,
+      "ma20": 21.38,
+      "five_day_pct": 9.08,
+      "watch_zone": "21.38—21.72",
+      "provider_volume_ratio": 3.74,
+      "completed_day_volume_ratio_5d": null,
+      "history_source": "akshare_eastmoney",
+      "history_price_adjustment": "qfq"
+    },
+    "603127": {
+      "code": "603127",
+      "history_data_through": "2026-10-12",
+      "reference_price": 49.34,
+      "ma5": 49.9,
+      "ma10": 48.2,
+      "ma20": 45.75,
+      "five_day_pct": 10.08,
+      "watch_zone": "45.75—49.90",
+      "provider_volume_ratio": 2.37,
+      "completed_day_volume_ratio_5d": null,
+      "history_source": "akshare_eastmoney",
+      "history_price_adjustment": "qfq"
+    },
+    "600938": {
+      "code": "600938",
+      "history_data_through": "2026-10-12",
+      "reference_price": 34.55,
+      "ma5": 33.75,
+      "ma10": 33.39,
+      "ma20": 33.46,
+      "five_day_pct": 3.57,
+      "watch_zone": "33.46—33.75",
+      "provider_volume_ratio": 3.72,
+      "completed_day_volume_ratio_5d": null,
+      "history_source": "akshare_eastmoney",
+      "history_price_adjustment": "qfq"
+    }
+  }
+}

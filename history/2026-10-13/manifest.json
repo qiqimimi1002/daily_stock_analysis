@@ -1,0 +1,129 @@
+{
+  "schema_version": "1.3",
+  "trade_date": "2026-10-13",
+  "workflow_name": "全市场初筛",
+  "branch": "main",
+  "run_id": "38334872692",
+  "run_number": "244",
+  "status": "success",
+  "started_at": "2026-10-13T10:01:57+08:00",
+  "completed_at": "2026-10-13T10:13:21+08:00",
+  "trigger_source": "external_scheduler_cloudflare",
+  "scheduled_slot": null,
+  "run_created_at": "2026-10-13T10:00:58+08:00",
+  "screening_started_at": "2026-10-13T10:01:57+08:00",
+  "run_creation_delay_minutes": null,
+  "screening_start_delay_minutes": null,
+  "idempotency_skipped": false,
+  "idempotency_skip_reason": null,
+  "idempotency_existing_run_id": null,
+  "idempotency_existing_run_number": null,
+  "screening_generated_at": "2026-10-13T10:06:45+08:00",
+  "market_data_at": "2026-10-13T10:05:14+08:00",
+  "market_snapshot": "data/market_snapshot.json",
+  "market_snapshot_error_report": null,
+  "technical_snapshot": "data/technical_snapshot.json",
+  "technical_snapshot_error_report": null,
+  "data_source": "akshare_eastmoney",
+  "model_version": "V2.1",
+  "screening_outcome": "success",
+  "deep_analysis_outcome": "success",
+  "deep_analysis_status": "completed",
+  "deep_analysis_requested": true,
+  "market_record_count": 5923,
+  "preselected_count": 60,
+  "history_success_count": 60,
+  "history_failure_count": 0,
+  "history_success_rate": 100.0,
+  "history_failure_reasons": {
+    "counts": {},
+    "by_code": []
+  },
+  "history_source_stats": {
+    "akshare_eastmoney": {
+      "attempts": 60,
+      "successes": 60,
+      "failures": 0,
+      "skipped": 0,
+      "retries": 0,
+      "failure_reasons": {},
+      "success_rate": 100.0
+    },
+    "akshare_sina": {
+      "attempts": 60,
+      "successes": 60,
+      "failures": 0,
+      "skipped": 0,
+      "retries": 0,
+      "failure_reasons": {},
+      "success_rate": 100.0
+    },
+    "cache_hits": 0
+  },
+  "history_consistency": {
+    "status_counts": {
+      "matched": 60
+    },
+    "checked_count": 60,
+    "conflict_count": 0,
+    "single_backend_count": 0
+  },
+  "history_data_quality": {
+    "status": "ok",
+    "confidence_label": "high",
+    "warning": null
+  },
+  "enrichment_success_count": 8,
+  "enrichment_failure_count": 0,
+  "candidate_count": 3,
+  "candidate_codes": [
+    "600026",
+    "603127",
+    "600938"
+  ],
+  "analysis_codes": [
+    "600026",
+    "603127",
+    "600938"
+  ],
+  "screening_json": "data/market_screening_20261013_1006.json",
+  "screened_codes": "data/screened_codes.txt",
+  "screening_reports": [
+    "reports/market_screening_20261013_1006.md"
+  ],
+  "deep_analysis_reports": [
+    "reports/report_20261013.md"
+  ],
+  "deep_analysis_missing_codes": [],
+  "llm_retry_events": [],
+  "deep_analysis_failures": [],
+  "reason_codes": [],
+  "artifact_name": "market-screening-244",
+  "fixed_result_entry": {
+    "branch": "screening-results",
+    "latest_manifest": "latest/manifest.json",
+    "latest_screening_json": "latest/market_screening.json",
+    "latest_screened_codes": "latest/screened_codes.txt",
+    "latest_market_snapshot": "latest/market_snapshot.json",
+    "latest_technical_snapshot": "latest/technical_snapshot.json",
+    "latest_reports": "latest/reports/",
+    "history_prefix": "history/2026-10-13/"
+  },
+  "evidence_coverage_average": 44.0,
+  "evidence_coverage_minimum": 44.0,
+  "result_file_sha256": {
+    "data/market_screening_20261013_1006.json": "e37bc79fe897e50cfcecc6ee6355f79107868bdbf35bd6cbadba615688a226d7",
+    "data/market_snapshot.json": "81f4d02ca76cdc1e02598cd002944da7efd4108644bf10fb2e5ac5ddbbc44384",
+    "data/technical_snapshot.json": "b9668c440a59d157784d671a322469e2adbfc47afca8757a93f05e5b18933b12",
+    "data/screened_codes.txt": "cc43e47f04da6c37c44a8ebefda3f5fe177d0f9419447077dbd7fe44df0fd9a8",
+    "reports/market_screening_20261013_1006.md": "de3357a6ceb01d01ccd238e58eb52176048d9f0b2cf91171f38000a47fad40d0",
+    "reports/report_20261013.md": "40a4779dc3812056ec96756d50f0b2a4c7e034a8d02973d83832e7abf5622df7",
+    "logs/screening_execution_guard.log": "0fca778d19fb32868ab0514954d39c5ba6eee697b4c6f866e8ba612dd1fc6af4",
+    "data/screening_execution_guard.json": "02d8cdb0b637133de3116df8cc01e7d554f1d8804f66f5929547db2763cedb80"
+  },
+  "integrity": {
+    "ok": true,
+    "errors": [],
+    "screening_json_count": 1
+  }
+}
